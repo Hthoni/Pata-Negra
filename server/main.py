@@ -93,6 +93,7 @@ def gerar_excel(dados):
         ap(ws['A5'],'Filial:',F_MB,BG_META,al=aln('left'))
         ap(ws['C5'],fd['filial'],F_M,BG_META)
         ap(ws['G5'],'Solicitante:',F_MB,BG_META,al=aln('left'))
+        ap(ws['H5'],None,F_M,BG_META,al=aln('left'))
         ap(ws['K5'],'Código vend.',F_HW,BG_AZL,BALL,aln('center',True))
         ap(ws['L5'],'código cond', F_HW,BG_AZL,BALL,aln('center',True))
         ap(ws['M5'],'empresa',     F_HW,BG_AZL,BALL,aln('center',True))
@@ -229,12 +230,13 @@ def gerar_pdf(dados):
         tkg = sum(float(it.get('kgPlanejados',0)) for it in its)
 
         # Título
-        tbl_tit = Table([[Paragraph(tit, ST_TIT)]], colWidths=[W])
+        W_tab = sum(col_w)
+        tbl_tit = Table([[Paragraph(tit, ST_TIT)]], colWidths=[W_tab])
         tbl_tit.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),COR_TIT),
             ('TOPPADDING',(0,0),(-1,-1),4),('BOTTOMPADDING',(0,0),(-1,-1),4)]))
 
         # Subtítulo
-        tbl_sub = Table([[Paragraph('DOM Atacarejo — '+fd['filial'], ST_SUB)]], colWidths=[W])
+        tbl_sub = Table([[Paragraph('DOM Atacarejo — '+fd['filial'], ST_SUB)]], colWidths=[W_tab])
         tbl_sub.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),COR_SUB),
             ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3)]))
 
@@ -249,7 +251,7 @@ def gerar_pdf(dados):
             [ml('Endereço:'),  mv(fd.get('endereco','')),   ml('Vendedor:'),     mv(vend)],
             [ml('Cond. Pgto.:'), mv(fd.get('condPgto','')), ml('Tel. Vendedor:'),mv(dados.get('telefone',''))],
         ]
-        tbl_meta = Table(meta, colWidths=[22*mm, 88*mm, 28*mm, 82*mm])
+        tbl_meta = Table(meta, colWidths=[22*mm, 88*mm, 28*mm, W_tab-22*mm-88*mm-28*mm])
         tbl_meta.setStyle(TableStyle([
             ('BACKGROUND',(0,0),(-1,-1),COR_META),
             ('FONTSIZE',(0,0),(-1,-1),8),
