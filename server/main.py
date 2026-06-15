@@ -33,6 +33,7 @@ BG_CZ=fill('FFE8E8E8'); BG_PAR=fill('FFF5F5F5'); BG_TOTV=fill('FFD5F5E3')
 F_TIT=fnt(True,11); F_SUB=fnt(True,10); F_MB=fnt(True,9); F_M=fnt(sz=9)
 F_HW=fnt(True,9,'FFFFFFFF'); F_HB=fnt(True,9); F_IT=fnt(sz=9); F_TOT=fnt(True,9)
 F_NT=fnt(sz=8,color='FF666666'); F_NR=fnt(sz=8,color='FFC0392B'); F_CX=fnt(True,9,'FF854F0B')
+F_DIF=fnt(True,9,'FFCC0000')  # vermelho bold para dif. preço
 FMT_MONEY='#,##0.00'; FMT_NUM='0.0'
 
 def ap(cell, val=None, fn=None, bg=None, bo=None, al=None, fmt=None):
@@ -135,14 +136,30 @@ def gerar_excel(dados):
             c('H').value = f'=IF(G{r}<>"",G{r}/{kgcx},F{r}/{kgcx})'
             ap(c('H'),None,F_IT,bg,BALL,aln('center'),FMT_NUM)
             ap(c('I'),it.get('obs') or None,F_IT,bg,BALL,aln('center'))
-            ap(c('K'),it.get('qtdeMultipl'),F_IT,BG_AZLT,BALL,aln('center'))
+            # K: Qtde Multipl — fórmula que reflete G (embarcado) ou F (planejado)
+            if isCx:
+                c('K').value = f'=IF(G{r}<>"",G{r}/{kgcx},F{r}/{kgcx})'
+            else:
+                c('K').value = f'=IF(G{r}<>"",G{r},F{r})'
+            ap(c('K'),None,F_IT,BG_AZLT,BALL,aln('center'))
             ap(c('L'),it.get('precoUnit'),F_IT,BG_AZLT,BALL,aln('center'),FMT_MONEY)
             c('M').value = f'=L{r}*K{r}' if isCx else f'=IF(G{r}<>"",L{r}*G{r},L{r}*F{r})'
             ap(c('M'),None,F_IT,BG_AZLT,BALL,aln('center'),FMT_MONEY)
             ap(c('N'),it.get('precoSistema') or 0,F_IT,BG_AZLT,BALL,aln('center'),FMT_MONEY)
             c('O').value = f'=IF(AND(L{r}<>"",N{r}<>"",L{r}<>N{r}),L{r}-N{r},"")'
-            ap(c('O'),None,F_IT,BG_AZLT,BALL,aln('center'),FMT_MONEY)
+            ap(c('O'),None,F_DIF,BG_AZLT,BALL,aln('center'),FMT_MONEY)
             ap(c('P'),it.get('unidFat','kg'),F_CX if isCx else F_IT,BG_AZLT,BALL,aln('center'))
+
+        # Formatação condicional coluna O: vermelho bold se <> 0, normal se vazio
+        from openpyxl.formatting.rule import FormulaRule
+        red_font = Font(bold=True, size=9, color='FFCC0000')
+        normal_font = Font(bold=False, size=9, color='FF000000')
+        # Regra: se O<>"" (tem valor), já está vermelho pelo F_DIF
+        # Regra: se O="" (vazio), aplicar fonte normal
+        ws.conditional_formatting.add(
+            f'O9:O{n+8}',
+            FormulaRule(formula=[f'O9=""'], font=Font(bold=False,size=9,color='FF000000'))
+        )
 
         # TOTAL
         rT=n+9; r1=9; r2=n+8
