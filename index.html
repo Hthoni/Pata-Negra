@@ -188,34 +188,34 @@ main{max-width:800px;margin:28px auto;padding:0 16px;display:flex;flex-direction
 <script>
 'use strict';
 var SERVER_URL = 'https://pata-negra-784065203515.us-central1.run.app';
-var S = {{cliente:null, perfilFile:null, pedidoFile:null, excelB64:null, pdfB64:null, perfilServidor:{{}}}};
-var CLIENTES = {{
-  assai:        {{nome:'Assaí'}},
-  atacadao:     {{nome:'Atacadão'}},
-  dom_atacarejo:{{nome:'DOM Atacarejo'}},
-  domatac:      {{nome:'Dom Atacadista'}},
-  summer:       {{nome:'Mercado Summer'}},
-  supjoao:      {{nome:'Superm. do João'}}
-}};
+var S = {cliente:null, perfilFile:null, pedidoFile:null, excelB64:null, pdfB64:null, perfilServidor:{}};
+var CLIENTES = {
+  assai:        {nome:'Assaí'},
+  atacadao:     {nome:'Atacadão'},
+  dom_atacarejo:{nome:'DOM Atacarejo'},
+  domatac:      {nome:'Dom Atacadista'},
+  summer:       {nome:'Mercado Summer'},
+  supjoao:      {nome:'Superm. do João'}
+};
 
 document.getElementById('hdate').textContent =
-  new Date().toLocaleDateString('pt-BR',{{weekday:'short',day:'2-digit',month:'short',year:'numeric'}});
+  new Date().toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
 
-Object.keys(CLIENTES).forEach(function(id) {{
+Object.keys(CLIENTES).forEach(function(id) {
   var btn = document.getElementById('btn-'+id);
-  if (btn) btn.addEventListener('click', function() {{ selCliente(id, btn); }});
-}});
+  if (btn) btn.addEventListener('click', function() { selCliente(id, btn); });
+});
 
-window.addEventListener('load', function() {{
+window.addEventListener('load', function() {
   fetch(SERVER_URL+'/health')
-    .then(function(r){{ return r.json(); }})
-    .then(function(d){{ S.perfilServidor = d.perfis || {{}}; }})
-    .catch(function(){{}});
-}});
+    .then(function(r){ return r.json(); })
+    .then(function(d){ S.perfilServidor = d.perfis || {}; })
+    .catch(function(){});
+});
 
-function selCliente(id, btn) {{
+function selCliente(id, btn) {
   S.cliente = id;
-  document.querySelectorAll('.cb').forEach(function(b){{ b.classList.remove('active'); }});
+  document.querySelectorAll('.cb').forEach(function(b){ b.classList.remove('active'); });
   btn.classList.add('active');
   document.getElementById('sub-c').textContent = '— ' + CLIENTES[id].nome;
   clearLog();
@@ -228,29 +228,29 @@ function selCliente(id, btn) {{
   var fnP   = document.getElementById('fn-p');
   var filename = S.perfilServidor[id] || '';
   fnP.textContent = '';
-  if (filename) {{
+  if (filename) {
     badge.textContent = '📋 ' + filename;
     badge.style.display = 'inline-block';
     zoneP.className = 'zone server';
     label.textContent = 'Perfil salvo no servidor';
     hint.textContent  = 'Clique para substituir';
-  }} else {{
+  } else {
     badge.style.display = 'none';
     zoneP.className = 'zone';
     label.textContent = 'Perfil Excel';
     hint.textContent  = '.xlsx — necessário para primeiro uso';
-  }}
+  }
   atualizarBotao();
-}}
+}
 
-function pickFile(inp, tipo) {{ var f = inp.files[0]; if (!f) return; setFile(f, tipo); }}
-function dropFile(ev, tipo) {{
+function pickFile(inp, tipo) { var f = inp.files[0]; if (!f) return; setFile(f, tipo); }
+function dropFile(ev, tipo) {
   ev.preventDefault();
   document.getElementById(tipo==='perfil' ? 'zone-p' : 'zone-o').classList.remove('drag');
   var f = ev.dataTransfer.files[0]; if (!f) return; setFile(f, tipo);
-}}
-function setFile(f, tipo) {{
-  if (tipo === 'perfil') {{
+}
+function setFile(f, tipo) {
+  if (tipo === 'perfil') {
     S.perfilFile = f;
     document.getElementById('fn-p').textContent = f.name;
     var zoneP = document.getElementById('zone-p');
@@ -260,52 +260,52 @@ function setFile(f, tipo) {{
     var badge = document.getElementById('perfil-salvo-badge');
     badge.textContent = '📋 ' + f.name;
     badge.style.display = 'inline-block';
-  }} else {{
+  } else {
     S.pedidoFile = f;
     document.getElementById('fn-o').textContent = f.name;
     document.getElementById('zone-o').classList.add('filled');
-  }}
+  }
   atualizarBotao();
-}}
+}
 
-function temPerfil() {{
+function temPerfil() {
   return S.perfilFile || (S.cliente && S.perfilServidor[S.cliente]);
-}}
-function atualizarBotao() {{
+}
+function atualizarBotao() {
   document.getElementById('btn-proc').disabled = !(S.cliente && S.pedidoFile && temPerfil());
-}}
+}
 
-function addLog(msg,cls){{var el=document.getElementById('log');el.style.display='block';var d=document.createElement('div');if(cls)d.className=cls;d.textContent='['+new Date().toLocaleTimeString('pt-BR')+'] '+msg;el.appendChild(d);el.scrollTop=el.scrollHeight;}}
-function logOk(m){{addLog('✓ '+m,'ok');}}
-function logWarn(m){{addLog('⚠ '+m,'wn');}}
-function logErr(m){{addLog('✗ '+m,'er');}}
-function logInfo(m){{addLog('ℹ '+m,'in');}}
-function clearLog(){{var el=document.getElementById('log');el.innerHTML='';el.style.display='none';}}
-function moeda(v){{return Number(v||0).toLocaleString('pt-BR',{{minimumFractionDigits:2,maximumFractionDigits:2}});}}
+function addLog(msg,cls){var el=document.getElementById('log');el.style.display='block';var d=document.createElement('div');if(cls)d.className=cls;d.textContent='['+new Date().toLocaleTimeString('pt-BR')+'] '+msg;el.appendChild(d);el.scrollTop=el.scrollHeight;}
+function logOk(m){addLog('✓ '+m,'ok');}
+function logWarn(m){addLog('⚠ '+m,'wn');}
+function logErr(m){addLog('✗ '+m,'er');}
+function logInfo(m){addLog('ℹ '+m,'in');}
+function clearLog(){var el=document.getElementById('log');el.innerHTML='';el.style.display='none';}
+function moeda(v){return Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 
-async function processar() {{
+async function processar() {
   var btn = document.getElementById('btn-proc');
   btn.disabled = true; btn.textContent = '⏳  Processando…';
   clearLog(); document.getElementById('results').style.display = 'none';
   S.excelB64 = null; S.pdfB64 = null;
-  try {{
+  try {
     logInfo(S.perfilFile ? 'Enviando perfil + pedido…' : 'Usando perfil salvo no servidor · enviando pedido…');
     var form = new FormData();
     if (S.perfilFile) form.append('perfil', S.perfilFile);
     form.append('pedido', S.pedidoFile);
     form.append('cliente', S.cliente);
-    var resp = await fetch(SERVER_URL+'/processar', {{method:'POST', body:form}});
-    if (!resp.ok) {{ var err = await resp.json(); logErr('Erro: '+(err.erro||resp.status)); return; }}
+    var resp = await fetch(SERVER_URL+'/processar', {method:'POST', body:form});
+    if (!resp.ok) { var err = await resp.json(); logErr('Erro: '+(err.erro||resp.status)); return; }
     var data = await resp.json();
-    if (!data.ok) {{ logErr('Erro: '+data.erro); return; }}
+    if (!data.ok) { logErr('Erro: '+data.erro); return; }
     if (S.perfilFile) S.perfilServidor[S.cliente] = S.perfilFile.name;
     S.excelB64 = data.excel; S.pdfB64 = data.pdf;
     logOk(data.filiais+' filiais | '+data.itens+' itens | '+data.totalKg+'kg | R$ '+moeda(data.totalValor));
-    var linhas = data.resumo.map(function(f){{
+    var linhas = data.resumo.map(function(f){
       return '<tr><td>'+f.filial+'</td><td style="text-align:center">'+f.itens+'</td>'+
              '<td style="text-align:right">'+f.kg+' kg</td>'+
              '<td style="text-align:right">R$ '+moeda(f.valor)+'</td></tr>';
-    }}).join('');
+    }).join('');
     document.getElementById('summary').innerHTML =
       '<table>'+
       '<tr><td><b>Filiais</b></td><td>'+data.filiais+'</td></tr>'+
@@ -316,28 +316,28 @@ async function processar() {{
       '<table><tr class="sh"><td>Filial</td><td style="text-align:center">Itens</td>'+
       '<td style="text-align:right">Kg</td><td style="text-align:right">Valor</td></tr>'+linhas+'</table>';
     document.getElementById('results').style.display = 'block';
-    document.getElementById('results').scrollIntoView({{behavior:'smooth'}});
-  }} catch(e) {{
+    document.getElementById('results').scrollIntoView({behavior:'smooth'});
+  } catch(e) {
     logErr('Erro de conexão: '+e.message);
-  }} finally {{
+  } finally {
     btn.disabled = false; btn.textContent = '⚙️  Processar pedido';
-  }}
-}}
+  }
+}
 
-function dlArquivo(tipo) {{
+function dlArquivo(tipo) {
   var b64 = tipo==='excel' ? S.excelB64 : S.pdfB64;
-  if (!b64) {{ logWarn('Processe um pedido primeiro.'); return; }}
+  if (!b64) { logWarn('Processe um pedido primeiro.'); return; }
   var mime = tipo==='excel' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'application/pdf';
   var ext  = tipo==='excel' ? '.xlsx' : '.pdf';
   var nome = 'PataNegra_'+CLIENTES[S.cliente].nome.replace(/\s+/g,'_')+'_'+
              new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+ext;
   var bin = atob(b64); var arr = new Uint8Array(bin.length);
   for (var i=0; i<bin.length; i++) arr[i] = bin.charCodeAt(i);
-  var blob = new Blob([arr],{{type:mime}});
+  var blob = new Blob([arr],{type:mime});
   var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nome;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   logOk(nome+' baixado!');
-}}
+}
 </script>
 </body>
 </html>
