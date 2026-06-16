@@ -163,7 +163,6 @@ def gerar_excel(dados, empresa_override=None):
         n = len(its)
         emp_fd = empresa_override if empresa_override else fd.get('empresa', emp)
         tit_fd = 'PEDIDO PATA NEGRA DISTRIBUIDORA' if emp_fd==2 else 'PEDIDO INDUSTRIA PATANEGRA'
-        nota_empresa = 'Pata Negra Distribuidora' if emp_fd==2 else 'Indústria Pata Negra'
         numPed = re.sub(r'[/\\*?\[\]:]', '-', fd.get('pedidoNum','')).strip().strip('-')
         nomeAba = ((numPed+' - '+fd['filial']) if numPed else fd['filial'])[:31]
         ws = wb.create_sheet(nomeAba)
@@ -338,6 +337,7 @@ def gerar_pdf(dados, empresa_override=None):
         n = len(its)
         emp_fd = empresa_override if empresa_override else fd.get('empresa', dados.get('empresa', 2))
         tit_fd = 'PEDIDO PATA NEGRA DISTRIBUIDORA' if emp_fd==2 else 'PEDIDO INDUSTRIA PATANEGRA'
+        nota_empresa = 'Pata Negra Distribuidora' if emp_fd==2 else 'Indústria Pata Negra'
         tkg = sum(float(it.get('kgPlanejados',0)) for it in its)
         subtitulo = (cli+' — '+fd['filial']) if cli else fd['filial']
 
