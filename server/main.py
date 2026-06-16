@@ -624,74 +624,66 @@ def parse_torre_central(pdf_bytes, produtos):
         for pi in range(0, n_pags, 2):
             txt1 = pdf.pages[pi].extract_text() or ''
             txt2 = pdf.pages[pi+1].extract_text() if pi+1 < n_pags else ''
-            lines = txt1.split('\n')
+            lines = [l.strip() for l in txt1.split('\n')]
             txt_all = txt1+'\n'+txt2
 
             def fm(pat, txt=txt_all):
                 m = re.search(pat, txt, re.I)
                 return m.group(1).strip() if m else ''
 
-            pedidoNum = fm(r'Nº\s*([\d]+/[ML])')
-            if not pedidoNum:
-                pedidoNum = fm(r'PEDIDO DE COMPRAS\s*\n\s*Nº\s*([\d]+/[ML]?)')
-
-            # filial: nome da loja no endereço
-            filial = ''
-            for ln in lines:
-                if 'TORRE' in ln and 'CIA' in ln:
-                    m2 = re.search(r'TORRE\s*&\s*CIA\s+SUPERMERCADOS\s+S/A\s+(.+)', ln)
-                    if m2:
-                        filial = m2.group(1).strip()
-                        break
-            if not filial:
-                filial = fm(r'TORRE\s*&\s*CIA\s+SUPERMERCADOS\s+S/A\s+([A-Z\s]+?)(?:\s+AV\.|\s+RUA|\s+R\.)')
-            if not filial: filial = 'TORRE'
-
-            cnpj = ''
-            for ln in lines:
-                found = re.findall(r'\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}', ln)
-                cnpjs_validos = [c for c in found if '56.423.719' not in c and '97.760.885' not in c.replace('07.760.885','')]
-                if cnpjs_validos: cnpj = cnpjs_validos[0]; break
-                elif found: cnpj = found[-1]; break
-
-            endereco = fm(r'(?:AV\.|RUA|R\.)\s+[^–\n]+?–\s*([A-Z\s]+)\s+RIO DE JANEIRO')
-            if not endereco:
-                endereco = fm(r'ENDEREÇO PARA ENTREGA[:\s]+(.+?)(?:\n|ENDEREÇO PARA COBRANÇA)')
-
+            pedidoNum   = fm(r'Nº\s*([\d]+/[ML])')
             dataPedido  = fm(r'Data Emiss[aã]o:\s*([\d/]+)')
             dataEntrega = fm(r'Previs[aã]o Entrega:\s*([\d/]+)')
             condPgto    = fm(r'Prazo para pagamento:\s*(\d+)')
             if condPgto: condPgto += ' dias'
 
+            # CNPJ cliente (não o do fornecedor)
+            cnpj = fm(r'CNPJ:\s*([\d./\-]+)')
+
+            # filial: bairro do endereço de entrega
+            filial_m = re.search(r'TORRE\s*&\s*CIA\s+SUPERMERCADOS\s+S/A\s+.+?–\s*([A-ZÁÉÍÓÚ][A-Z\s]+?)\s+(?:RIO DE|SÃO|NITERÓI)', txt_all, re.I)
+            filial = filial_m.group(1).strip() if filial_m else 'TORRE CENTRAL'
+
+            # endereço
+            end_m = re.search(r'(AV\.[^–\n]+)', txt_all)
+            endereco = end_m.group(1).strip() if end_m else ''
+
             # empresa pelo CNPJ do fornecedor
             cnpj_forn = fm(r'CNPJ Fornecedor:\s*([\d./\-]+)')
             empresa = 1 if CNPJ_INDUSTRIA.replace('.','') in cnpj_forn.replace('.','').replace('-','') else 2
 
-            reItem = re.compile(
-                r'^(\d{5,6})\s+(\d{5,6})\s+(.+?)\s+(KG|CX)\s+(\d+)\s+([\d,.]+)\s+([\d,.]+)',
-                re.M)
-            # também tenta sem código duplo
-            reItem2 = re.compile(
-                r'^(\d{5,6})\s+(.+?)\s+(KG|CX)\s+(\d+)\s+([\d,.]+)\s+([\d,.]+)',
-                re.M)
+            # Parser de itens: nome vem na linha anterior ao código+dados
+            reData = re.compile(
+                r'^(\d{4,6})(?:\s+\d{4,6})?\s+(KG|CX)\s+(\d+)\s+([\d.]+,\d+)\s+([\d.]+,\d+)\s+([\d.]+,\d+)'
+            )
+            reInline = re.compile(
+                r'^(\d{4,6})\s+([A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇ][A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇ\s]+?)\s+(KG|CX)\s+(\d+)\s+([\d.]+,\d+)\s+([\d.]+,\d+)\s+([\d.]+,\d+)'
+            )
+            reSufixo = re.compile(r'^[A-Z0-9]{1,5}$')
 
-            itens = []
-            for m in reItem.finditer(txt1):
-                qtde_ped = float(m.group(6).replace('.','').replace(',','.'))
-                preco    = float(m.group(7).replace('.','').replace(',','.'))
-                total    = round(qtde_ped * preco, 2)
-                it = processar_item(m.group(1), m.group(3), m.group(4),
-                                    int(m.group(5)), qtde_ped, preco, total, produtos)
-                itens.append(it)
-
-            if not itens:
-                for m in reItem2.finditer(txt1):
-                    qtde_ped = float(m.group(5).replace('.','').replace(',','.'))
-                    preco    = float(m.group(6).replace('.','').replace(',','.'))
-                    total    = round(qtde_ped * preco, 2)
-                    it = processar_item(m.group(1), m.group(2), m.group(3),
-                                        int(m.group(4)), qtde_ped, preco, total, produtos)
-                    itens.append(it)
+            itens = []; pending_nome = None
+            for i, ln in enumerate(lines):
+                m = reData.match(ln)
+                if m:
+                    sufixo = ''
+                    if i+1 < len(lines) and reSufixo.match(lines[i+1]):
+                        sufixo = lines[i+1]
+                    nome = ((pending_nome or '') + (' '+sufixo if sufixo else '')).strip()
+                    qtde  = float(m.group(4).replace('.','').replace(',','.'))
+                    preco = float(m.group(5).replace('.','').replace(',','.'))
+                    total = float(m.group(6).replace('.','').replace(',','.'))
+                    it = processar_item(m.group(1), nome, m.group(2), int(m.group(3)), qtde, preco, total, produtos)
+                    itens.append(it); pending_nome = None
+                else:
+                    m2 = reInline.match(ln)
+                    if m2:
+                        qtde  = float(m2.group(5).replace('.','').replace(',','.'))
+                        preco = float(m2.group(6).replace('.','').replace(',','.'))
+                        total = float(m2.group(7).replace('.','').replace(',','.'))
+                        it = processar_item(m2.group(1), m2.group(2).strip(), m2.group(3), int(m2.group(4)), qtde, preco, total, produtos)
+                        itens.append(it); pending_nome = None
+                    elif re.match(r'^[A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇ][A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇ\s]{4,}$', ln) and 'TORRE' not in ln and 'PEDIDO' not in ln and 'DADOS' not in ln:
+                        pending_nome = ln
 
             if itens:
                 filiais.append({'filial':filial,'pedidoNum':pedidoNum,'cnpj':cnpj,
