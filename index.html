@@ -204,10 +204,19 @@ Object.keys(CLIENTES).forEach(function(id) {
   if (btn) btn.addEventListener('click', function() { selCliente(id, btn); });
 });
 
+var LOGOS_CACHE = {};
+
 window.addEventListener('load', function() {
   fetch(SERVER_URL+'/health')
     .then(function(r){ return r.json(); })
-    .then(function(d){ S.perfilServidor = d.perfis || {}; })
+    .then(function(d){
+      S.perfilServidor = d.perfis || {};
+      ['assai','atacadao','dom_atacarejo'].forEach(function(id) {
+        var img = new window.Image();
+        img.onload = function() { LOGOS_CACHE[id] = img.src; };
+        img.src = SERVER_URL+'/logo/'+id+'?t='+Date.now();
+      });
+    })
     .catch(function(){});
 });
 
