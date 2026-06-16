@@ -164,7 +164,7 @@ def gerar_excel(dados, empresa_override=None):
         emp_fd = empresa_override if empresa_override else fd.get('empresa', emp)
         tit_fd = 'PEDIDO PATA NEGRA DISTRIBUIDORA' if emp_fd==2 else 'PEDIDO INDUSTRIA PATANEGRA'
         nota_empresa = 'Pata Negra Distribuidora' if emp_fd==2 else 'Indústria Pata Negra'
-        numPed = fd.get('pedidoNum','').replace('/C','').replace('/L','').strip()
+        numPed = re.sub(r'[/\\*?\[\]:]', '-', fd.get('pedidoNum','')).strip().strip('-')
         nomeAba = ((numPed+' - '+fd['filial']) if numPed else fd['filial'])[:31]
         ws = wb.create_sheet(nomeAba)
 
