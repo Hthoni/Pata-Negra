@@ -125,6 +125,7 @@ def ler_perfil(perfil_bytes):
     for r in pdata[7:]:
         if not r or not r[2]: break
         produtos.append({
+            'empresa':     int(r[0]) if r[0] in (1,2) else None,  # coluna A: Fat. (1=Indústria, 2=Distrib.)
             'codInterno':  r[1],
             'nomePerfil':  str(r[2]).strip(),
             'formato':     str(r[3] or '').strip(),
@@ -139,8 +140,8 @@ def ler_perfil(perfil_bytes):
 # ════════════════════════════════════════════════
 # GERADOR EXCEL
 # ════════════════════════════════════════════════
-def gerar_excel(dados):
-    emp   = dados.get('empresa', 2)
+def gerar_excel(dados, empresa_override=None):
+    emp   = empresa_override if empresa_override else dados.get('empresa', 2)
     cv    = str(dados.get('codVend',''))
     cc    = str(dados.get('codCond',''))
     vend  = dados.get('vendedor','')
@@ -152,9 +153,17 @@ def gerar_excel(dados):
     wb.remove(wb.active)
 
     for fd in dados['filiais']:
-        its = fd['itens']; n = len(its)
-        emp_fd = fd.get('empresa', emp)
+        # filtrar itens pela empresa quando em modo split
+        if empresa_override:
+            its = [it for it in fd['itens']
+                   if (it.get('empresa') or empresa_override) == empresa_override]
+        else:
+            its = fd['itens']
+        if not its: continue
+        n = len(its)
+        emp_fd = empresa_override if empresa_override else fd.get('empresa', emp)
         tit_fd = 'PEDIDO PATA NEGRA DISTRIBUIDORA' if emp_fd==2 else 'PEDIDO INDUSTRIA PATANEGRA'
+        nota_empresa = 'Pata Negra Distribuidora' if emp_fd==2 else 'Indústria Pata Negra'
         numPed = fd.get('pedidoNum','').replace('/C','').replace('/L','').strip()
         nomeAba = ((numPed+' - '+fd['filial']) if numPed else fd['filial'])[:31]
         ws = wb.create_sheet(nomeAba)
@@ -186,6 +195,7 @@ def gerar_excel(dados):
         ap(ws['A5'],'Filial:',F_MB,BG_META,al=aln('left'))
         ap(ws['C5'],fd['filial'],F_M,BG_META)
         ap(ws['G5'],'Solicitante:',F_MB,BG_META,al=aln('left'))
+        ap(ws['H5'],fd.get('solicitante',''),F_M,BG_META,al=aln('left'))
         ap(ws['K5'],'Código vend.',F_HW,BG_AZL,BALL,aln('center',True))
         ap(ws['L5'],'código cond', F_HW,BG_AZL,BALL,aln('center',True))
         ap(ws['M5'],'empresa',     F_HW,BG_AZL,BALL,aln('center',True))
@@ -284,7 +294,7 @@ def gerar_excel(dados):
 # ════════════════════════════════════════════════
 # GERADOR PDF
 # ════════════════════════════════════════════════
-def gerar_pdf(dados):
+def gerar_pdf(dados, empresa_override=None):
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
         leftMargin=10*mm, rightMargin=10*mm,
@@ -319,8 +329,14 @@ def gerar_pdf(dados):
     story = []
 
     for fd in dados['filiais']:
-        its = fd['itens']; n = len(its)
-        emp_fd = fd.get('empresa', dados.get('empresa', 2))
+        if empresa_override:
+            its = [it for it in fd['itens']
+                   if (it.get('empresa') or empresa_override) == empresa_override]
+        else:
+            its = fd['itens']
+        if not its: continue
+        n = len(its)
+        emp_fd = empresa_override if empresa_override else fd.get('empresa', dados.get('empresa', 2))
         tit_fd = 'PEDIDO PATA NEGRA DISTRIBUIDORA' if emp_fd==2 else 'PEDIDO INDUSTRIA PATANEGRA'
         tkg = sum(float(it.get('kgPlanejados',0)) for it in its)
         subtitulo = (cli+' — '+fd['filial']) if cli else fd['filial']
@@ -403,7 +419,7 @@ def gerar_pdf(dados):
         tbl_itens.setStyle(TableStyle(cmds))
 
         nota = Paragraph(
-            'Col. G — Kg Embarcados: preenchida pelo encarregado de embarque.   |   Pata Negra Distribuidora',
+            f'Col. G — Kg Embarcados: preenchida pelo encarregado de embarque.   |   {nota_empresa}',
             ST_NOTA)
 
         story.append(KeepTogether([tbl_tit, tbl_sub, tbl_meta, tbl_itens, nota]))
@@ -425,6 +441,7 @@ def processar_item(cod_cli, nome_raw, emb_tipo, qtde_emb, qtde_ped, preco, total
     else:
         kgPlan=qtde_ped; nrCx=round(kgPlan/kgCx,1) if kgCx else 0; qtdeMult=kgPlan; unidFat='kg'
     return {
+        'empresa':      pf.get('empresa') if pf else None,  # herda do perfil (coluna A)
         'codInterno':   pf['codInterno']    if pf else cod_cli,
         'nomeProduto':  pf['nomePerfil']    if pf else nome_raw,
         'formato':      pf.get('formato','') if pf else '',
@@ -683,22 +700,43 @@ def processar():
 
         dados = {**meta, 'filiais': filiais, 'clienteNome': nomes_cliente.get(cliente, cliente)}
 
-        excel_bytes   = gerar_excel(dados)
-        pdf_bytes_out = gerar_pdf(dados)
+        # detectar se há itens de empresas diferentes (split)
+        empresas_nos_itens = set(
+            it.get('empresa') or dados.get('empresa', 2)
+            for f in filiais for it in f['itens']
+        )
+        empresas_nos_itens.discard(None)
+        if not empresas_nos_itens: empresas_nos_itens = {dados.get('empresa', 2)}
 
+        arquivos = []
+        for emp_split in sorted(empresas_nos_itens):
+            eb = gerar_excel(dados, empresa_override=emp_split if len(empresas_nos_itens)>1 else None)
+            pb = gerar_pdf(dados,   empresa_override=emp_split if len(empresas_nos_itens)>1 else None)
+            label = ('Indústria' if emp_split==1 else 'Distribuidora') if len(empresas_nos_itens)>1 else ''
+            arquivos.append({
+                'empresa': emp_split,
+                'label':   label,
+                'excel':   base64.b64encode(eb).decode(),
+                'pdf':     base64.b64encode(pb).decode(),
+            })
+
+        todos_itens = [i for f in filiais for i in f['itens']]
         return jsonify({
             'ok':         True,
+            'split':      len(empresas_nos_itens) > 1,
             'filiais':    len(filiais),
-            'itens':      sum(len(f['itens']) for f in filiais),
-            'totalKg':    round(sum(i['kgPlanejados'] for f in filiais for i in f['itens']),1),
-            'totalValor': round(sum(i['valorPedido']  for f in filiais for i in f['itens']),2),
+            'itens':      len(todos_itens),
+            'totalKg':    round(sum(i['kgPlanejados'] for i in todos_itens),1),
+            'totalValor': round(sum(i['valorPedido']  for i in todos_itens),2),
             'resumo': [{'filial':f['filial'],'pedidoNum':f.get('pedidoNum',''),
                         'itens':len(f['itens']),
                         'kg':   round(sum(i['kgPlanejados'] for i in f['itens']),1),
                         'valor':round(sum(i['valorPedido']  for i in f['itens']),2)}
                        for f in filiais],
-            'excel': base64.b64encode(excel_bytes).decode(),
-            'pdf':   base64.b64encode(pdf_bytes_out).decode(),
+            'arquivos': arquivos,
+            # compatibilidade retroativa (caso simples)
+            'excel': base64.b64encode(gerar_excel(dados)).decode() if len(empresas_nos_itens)==1 else '',
+            'pdf':   base64.b64encode(gerar_pdf(dados)).decode()   if len(empresas_nos_itens)==1 else '',
         })
 
     except Exception as e:
