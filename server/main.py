@@ -617,13 +617,95 @@ def parse_assai(pdf_bytes, produtos):
                     'condPgto':condPgto,'empresa':empresa,'itens':itens})
     return filiais
 
+def parse_torre_central(pdf_bytes, produtos):
+    filiais = []
+    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+        n_pags = len(pdf.pages)
+        for pi in range(0, n_pags, 2):
+            txt1 = pdf.pages[pi].extract_text() or ''
+            txt2 = pdf.pages[pi+1].extract_text() if pi+1 < n_pags else ''
+            lines = txt1.split('\n')
+            txt_all = txt1+'\n'+txt2
+
+            def fm(pat, txt=txt_all):
+                m = re.search(pat, txt, re.I)
+                return m.group(1).strip() if m else ''
+
+            pedidoNum = fm(r'Nº\s*([\d]+/[ML])')
+            if not pedidoNum:
+                pedidoNum = fm(r'PEDIDO DE COMPRAS\s*\n\s*Nº\s*([\d]+/[ML]?)')
+
+            # filial: nome da loja no endereço
+            filial = ''
+            for ln in lines:
+                if 'TORRE' in ln and 'CIA' in ln:
+                    m2 = re.search(r'TORRE\s*&\s*CIA\s+SUPERMERCADOS\s+S/A\s+(.+)', ln)
+                    if m2:
+                        filial = m2.group(1).strip()
+                        break
+            if not filial:
+                filial = fm(r'TORRE\s*&\s*CIA\s+SUPERMERCADOS\s+S/A\s+([A-Z\s]+?)(?:\s+AV\.|\s+RUA|\s+R\.)')
+            if not filial: filial = 'TORRE'
+
+            cnpj = ''
+            for ln in lines:
+                found = re.findall(r'\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}', ln)
+                cnpjs_validos = [c for c in found if '56.423.719' not in c and '97.760.885' not in c.replace('07.760.885','')]
+                if cnpjs_validos: cnpj = cnpjs_validos[0]; break
+                elif found: cnpj = found[-1]; break
+
+            endereco = fm(r'(?:AV\.|RUA|R\.)\s+[^–\n]+?–\s*([A-Z\s]+)\s+RIO DE JANEIRO')
+            if not endereco:
+                endereco = fm(r'ENDEREÇO PARA ENTREGA[:\s]+(.+?)(?:\n|ENDEREÇO PARA COBRANÇA)')
+
+            dataPedido  = fm(r'Data Emiss[aã]o:\s*([\d/]+)')
+            dataEntrega = fm(r'Previs[aã]o Entrega:\s*([\d/]+)')
+            condPgto    = fm(r'Prazo para pagamento:\s*(\d+)')
+            if condPgto: condPgto += ' dias'
+
+            # empresa pelo CNPJ do fornecedor
+            cnpj_forn = fm(r'CNPJ Fornecedor:\s*([\d./\-]+)')
+            empresa = 1 if CNPJ_INDUSTRIA.replace('.','') in cnpj_forn.replace('.','').replace('-','') else 2
+
+            reItem = re.compile(
+                r'^(\d{5,6})\s+(\d{5,6})\s+(.+?)\s+(KG|CX)\s+(\d+)\s+([\d,.]+)\s+([\d,.]+)',
+                re.M)
+            # também tenta sem código duplo
+            reItem2 = re.compile(
+                r'^(\d{5,6})\s+(.+?)\s+(KG|CX)\s+(\d+)\s+([\d,.]+)\s+([\d,.]+)',
+                re.M)
+
+            itens = []
+            for m in reItem.finditer(txt1):
+                qtde_ped = float(m.group(6).replace('.','').replace(',','.'))
+                preco    = float(m.group(7).replace('.','').replace(',','.'))
+                total    = round(qtde_ped * preco, 2)
+                it = processar_item(m.group(1), m.group(3), m.group(4),
+                                    int(m.group(5)), qtde_ped, preco, total, produtos)
+                itens.append(it)
+
+            if not itens:
+                for m in reItem2.finditer(txt1):
+                    qtde_ped = float(m.group(5).replace('.','').replace(',','.'))
+                    preco    = float(m.group(6).replace('.','').replace(',','.'))
+                    total    = round(qtde_ped * preco, 2)
+                    it = processar_item(m.group(1), m.group(2), m.group(3),
+                                        int(m.group(4)), qtde_ped, preco, total, produtos)
+                    itens.append(it)
+
+            if itens:
+                filiais.append({'filial':filial,'pedidoNum':pedidoNum,'cnpj':cnpj,
+                    'endereco':endereco,'dataPedido':dataPedido,'dataEntrega':dataEntrega,
+                    'condPgto':condPgto,'empresa':empresa,'itens':itens})
+    return filiais
+
 # ════════════════════════════════════════════════
 # ROTAS
 # ════════════════════════════════════════════════
 @app.route('/health')
 def health():
     perfis = {}
-    for c in ['dom_atacarejo','atacadao','assai']:
+    for c in ['dom_atacarejo','atacadao','assai','torre_central']:
         if perfil_existe(c):
             perfis[c] = perfil_filename(c)
     return jsonify({'status':'ok', 'perfis': perfis})
@@ -631,7 +713,7 @@ def health():
 @app.route('/perfil/<cliente>', methods=['POST'])
 def upload_perfil(cliente):
     """Salva ou atualiza o perfil de um cliente no servidor."""
-    clientes_validos = ['dom_atacarejo','atacadao','assai']
+    clientes_validos = ['dom_atacarejo','atacadao','assai','torre_central']
     if cliente not in clientes_validos:
         return jsonify({'erro': f'Cliente inválido: {cliente}'}), 400
     f = request.files.get('perfil')
@@ -684,6 +766,7 @@ def processar():
             'dom_atacarejo': 'DOM Atacarejo',
             'atacadao':      'Atacadão',
             'assai':         'Assaí',
+            'torre_central': 'Torre Central',
         }
         if cliente == 'dom_atacarejo':
             filiais = parse_dom_atacarejo(pdf_bytes, produtos)
@@ -692,6 +775,8 @@ def processar():
         elif cliente == 'assai':
             filiais = parse_assai(pdf_bytes, produtos)
             if filiais: meta['empresa'] = filiais[0]['empresa']
+        elif cliente == 'torre_central':
+            filiais = parse_torre_central(pdf_bytes, produtos)
         else:
             return jsonify({'erro': f'Cliente {cliente} não implementado'}), 400
 
