@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
 from openpyxl.utils import get_column_letter
@@ -18,6 +18,40 @@ CORS(app)
 
 CNPJ_DISTRIBUIDORA = '56.423.719'
 CNPJ_INDUSTRIA     = '10.171.633'
+
+# ════════════════════════════════════════════════
+# PERFIS SALVOS NO SERVIDOR
+# ════════════════════════════════════════════════
+PERFIS_DIR = os.path.join(os.path.dirname(__file__), 'perfis')
+os.makedirs(PERFIS_DIR, exist_ok=True)
+
+def perfil_path(cliente):
+    return os.path.join(PERFIS_DIR, f'{cliente}.xlsx')
+
+def meta_path(cliente):
+    return os.path.join(PERFIS_DIR, f'{cliente}_meta.json')
+
+def perfil_existe(cliente):
+    return os.path.exists(perfil_path(cliente))
+
+def salvar_perfil(cliente, file_bytes, filename=None):
+    with open(perfil_path(cliente), 'wb') as f:
+        f.write(file_bytes)
+    if filename:
+        import json as _json
+        with open(meta_path(cliente), 'w') as f:
+            _json.dump({'filename': filename}, f)
+
+def carregar_perfil_bytes(cliente):
+    with open(perfil_path(cliente), 'rb') as f:
+        return f.read()
+
+def perfil_filename(cliente):
+    import json as _json
+    mp = meta_path(cliente)
+    if os.path.exists(mp):
+        return _json.load(open(mp)).get('filename','')
+    return 
 
 # ════════════════════════════════════════════════
 # ESTILOS EXCEL
@@ -74,6 +108,35 @@ def detectar_empresa(txt):
     return 2
 
 # ════════════════════════════════════════════════
+# LER PERFIL EXCEL → meta + produtos
+# ════════════════════════════════════════════════
+def ler_perfil(perfil_bytes):
+    wb_p  = openpyxl.load_workbook(io.BytesIO(perfil_bytes), data_only=True)
+    pws   = wb_p[wb_p.sheetnames[0]]
+    pdata = list(pws.iter_rows(values_only=True))
+    meta  = {
+        'empresa':  pdata[0][9] if pdata[0][9] else 2,
+        'codVend':  str(pdata[2][6]) if pdata[2][6] else '',
+        'codCond':  str(pdata[3][6]) if pdata[3][6] else '',
+        'vendedor': pdata[2][8] or '',
+        'telefone': pdata[2][9] or '',
+    }
+    produtos = []
+    for r in pdata[7:]:
+        if not r or not r[2]: break
+        produtos.append({
+            'codInterno':  r[1],
+            'nomePerfil':  str(r[2]).strip(),
+            'formato':     str(r[3] or '').strip(),
+            'embalagem':   str(r[4]).strip(),
+            'kgCx':        float(r[6] or 20),
+            'unidFat':     str(r[7] or 'kg').strip(),
+            'precoUnit':   float(r[8] or 0),
+            'obs':         str(r[9] or '').strip(),
+        })
+    return meta, produtos
+
+# ════════════════════════════════════════════════
 # GERADOR EXCEL
 # ════════════════════════════════════════════════
 def gerar_excel(dados):
@@ -99,16 +162,12 @@ def gerar_excel(dados):
         for i,w in enumerate([4,10,38,12,7,12,12,9,14,2,11,12,14,12,10,8],1):
             ws.column_dimensions[get_column_letter(i)].width = w
 
-        # L1
         ws.merge_cells('A1:I1')
         ap(ws['A1'], tit_fd, F_TIT, BG_TIT, al=aln('center'))
-
-        # L2
         ws.merge_cells('A2:I2')
         subtitulo = (cli+' — '+fd['filial']) if cli else fd['filial']
         ap(ws['A2'], subtitulo, F_SUB, BG_SUB, al=aln('center'))
 
-        # L3-L7
         for r in [3,4,5,6,7]:
             ws.merge_cells(f'A{r}:B{r}')
             ws.merge_cells(f'C{r}:F{r}')
@@ -145,7 +204,6 @@ def gerar_excel(dados):
         ap(ws['G7'],'Tel. Vendedor:',F_MB,BG_META,al=aln('left'))
         ap(ws['H7'],tel,F_M,BG_META,al=aln('left'))
 
-        # L8 Headers
         for col,h,az in [('A','#',0),('B','Cód.\nInterno',0),('C','Nome Produto\nno Cliente',0),
             ('D','Formato',0),('E','Caixa',0),('F','Kg\nPlanejados',0),('G','Kg\nEmbarcados',0),
             ('H','Nº\nCaixas',0),('I','Obs.',0),('K','Qtde\nMultipl.',1),('L','Preço Unit.\n(R$)',1),
@@ -153,7 +211,6 @@ def gerar_excel(dados):
             ap(ws[f'{col}8'],h,F_HW if az else F_HB,BG_AZL if az else BG_HDR,BALL,aln('center',True))
         ws.row_dimensions[8].height = 28
 
-        # Itens
         for idx,it in enumerate(its):
             r = idx+9; par=(idx%2==1); bg=BG_PAR if par else None
             isCx=(it.get('unidFat','kg')=='cx'); kgcx=it.get('kgCx',20)
@@ -179,13 +236,11 @@ def gerar_excel(dados):
             ap(c('O'),None,F_DIF,BG_AZLT,BALL,aln('center'),FMT_MONEY)
             ap(c('P'),it.get('unidFat','kg'),F_CX if isCx else F_IT,BG_AZLT,BALL,aln('center'))
 
-        # Formatação condicional O vazio → fonte normal
         ws.conditional_formatting.add(
             f'O9:O{n+8}',
             FormulaRule(formula=[f'O9=""'], font=Font(bold=False,size=9,color='FF000000'))
         )
 
-        # TOTAL
         rT=n+9; r1=9; r2=n+8
         ws.merge_cells(f'A{rT}:E{rT}')
         ap(ws[f'A{rT}'],f'TOTAL  —  {n} itens',F_TOT,None,brd(1,1,1,0),aln('left'))
@@ -196,14 +251,12 @@ def gerar_excel(dados):
         ws[f'M{rT}'].value = f'=SUM(M{r1}:M{r2})'
         ap(ws[f'M{rT}'],None,F_TOT,BG_TOTV,BALL,aln('center'),FMT_MONEY)
 
-        # Instrução
         rI = rT+2
         ws.merge_cells(f'A{rI}:I{rI}')
         ws.merge_cells(f'K{rI}:P{rI}')
         ap(ws[f'A{rI}'],f'Imprimir: selecionar A1:I{rT-1} → Imprimir Seleção',F_NT,al=aln('left'))
         ap(ws[f'K{rI}'],'Col K=qtde faturamento | Col P=unidade | Dif. Preço vermelho=revisar',F_NR,al=aln('left'))
 
-    # RESUMO GERAL
     wsr = wb.create_sheet('RESUMO GERAL')
     for i,w in enumerate([22,12,22,6,12,14],1): wsr.column_dimensions[get_column_letter(i)].width=w
     for ci,h in enumerate(['Filial','Pedido Nº','CNPJ','Itens','Kg Plan.','Valor (R$)'],1):
@@ -229,7 +282,7 @@ def gerar_excel(dados):
     return buf.read()
 
 # ════════════════════════════════════════════════
-# GERADOR PDF — A4 paisagem, largura total, fontes maiores
+# GERADOR PDF
 # ════════════════════════════════════════════════
 def gerar_pdf(dados):
     buf = io.BytesIO()
@@ -248,11 +301,9 @@ def gerar_pdf(dados):
     COR_PAR = colors.HexColor('#F5F5F5')
     COR_CZ  = colors.HexColor('#E8E8E8')
 
-    # Colunas A:I — largura total 277mm
     col_w = [8*mm, 18*mm, 95*mm, 24*mm, 18*mm, 22*mm, 22*mm, 20*mm, 50*mm]
-    W = sum(col_w)  # 277mm — largura total da tabela
+    W = sum(col_w)
 
-    # Estilos com fontes maiores para boa leitura impressa
     ST_TIT  = ParagraphStyle('t',  fontSize=13, fontName='Helvetica-Bold', alignment=TA_CENTER, leading=16)
     ST_SUB  = ParagraphStyle('s',  fontSize=11, fontName='Helvetica-Bold', alignment=TA_CENTER, leading=14)
     ST_MB   = ParagraphStyle('mb', fontSize=10, fontName='Helvetica-Bold', alignment=TA_LEFT,   leading=12)
@@ -272,22 +323,18 @@ def gerar_pdf(dados):
         emp_fd = fd.get('empresa', dados.get('empresa', 2))
         tit_fd = 'PEDIDO PATA NEGRA DISTRIBUIDORA' if emp_fd==2 else 'PEDIDO INDUSTRIA PATANEGRA'
         tkg = sum(float(it.get('kgPlanejados',0)) for it in its)
-
         subtitulo = (cli+' — '+fd['filial']) if cli else fd['filial']
 
-        # Título
         tbl_tit = Table([[Paragraph(tit_fd, ST_TIT)]], colWidths=[W])
         tbl_tit.setStyle(TableStyle([
             ('BACKGROUND',(0,0),(-1,-1),COR_TIT),
             ('TOPPADDING',(0,0),(-1,-1),5),('BOTTOMPADDING',(0,0),(-1,-1),5)]))
 
-        # Subtítulo
         tbl_sub = Table([[Paragraph(subtitulo, ST_SUB)]], colWidths=[W])
         tbl_sub.setStyle(TableStyle([
             ('BACKGROUND',(0,0),(-1,-1),COR_SUB),
             ('TOPPADDING',(0,0),(-1,-1),4),('BOTTOMPADDING',(0,0),(-1,-1),4)]))
 
-        # Metadados — 2 colunas
         def ml(t): return Paragraph(t, ST_MB)
         def mv(t): return Paragraph(str(t) if t else '—', ST_MV)
 
@@ -298,7 +345,6 @@ def gerar_pdf(dados):
             [ml('Endereço:'),  mv(fd.get('endereco','')),   ml('Vendedor:'),     mv(vend)],
             [ml('Cond. Pgto.:'), mv(fd.get('condPgto','')),ml('Tel. Vendedor:'), mv(tel)],
         ]
-        # Larguras: 25+100+32+120 = 277mm
         tbl_meta = Table(meta, colWidths=[25*mm, 100*mm, 32*mm, W-25*mm-100*mm-32*mm])
         tbl_meta.setStyle(TableStyle([
             ('BACKGROUND',(0,0),(-1,-1),COR_META),
@@ -308,16 +354,11 @@ def gerar_pdf(dados):
             ('LINEBELOW',(0,4),(-1,4),0.5,colors.grey),
         ]))
 
-        # Tabela de itens A:I
         header = [
-            Paragraph('#',ST_HDR),
-            Paragraph('Cód.\nInterno',ST_HDR),
-            Paragraph('Nome Produto no Cliente',ST_HDR),
-            Paragraph('Formato',ST_HDR),
-            Paragraph('Caixa',ST_HDR),
-            Paragraph('Kg\nPlanejados',ST_HDR),
-            Paragraph('Kg\nEmbarcados',ST_HDR),
-            Paragraph('Nº\nCaixas',ST_HDR),
+            Paragraph('#',ST_HDR), Paragraph('Cód.\nInterno',ST_HDR),
+            Paragraph('Nome Produto no Cliente',ST_HDR), Paragraph('Formato',ST_HDR),
+            Paragraph('Caixa',ST_HDR), Paragraph('Kg\nPlanejados',ST_HDR),
+            Paragraph('Kg\nEmbarcados',ST_HDR), Paragraph('Nº\nCaixas',ST_HDR),
             Paragraph('Obs.',ST_HDR),
         ]
         rows = [header]
@@ -326,23 +367,20 @@ def gerar_pdf(dados):
             kgPlan = it.get('kgPlanejados',0) or 0
             nrCx = round(kgPlan/kgcx,1) if kgcx else ''
             rows.append([
-                Paragraph(str(idx+1),       ST_ITC),
+                Paragraph(str(idx+1), ST_ITC),
                 Paragraph(str(it.get('codInterno','')), ST_ITC),
-                Paragraph(str(it.get('nomeProduto','')),ST_IT),
-                Paragraph(str(it.get('formato','') or ''),ST_ITC),
-                Paragraph(str(it.get('embalagem','')),  ST_ITC),
+                Paragraph(str(it.get('nomeProduto','')), ST_IT),
+                Paragraph(str(it.get('formato','') or ''), ST_ITC),
+                Paragraph(str(it.get('embalagem','')), ST_ITC),
                 Paragraph(f"{kgPlan:.1f}" if kgPlan else '', ST_ITR),
-                Paragraph('', ST_ITC),   # Kg Embarcados — vazio
+                Paragraph('', ST_ITC),
                 Paragraph(str(nrCx) if nrCx else '', ST_ITR),
                 Paragraph(str(it.get('obs','') or ''), ST_IT),
             ])
 
-        # Linha TOTAL
         rows.append([
-            Paragraph(f'TOTAL — {n} itens', ST_TOT),
-            '','','','',
-            Paragraph(f'{tkg:.1f}', ST_TOTR),
-            '','',''
+            Paragraph(f'TOTAL — {n} itens', ST_TOT),'','','','',
+            Paragraph(f'{tkg:.1f}', ST_TOTR),'','',''
         ])
 
         tbl_itens = Table(rows, colWidths=col_w, repeatRows=1)
@@ -353,7 +391,7 @@ def gerar_pdf(dados):
             ('GRID',(0,0),(-1,-2),0.5,colors.HexColor('#BBBBBB')),
             ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),
             ('LEFTPADDING',(0,0),(-1,-1),3),('RIGHTPADDING',(0,0),(-1,-1),3),
-            ('BACKGROUND',(6,1),(6,-2),COR_CZ),  # col G cinza
+            ('BACKGROUND',(6,1),(6,-2),COR_CZ),
             ('BACKGROUND',(0,-1),(-1,-1),COR_HDR),
             ('SPAN',(0,-1),(4,-1)),
             ('LINEABOVE',(0,-1),(-1,-1),0.8,colors.grey),
@@ -365,8 +403,7 @@ def gerar_pdf(dados):
         tbl_itens.setStyle(TableStyle(cmds))
 
         nota = Paragraph(
-            'Col. G — Kg Embarcados: preenchida pelo encarregado de embarque.   |   '
-            'Pata Negra Distribuidora',
+            'Col. G — Kg Embarcados: preenchida pelo encarregado de embarque.   |   Pata Negra Distribuidora',
             ST_NOTA)
 
         story.append(KeepTogether([tbl_tit, tbl_sub, tbl_meta, tbl_itens, nota]))
@@ -401,7 +438,7 @@ def processar_item(cod_cli, nome_raw, emb_tipo, qtde_emb, qtde_ped, preco, total
     }
 
 # ════════════════════════════════════════════════
-# PARSER DOM ATACAREJO (TOTVS — multi-filial, 2 pág/filial)
+# PARSERS
 # ════════════════════════════════════════════════
 def parse_dom_atacarejo(pdf_bytes, produtos):
     filiais = []
@@ -457,9 +494,6 @@ def parse_dom_atacarejo(pdf_bytes, produtos):
                     'condPgto':condPgto,'empresa':2,'itens':itens})
     return filiais
 
-# ════════════════════════════════════════════════
-# PARSER ATACADÃO (1 PDF = 1 filial, linhas KG+GR por produto)
-# ════════════════════════════════════════════════
 def parse_atacadao(pdf_bytes, produtos):
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
         txt = '\n'.join(p.extract_text() or '' for p in pdf.pages)
@@ -473,7 +507,6 @@ def parse_atacadao(pdf_bytes, produtos):
     cnpj      = fm(r'Local de Entrega:\s*([\d./\-]+)')
     empresa   = 1 if CNPJ_INDUSTRIA.replace('.','') in cnpj.replace('.','').replace('-','') else 2
 
-    # Condição de pagamento: número isolado antes de "da data de recebimento"
     cond_m = re.search(r'\|\s+(\d+)\s*\+?\s*\n.*?da data de recebimento', txt, re.S)
     condPgto = cond_m.group(1)+' dias' if cond_m else fm(r'Condicoes de Pagto.*?\n\|\s*(\d+)')
     if condPgto and 'dias' not in condPgto: condPgto += ' dias'
@@ -501,11 +534,11 @@ def parse_atacadao(pdf_bytes, produtos):
 
     itens = []; pending = None
     for ln in lines:
-        mm = reItem.match(ln)
-        if mm:
-            pending = {'nome': mm.group(1).strip(),
-                       'qtd':  float(mm.group(3).replace('.','').replace(',','.')),
-                       'preco':float(mm.group(4).replace('.','').replace(',','.'))}
+        mm2 = reItem.match(ln)
+        if mm2:
+            pending = {'nome': mm2.group(1).strip(),
+                       'qtd':  float(mm2.group(3).replace('.','').replace(',','.')),
+                       'preco':float(mm2.group(4).replace('.','').replace(',','.'))}
             continue
         m2 = reRef.search(ln)
         if m2 and pending:
@@ -523,15 +556,11 @@ def parse_atacadao(pdf_bytes, produtos):
              'dataPedido':'','dataEntrega':dataEntrega,'condPgto':condPgto,
              'empresa':empresa,'itens':itens}]
 
-# ════════════════════════════════════════════════
-# PARSER ASSAÍ (Consinco — 1 filial por página)
-# ════════════════════════════════════════════════
 def parse_assai(pdf_bytes, produtos):
     filiais = []
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
         for page in pdf.pages:
             txt = page.extract_text() or ''
-            lines = txt.split('\n')
 
             def fm(pat):
                 m = re.search(pat, txt, re.I)
@@ -576,7 +605,41 @@ def parse_assai(pdf_bytes, produtos):
 # ════════════════════════════════════════════════
 @app.route('/health')
 def health():
-    return jsonify({'status':'ok'})
+    perfis = {}
+    for c in ['dom_atacarejo','atacadao','assai']:
+        if perfil_existe(c):
+            perfis[c] = perfil_filename(c)
+    return jsonify({'status':'ok', 'perfis': perfis})
+
+@app.route('/perfil/<cliente>', methods=['POST'])
+def upload_perfil(cliente):
+    """Salva ou atualiza o perfil de um cliente no servidor."""
+    clientes_validos = ['dom_atacarejo','atacadao','assai']
+    if cliente not in clientes_validos:
+        return jsonify({'erro': f'Cliente inválido: {cliente}'}), 400
+    f = request.files.get('perfil')
+    if not f:
+        return jsonify({'erro': 'Envie o arquivo perfil'}), 400
+    filename = f.filename or ''
+    salvar_perfil(cliente, f.read(), filename)
+    return jsonify({'ok': True, 'cliente': cliente, 'filename': filename, 'mensagem': 'Perfil salvo com sucesso'})
+
+@app.route('/logo/<cliente>')
+def logo(cliente):
+    """Retorna a logo extraída do perfil Excel do cliente."""
+    if not perfil_existe(cliente):
+        return jsonify({'erro': 'Perfil não encontrado'}), 404
+    try:
+        wb = openpyxl.load_workbook(perfil_path(cliente))
+        ws = wb[wb.sheetnames[0]]
+        if not ws._images:
+            return jsonify({'erro': 'Sem imagem no perfil'}), 404
+        img = ws._images[0]
+        img.ref.seek(0)
+        data = img.ref.read()
+        return send_file(io.BytesIO(data), mimetype='image/png')
+    except Exception as e:
+        return jsonify({'erro': str(e)}), 500
 
 @app.route('/processar', methods=['POST'])
 def processar():
@@ -585,37 +648,21 @@ def processar():
         pedido_file = request.files.get('pedido')
         cliente     = request.form.get('cliente','dom_atacarejo')
 
-        if not perfil_file or not pedido_file:
-            return jsonify({'erro':'Envie perfil e pedido'}), 400
+        if not pedido_file:
+            return jsonify({'erro': 'Envie o pedido'}), 400
 
-        # Ler Perfil
-        wb_p  = openpyxl.load_workbook(io.BytesIO(perfil_file.read()), data_only=True)
-        pws   = wb_p[wb_p.sheetnames[0]]
-        pdata = list(pws.iter_rows(values_only=True))
-        meta  = {
-            'empresa':  pdata[0][9] if pdata[0][9] else 2,
-            'codVend':  str(pdata[2][6]) if pdata[2][6] else '',
-            'codCond':  str(pdata[3][6]) if pdata[3][6] else '',
-            'vendedor': pdata[2][8] or '',
-            'telefone': pdata[2][9] or '',
-        }
-        produtos = []
-        for r in pdata[7:]:
-            if not r or not r[2]: break
-            produtos.append({
-                'codInterno':  r[1],
-                'nomePerfil':  str(r[2]).strip(),
-                'formato':     str(r[3] or '').strip(),
-                'embalagem':   str(r[4]).strip(),
-                'kgCx':        float(r[6] or 20),
-                'unidFat':     str(r[7] or 'kg').strip(),
-                'precoUnit':   float(r[8] or 0),
-                'obs':         str(r[9] or '').strip(),
-            })
+        # Perfil: usa o enviado agora (e salva) ou o salvo no servidor
+        if perfil_file:
+            perfil_bytes = perfil_file.read()
+            salvar_perfil(cliente, perfil_bytes, perfil_file.filename)  # atualiza o salvo
+        elif perfil_existe(cliente):
+            perfil_bytes = carregar_perfil_bytes(cliente)
+        else:
+            return jsonify({'erro': f'Nenhum perfil disponível para {cliente}. Faça upload do perfil primeiro.'}), 400
 
+        meta, produtos = ler_perfil(perfil_bytes)
         pdf_bytes = pedido_file.read()
 
-        # Parser
         nomes_cliente = {
             'dom_atacarejo': 'DOM Atacarejo',
             'atacadao':      'Atacadão',
@@ -629,14 +676,12 @@ def processar():
             filiais = parse_assai(pdf_bytes, produtos)
             if filiais: meta['empresa'] = filiais[0]['empresa']
         else:
-            return jsonify({'erro':f'Cliente {cliente} não implementado'}), 400
+            return jsonify({'erro': f'Cliente {cliente} não implementado'}), 400
 
         if not filiais:
-            return jsonify({'erro':'Nenhuma filial encontrada no pedido'}), 400
+            return jsonify({'erro': 'Nenhuma filial encontrada no pedido'}), 400
 
-        dados = {**meta,
-                 'filiais': filiais,
-                 'clienteNome': nomes_cliente.get(cliente, cliente)}
+        dados = {**meta, 'filiais': filiais, 'clienteNome': nomes_cliente.get(cliente, cliente)}
 
         excel_bytes   = gerar_excel(dados)
         pdf_bytes_out = gerar_pdf(dados)
@@ -658,7 +703,7 @@ def processar():
 
     except Exception as e:
         traceback.print_exc()
-        return jsonify({'erro':str(e)}), 500
+        return jsonify({'erro': str(e)}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
