@@ -102,6 +102,14 @@ main{max-width:800px;margin:28px auto;padding:0 16px;display:flex;flex-direction
         <div class="cb-info"><span class="cn">DOM Atacarejo</span><span class="ct">PDF TOTVS</span><span class="badge">Ativo</span></div>
       </button>
 
+      <button class="cb" id="btn-torre_central">
+        <div class="cb-logo">
+          <img src="https://pata-negra-784065203515.us-central1.run.app/logo/torre_central" alt="Torre Central" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+          <div class="cb-logo-placeholder" style="display:none">🏪</div>
+        </div>
+        <div class="cb-info"><span class="cn">Torre Central</span><span class="ct">PDF TOTVS</span><span class="badge">Ativo</span></div>
+      </button>
+
       <button class="cb" id="btn-domatac">
         <div class="cb-logo"><div class="cb-logo-placeholder">🏪</div></div>
         <div class="cb-info"><span class="cn">Dom Atacadista</span><span class="ct">PDF texto</span><span class="badge m">A mapear</span></div>
@@ -179,12 +187,13 @@ main{max-width:800px;margin:28px auto;padding:0 16px;display:flex;flex-direction
 var SERVER_URL = 'https://pata-negra-784065203515.us-central1.run.app';
 var S = {cliente:null, perfilFile:null, pedidoFile:null, arquivos:[], perfilServidor:{}};
 var CLIENTES = {
-  assai:        {nome:'Assaí'},
-  atacadao:     {nome:'Atacadão'},
-  dom_atacarejo:{nome:'DOM Atacarejo'},
-  domatac:      {nome:'Dom Atacadista'},
-  summer:       {nome:'Mercado Summer'},
-  supjoao:      {nome:'Superm. do João'}
+  assai:         {nome:'Assaí'},
+  atacadao:      {nome:'Atacadão'},
+  dom_atacarejo: {nome:'DOM Atacarejo'},
+  torre_central: {nome:'Torre Central'},
+  domatac:       {nome:'Dom Atacadista'},
+  summer:        {nome:'Mercado Summer'},
+  supjoao:       {nome:'Superm. do João'}
 };
 
 document.getElementById('hdate').textContent =
@@ -365,4 +374,4 @@ function dlArquivoIdx(idx, tipo) {
 }
 </script>
 </body>
-</html>
+</html
