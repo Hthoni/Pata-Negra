@@ -1,85 +1,368 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
-<html>
+<!DOCTYPE html>
+<html lang="pt-BR">
 <head>
-  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-  <meta http-equiv="Content-Style-Type" content="text/css">
-  <title></title>
-  <meta name="Generator" content="Cocoa HTML Writer">
-  <meta name="CocoaVersion" content="2113.65">
-  <style type="text/css">
-    body {background-color: #f5f3ef}
-    p.p1 {margin: 0.0px 0.0px 0.0px 0.0px; line-height: 22.5px; font: 15.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff; background-color: #ffffff; background-color: rgba(255, 255, 255, 0.18)}
-    p.p3 {margin: 0.0px 0.0px 0.0px 0.0px; line-height: 18.0px; font: 12.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff; min-height: 15.0px}
-    p.p4 {margin: 0.0px 0.0px 0.0px 0.0px; line-height: 16.5px; font: 11.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff; background-color: #771016}
-    p.p6 {margin: 0.0px 0.0px 0.0px 0.0px; text-align: center; line-height: 21.0px; font: 11.0px 'Helvetica Neue'; color: #141210; -webkit-text-stroke: #141210; min-height: 13.0px}
-    p.p7 {margin: 0.0px 0.0px 0.0px 0.0px; text-align: center; line-height: 21.0px; font: 12.0px 'Helvetica Neue'; color: #141210; -webkit-text-stroke: #141210}
-    p.p8 {margin: 0.0px 0.0px 0.0px 0.0px; text-align: center; line-height: 21.0px; font: 10.0px 'Helvetica Neue'; color: #67615d; -webkit-text-stroke: #67615d}
-    p.p9 {margin: 0.0px 0.0px 0.0px 0.0px; text-align: center; line-height: 21.0px; font: 10.0px 'Helvetica Neue'; color: #185a2e; -webkit-text-stroke: #185a2e; background-color: #e6f3ec}
-    p.p10 {margin: 0.0px 0.0px 0.0px 0.0px; line-height: 21.0px; font: 18.0px '.Apple Color Emoji UI'; color: #141210; -webkit-text-stroke: #141210; background-color: #f5f3ef}
-    p.p11 {margin: 0.0px 0.0px 0.0px 0.0px; text-align: center; line-height: 21.0px; font: 10.0px 'Helvetica Neue'; color: #757575; -webkit-text-stroke: #757575; background-color: #ececec}
-    p.p12 {margin: 0.0px 0.0px 0.0px 0.0px; text-align: center; line-height: 21.0px; font: 10.0px 'Helvetica Neue'; color: #a84804; -webkit-text-stroke: #a84804; background-color: #fdf0db}
-    p.p13 {margin: 0.0px 0.0px 0.0px 0.0px; line-height: 18.0px; font: 12.0px 'Helvetica Neue'; color: #67615d; -webkit-text-stroke: #67615d}
-    p.p14 {margin: 0.0px 0.0px 0.0px 0.0px; line-height: 18.0px; font: 12.0px 'Helvetica Neue'; color: #67615d; -webkit-text-stroke: #67615d; background-color: #ffffff}
-    p.p15 {margin: 0.0px 0.0px 0.0px 0.0px; line-height: 21.0px; font: 11.0px 'Helvetica Neue'; color: #141210; -webkit-text-stroke: #141210; min-height: 13.0px}
-    p.p16 {margin: 0.0px 0.0px 0.0px 0.0px; text-align: center; line-height: 30.0px; font: 20.0px '.Apple Color Emoji UI'; color: #141210; -webkit-text-stroke: #141210}
-    p.p17 {margin: 0.0px 0.0px 0.0px 0.0px; text-align: center; line-height: 18.0px; font: 12.0px 'Helvetica Neue'; color: #141210; -webkit-text-stroke: #141210}
-    p.p18 {margin: 0.0px 0.0px 0.0px 0.0px; text-align: center; line-height: 15.0px; font: 10.0px 'Helvetica Neue'; color: #67615d; -webkit-text-stroke: #67615d}
-    p.p19 {margin: 0.0px 0.0px 0.0px 0.0px; text-align: center; line-height: 15.0px; font: 10.0px 'Helvetica Neue'; color: #185a2e; -webkit-text-stroke: #185a2e; min-height: 12.0px}
-    p.p20 {margin: 0.0px 0.0px 0.0px 0.0px; line-height: 18.0px; font: 12.0px 'Helvetica Neue'; color: #771016; -webkit-text-stroke: #771016}
-    p.p21 {margin: 0.0px 0.0px 0.0px 0.0px; line-height: 21.0px; font: 14.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff}
-    span.s1 {font-kerning: none}
-    span.s2 {font-kerning: none; background-color: #771016}
-    span.s3 {font-kerning: none; background-color: #ffffff}
-    span.s4 {font: 14.0px '.Apple Color Emoji UI'; font-kerning: none; background-color: #771016}
-    span.s5 {font-kerning: none; color: #141210; background-color: #ffffff; -webkit-text-stroke: 0px #141210}
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pata Negra — Processamento de Pedidos</title>
+<style>
+:root{--bg:#F7F5F2;--surface:#fff;--border:#E2DDD8;--text:#1A1714;--muted:#7A7470;--accent:#8B1C1C;--accent-lt:#F9EFEF;--green:#1A6B3C;--green-lt:#EBF5F0;--warn:#B85C00;--warn-lt:#FEF3E2;--radius:6px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line-height:1.5}
+header{background:var(--accent);color:#fff;padding:0 24px;height:56px;display:flex;align-items:center;gap:12px;box-shadow:0 2px 8px rgba(139,28,28,.25)}
+.logo{width:30px;height:30px;background:rgba(255,255,255,.18);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;flex-shrink:0}
+header h1{font-size:15px;font-weight:600}
+header span{font-size:12px;opacity:.65;margin-left:auto}
+main{max-width:800px;margin:28px auto;padding:0 16px;display:flex;flex-direction:column;gap:18px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 1px 3px rgba(0,0,0,.08);overflow:hidden}
+.card-header{padding:13px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.step{width:22px;height:22px;background:var(--accent);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+.card-header h2{font-size:13px;font-weight:600}
+.csub{font-size:12px;color:var(--muted);margin-left:auto}
+.card-body{padding:18px 20px}
+.client-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+.cb{border:2px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:10px 10px 8px;cursor:pointer;text-align:center;color:var(--text);transition:border-color .13s,background .13s;font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:6px;min-height:110px}
+.cb:hover{border-color:var(--accent);background:var(--accent-lt)}
+.cb.active{border-color:var(--accent);background:var(--accent-lt);box-shadow:0 0 0 3px rgba(139,28,28,.12)}
+.cb-logo{width:100%;height:56px;display:flex;align-items:center;justify-content:center}
+.cb-logo img{max-width:90%;max-height:54px;object-fit:contain}
+.cb-logo-placeholder{width:44px;height:44px;background:var(--bg);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:18px}
+.cb-info{display:flex;flex-direction:column;align-items:center;gap:2px;width:100%}
+.cb .cn{font-size:12px;font-weight:600}
+.cb .ct{font-size:10px;color:var(--muted)}
+.badge{display:inline-block;padding:1px 7px;border-radius:10px;font-size:10px;font-weight:600;background:var(--green-lt);color:var(--green)}
+.badge.p{background:var(--warn-lt);color:var(--warn)}
+.badge.m{background:#F0F0F0;color:#888}
+.upload-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:500px){.upload-row{grid-template-columns:1fr}}
+.ulabel{font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.perfil-salvo{font-size:10px;color:var(--green);background:var(--green-lt);padding:2px 8px;border-radius:10px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
+.zone{border:2px dashed var(--border);border-radius:var(--radius);padding:16px 12px;text-align:center;cursor:pointer;position:relative;transition:border-color .13s,background .13s;min-height:100px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.zone:hover,.zone.drag{border-color:var(--accent);background:var(--accent-lt)}
+.zone.filled{border-style:solid;border-color:var(--green);background:var(--green-lt)}
+.zone.server{border-style:solid;border-color:var(--green);background:var(--green-lt);opacity:.8}
+.zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.zi{font-size:20px;margin-bottom:4px}.zl{font-size:12px;font-weight:600}
+.zh{font-size:10px;color:var(--muted);margin-top:2px}
+.zf{font-size:10px;color:var(--green);font-weight:600;margin-top:4px;word-break:break-all;max-width:100%;padding:0 4px}
+.btn-proc{width:100%;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius);font-size:14px;font-weight:600;cursor:pointer;margin-top:12px;font-family:inherit;transition:background .13s}
+.btn-proc:hover:not(:disabled){background:#6F1515}
+.btn-proc:disabled{opacity:.4;cursor:not-allowed}
+#log{display:none;background:#1A1714;color:#E8E4DF;border-radius:var(--radius);padding:14px 18px;font-family:monospace;font-size:12px;line-height:1.7;max-height:260px;overflow-y:auto}
+#log .ok{color:#5CB85C}#log .wn{color:#F0AD4E}#log .er{color:#D9534F}#log .in{color:#5BC0DE}
+#results{display:none}
+.rg{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+@media(max-width:500px){.rg{grid-template-columns:1fr}}
+.rc{border:1px solid var(--border);border-radius:var(--radius);padding:14px;display:flex;flex-direction:column;gap:7px}
+.ri{font-size:26px}.rt{font-size:13px;font-weight:600}.rd{font-size:11px;color:var(--muted)}
+.btn-dl{padding:9px 14px;border-radius:var(--radius);border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:background .13s}
+.btn-dl.xl{background:var(--green-lt);color:var(--green)}.btn-dl.xl:hover{background:#D4EDDA}
+.btn-dl.pd{background:var(--accent-lt);color:var(--accent)}.btn-dl.pd:hover{background:#F5D5D5}
+.summary{background:var(--bg);border-radius:4px;padding:12px 14px;font-size:12px}
+.summary table{width:100%;border-collapse:collapse}
+.summary td{padding:3px 5px;vertical-align:top}
+.summary td:last-child{text-align:right;font-weight:600}
+.summary tr.sh td{color:var(--muted);font-weight:600;border-bottom:1px solid var(--border);padding-bottom:5px}
+.divider{height:1px;background:var(--border);margin:8px 0}
+</style>
 </head>
 <body>
-<p class="p1"><span class="s1"><b>PN</b></span></p>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; line-height: 22.5px; font: 15.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s2"><b>Pata Negra — Processamento de Pedidos</b></span></h1>
-<p class="p3"><span class="s1"></span><br></p>
-<p class="p4"><span class="s1"><b>1</b></span></p>
-<h2 style="margin: 0.0px 0.0px 0.0px 0.0px; line-height: 19.5px; font: 13.0px 'Helvetica Neue'; color: #141210; -webkit-text-stroke: #141210"><span class="s3"><b>Selecionar cliente</b></span></h2>
-<p class="p6"><span class="s1"></span><br></p>
-<p class="p7"><span class="s3"><b>Assaí</b></span></p>
-<p class="p8"><span class="s3">PDF Consinco</span></p>
-<p class="p9"><span class="s1"><b>Ativo</b></span></p>
-<p class="p6"><span class="s1"></span><br></p>
-<p class="p7"><span class="s3"><b>Atacadão</b></span></p>
-<p class="p8"><span class="s3">PDF Atacadão</span></p>
-<p class="p9"><span class="s1"><b>Ativo</b></span></p>
-<p class="p6"><span class="s1"></span><br></p>
-<p class="p7"><span class="s3"><b>DOM Atacarejo</b></span></p>
-<p class="p8"><span class="s3">PDF TOTVS</span></p>
-<p class="p9"><span class="s1"><b>Ativo</b></span></p>
-<p class="p10"><span class="s1">🏪</span></p>
-<p class="p7"><span class="s3"><b>Dom Atacadista</b></span></p>
-<p class="p8"><span class="s3">PDF texto</span></p>
-<p class="p11"><span class="s1"><b>A mapear</b></span></p>
-<p class="p10"><span class="s1">🏪</span></p>
-<p class="p7"><span class="s3"><b>Mercado Summer</b></span></p>
-<p class="p8"><span class="s3">PDF texto</span></p>
-<p class="p12"><span class="s1"><b>Em breve</b></span></p>
-<p class="p10"><span class="s1">🏪</span></p>
-<p class="p7"><span class="s3"><b>Superm. do João</b></span></p>
-<p class="p8"><span class="s3">PDF texto</span></p>
-<p class="p12"><span class="s1"><b>Em breve</b></span></p>
-<p class="p4"><span class="s1"><b>2</b></span></p>
-<h2 style="margin: 0.0px 0.0px 0.0px 0.0px; line-height: 19.5px; font: 13.0px 'Helvetica Neue'; color: #141210; -webkit-text-stroke: #141210"><span class="s3"><b>Upload dos arquivos</b></span></h2>
-<p class="p13"><span class="s3">— selecione um cliente acima</span></p>
-<p class="p14"><span class="s1"><b>Perfil do cliente</b></span></p>
-<p class="p15"><span class="s1"></span><br></p>
-<p class="p16"><span class="s3">📋</span></p>
-<p class="p17"><span class="s3"><b>Perfil Excel</b></span></p>
-<p class="p18"><span class="s3">.xlsx — necessário para primeiro uso</span></p>
-<p class="p19"><span class="s1"><b></b></span><br></p>
-<p class="p14"><span class="s1"><b>Pedido do cliente</b></span></p>
-<p class="p20"><span class="s3"><b>*</b></span></p>
-<p class="p15"><span class="s1"></span><br></p>
-<p class="p16"><span class="s3">📦</span></p>
-<p class="p17"><span class="s3"><b>Pedido</b></span></p>
-<p class="p18"><span class="s3">PDF · Excel · Imagem</span></p>
-<p class="p19"><span class="s1"><b></b></span><br></p>
-<p class="p21"><span class="s4">⚙️</span><span class="s2"><b>  Processar pedido</b></span><span class="s5"><span class="Apple-converted-space"> </span></span></p>
+<header>
+  <div class="logo">PN</div>
+  <h1>Pata Negra — Processamento de Pedidos</h1>
+  <span id="hdate"></span>
+</header>
+<main>
+
+<div class="card">
+  <div class="card-header"><div class="step">1</div><h2>Selecionar cliente</h2></div>
+  <div class="card-body">
+    <div class="client-grid" id="client-grid">
+
+      <button class="cb" id="btn-assai">
+        <div class="cb-logo">
+          <img src="https://pata-negra-784065203515.us-central1.run.app/logo/assai" alt="Assai" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+          <div class="cb-logo-placeholder" style="display:none">🏪</div>
+        </div>
+        <div class="cb-info"><span class="cn">Assaí</span><span class="ct">PDF Consinco</span><span class="badge">Ativo</span></div>
+      </button>
+
+      <button class="cb" id="btn-atacadao">
+        <div class="cb-logo">
+          <img src="https://pata-negra-784065203515.us-central1.run.app/logo/atacadao" alt="Atacadao" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+          <div class="cb-logo-placeholder" style="display:none">🏪</div>
+        </div>
+        <div class="cb-info"><span class="cn">Atacadão</span><span class="ct">PDF Atacadão</span><span class="badge">Ativo</span></div>
+      </button>
+
+      <button class="cb" id="btn-dom_atacarejo">
+        <div class="cb-logo">
+          <img src="https://pata-negra-784065203515.us-central1.run.app/logo/dom_atacarejo" alt="DOM Atacarejo" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+          <div class="cb-logo-placeholder" style="display:none">🏪</div>
+        </div>
+        <div class="cb-info"><span class="cn">DOM Atacarejo</span><span class="ct">PDF TOTVS</span><span class="badge">Ativo</span></div>
+      </button>
+
+      <button class="cb" id="btn-domatac">
+        <div class="cb-logo"><div class="cb-logo-placeholder">🏪</div></div>
+        <div class="cb-info"><span class="cn">Dom Atacadista</span><span class="ct">PDF texto</span><span class="badge m">A mapear</span></div>
+      </button>
+
+      <button class="cb" id="btn-summer">
+        <div class="cb-logo"><div class="cb-logo-placeholder">🏪</div></div>
+        <div class="cb-info"><span class="cn">Mercado Summer</span><span class="ct">PDF texto</span><span class="badge p">Em breve</span></div>
+      </button>
+
+      <button class="cb" id="btn-supjoao">
+        <div class="cb-logo"><div class="cb-logo-placeholder">🏪</div></div>
+        <div class="cb-info"><span class="cn">Superm. do João</span><span class="ct">PDF texto</span><span class="badge p">Em breve</span></div>
+      </button>
+
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <div class="step">2</div><h2>Upload dos arquivos</h2>
+    <span class="csub" id="sub-c">— selecione um cliente acima</span>
+  </div>
+  <div class="card-body">
+    <div class="upload-row">
+      <div>
+        <div class="ulabel">
+          Perfil do cliente
+          <span id="perfil-salvo-badge" style="display:none" class="perfil-salvo"></span>
+        </div>
+        <div class="zone" id="zone-p"
+             ondragover="event.preventDefault();this.classList.add('drag')"
+             ondragleave="this.classList.remove('drag')"
+             ondrop="dropFile(event,'perfil')">
+          <input type="file" id="inp-p" accept=".xlsx,.xls" onchange="pickFile(this,'perfil')">
+          <div class="zi">📋</div>
+          <div class="zl" id="zone-p-label">Perfil Excel</div>
+          <div class="zh" id="zone-p-hint">.xlsx — necessário para primeiro uso</div>
+          <div class="zf" id="fn-p"></div>
+        </div>
+      </div>
+      <div>
+        <div class="ulabel">Pedido do cliente <span style="color:var(--accent)">*</span></div>
+        <div class="zone" id="zone-o"
+             ondragover="event.preventDefault();this.classList.add('drag')"
+             ondragleave="this.classList.remove('drag')"
+             ondrop="dropFile(event,'pedido')">
+          <input type="file" id="inp-o" accept=".pdf,.xlsx,.xls,.jpg,.jpeg,.png,.webp" onchange="pickFile(this,'pedido')">
+          <div class="zi">📦</div><div class="zl">Pedido</div>
+          <div class="zh">PDF · Excel · Imagem</div>
+          <div class="zf" id="fn-o"></div>
+        </div>
+      </div>
+    </div>
+    <button class="btn-proc" id="btn-proc" disabled onclick="processar()">⚙️ &nbsp;Processar pedido</button>
+  </div>
+</div>
+
+<div id="log"></div>
+
+<div class="card" id="results">
+  <div class="card-header">
+    <div class="step" style="background:var(--green)">✓</div><h2>Pedido processado</h2>
+  </div>
+  <div class="card-body">
+    <div class="summary" id="summary"></div>
+    <div class="rg" id="rg-downloads"></div>
+  </div>
+</div>
+
+</main>
+<script>
+'use strict';
+var SERVER_URL = 'https://pata-negra-784065203515.us-central1.run.app';
+var S = {cliente:null, perfilFile:null, pedidoFile:null, arquivos:[], perfilServidor:{}};
+var CLIENTES = {
+  assai:        {nome:'Assaí'},
+  atacadao:     {nome:'Atacadão'},
+  dom_atacarejo:{nome:'DOM Atacarejo'},
+  domatac:      {nome:'Dom Atacadista'},
+  summer:       {nome:'Mercado Summer'},
+  supjoao:      {nome:'Superm. do João'}
+};
+
+document.getElementById('hdate').textContent =
+  new Date().toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
+
+Object.keys(CLIENTES).forEach(function(id) {
+  var btn = document.getElementById('btn-'+id);
+  if (btn) btn.addEventListener('click', function() { selCliente(id, btn); });
+});
+
+window.addEventListener('load', function() {
+  fetch(SERVER_URL+'/health')
+    .then(function(r){ return r.json(); })
+    .then(function(d){ S.perfilServidor = d.perfis || {}; })
+    .catch(function(){});
+});
+
+function selCliente(id, btn) {
+  S.cliente = id;
+  document.querySelectorAll('.cb').forEach(function(b){ b.classList.remove('active'); });
+  btn.classList.add('active');
+  document.getElementById('sub-c').textContent = '— ' + CLIENTES[id].nome;
+  clearLog();
+  document.getElementById('results').style.display = 'none';
+  S.perfilFile = null;
+  // restaurar logos que possam ter sumido
+  ['assai','atacadao','dom_atacarejo'].forEach(function(cid) {
+    var imgEl = document.querySelector('#btn-'+cid+' .cb-logo img');
+    if (imgEl && LOGOS_CACHE[cid] && imgEl.style.display === 'none') {
+      imgEl.src = LOGOS_CACHE[cid];
+      imgEl.style.display = '';
+      var ph = imgEl.nextElementSibling;
+      if (ph) ph.style.display = 'none';
+    }
+  });
+  var badge = document.getElementById('perfil-salvo-badge');
+  var zoneP = document.getElementById('zone-p');
+  var label = document.getElementById('zone-p-label');
+  var hint  = document.getElementById('zone-p-hint');
+  var fnP   = document.getElementById('fn-p');
+  var filename = S.perfilServidor[id] || '';
+  fnP.textContent = '';
+  if (filename) {
+    badge.textContent = '📋 ' + filename;
+    badge.style.display = 'inline-block';
+    zoneP.className = 'zone server';
+    label.textContent = 'Perfil salvo no servidor';
+    hint.textContent  = 'Clique para substituir';
+  } else {
+    badge.style.display = 'none';
+    zoneP.className = 'zone';
+    label.textContent = 'Perfil Excel';
+    hint.textContent  = '.xlsx — necessário para primeiro uso';
+  }
+  atualizarBotao();
+}
+
+function pickFile(inp, tipo) { var f = inp.files[0]; if (!f) return; setFile(f, tipo); }
+function dropFile(ev, tipo) {
+  ev.preventDefault();
+  document.getElementById(tipo==='perfil' ? 'zone-p' : 'zone-o').classList.remove('drag');
+  var f = ev.dataTransfer.files[0]; if (!f) return; setFile(f, tipo);
+}
+function setFile(f, tipo) {
+  if (tipo === 'perfil') {
+    S.perfilFile = f;
+    document.getElementById('fn-p').textContent = f.name;
+    var zoneP = document.getElementById('zone-p');
+    zoneP.className = 'zone filled';
+    document.getElementById('zone-p-label').textContent = 'Novo perfil selecionado';
+    document.getElementById('zone-p-hint').textContent  = 'Será salvo no servidor ao processar';
+    var badge = document.getElementById('perfil-salvo-badge');
+    badge.textContent = '📋 ' + f.name;
+    badge.style.display = 'inline-block';
+  } else {
+    S.pedidoFile = f;
+    document.getElementById('fn-o').textContent = f.name;
+    document.getElementById('zone-o').classList.add('filled');
+  }
+  atualizarBotao();
+}
+
+function temPerfil() {
+  return S.perfilFile || (S.cliente && S.perfilServidor[S.cliente]);
+}
+function atualizarBotao() {
+  document.getElementById('btn-proc').disabled = !(S.cliente && S.pedidoFile && temPerfil());
+}
+
+function addLog(msg,cls){var el=document.getElementById('log');el.style.display='block';var d=document.createElement('div');if(cls)d.className=cls;d.textContent='['+new Date().toLocaleTimeString('pt-BR')+'] '+msg;el.appendChild(d);el.scrollTop=el.scrollHeight;}
+function logOk(m){addLog('✓ '+m,'ok');}
+function logWarn(m){addLog('⚠ '+m,'wn');}
+function logErr(m){addLog('✗ '+m,'er');}
+function logInfo(m){addLog('ℹ '+m,'in');}
+function clearLog(){var el=document.getElementById('log');el.innerHTML='';el.style.display='none';}
+function moeda(v){return Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
+
+async function processar() {
+  var btn = document.getElementById('btn-proc');
+  btn.disabled = true; btn.textContent = '⏳  Processando…';
+  clearLog(); document.getElementById('results').style.display = 'none';
+  S.excelB64 = null; S.pdfB64 = null;
+  try {
+    logInfo(S.perfilFile ? 'Enviando perfil + pedido…' : 'Usando perfil salvo no servidor · enviando pedido…');
+    var form = new FormData();
+    if (S.perfilFile) form.append('perfil', S.perfilFile);
+    form.append('pedido', S.pedidoFile);
+    form.append('cliente', S.cliente);
+    var resp = await fetch(SERVER_URL+'/processar', {method:'POST', body:form});
+    if (!resp.ok) { var err = await resp.json(); logErr('Erro: '+(err.erro||resp.status)); return; }
+    var data = await resp.json();
+    if (!data.ok) { logErr('Erro: '+data.erro); return; }
+    if (S.perfilFile) S.perfilServidor[S.cliente] = S.perfilFile.name;
+    S.arquivos = data.arquivos || [];
+    // compatibilidade retroativa
+    if (!S.arquivos.length && data.excel) {
+      S.arquivos = [{empresa: data.arquivos, label:'', excel: data.excel, pdf: data.pdf}];
+    }
+    logOk(data.filiais+' filiais | '+data.itens+' itens | '+data.totalKg+'kg | R$ '+moeda(data.totalValor));
+    if (data.split) logOk('Pedido misto — gerados arquivos separados por empresa');
+    var linhas = data.resumo.map(function(f){
+      return '<tr><td>'+f.filial+'</td><td style="text-align:center">'+f.itens+'</td>'+
+             '<td style="text-align:right">'+f.kg+' kg</td>'+
+             '<td style="text-align:right">R$ '+moeda(f.valor)+'</td></tr>';
+    }).join('');
+    document.getElementById('summary').innerHTML =
+      '<table>'+
+      '<tr><td><b>Filiais</b></td><td>'+data.filiais+'</td></tr>'+
+      '<tr><td><b>Total itens</b></td><td>'+data.itens+'</td></tr>'+
+      '<tr><td><b>Total Kg</b></td><td>'+data.totalKg+' kg</td></tr>'+
+      '<tr><td><b>Total Valor</b></td><td>R$ '+moeda(data.totalValor)+'</td></tr>'+
+      '</table><div class="divider"></div>'+
+      '<table><tr class="sh"><td>Filial</td><td style="text-align:center">Itens</td>'+
+      '<td style="text-align:right">Kg</td><td style="text-align:right">Valor</td></tr>'+linhas+'</table>';
+    // renderizar botões de download
+    var rg = document.getElementById('rg-downloads');
+    rg.innerHTML = '';
+    S.arquivos.forEach(function(arq) {
+      var sufixo = arq.label ? ' — '+arq.label : '';
+      rg.innerHTML +=
+        '<div class="rc">'+
+          '<div class="ri">📊</div>'+
+          '<div class="rt">Excel de Upload'+sufixo+'</div>'+
+          '<div class="rd">Formatação completa · fórmulas vivas · uma aba por filial</div>'+
+          '<button class="btn-dl xl" onclick="dlArquivoIdx('+S.arquivos.indexOf(arq)+','excel')">⬇ Baixar Excel'+sufixo+'</button>'+
+        '</div>'+
+        '<div class="rc">'+
+          '<div class="ri">🖨️</div>'+
+          '<div class="rt">PDF de Expedição'+sufixo+'</div>'+
+          '<div class="rd">Espelho das colunas A–I · para o encarregado</div>'+
+          '<button class="btn-dl pd" onclick="dlArquivoIdx('+S.arquivos.indexOf(arq)+','pdf')">⬇ Baixar PDF'+sufixo+'</button>'+
+        '</div>';
+    });
+    document.getElementById('results').style.display = 'block';
+    document.getElementById('results').scrollIntoView({behavior:'smooth'});
+  } catch(e) {
+    logErr('Erro de conexão: '+e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '⚙️  Processar pedido';
+  }
+}
+
+function dlArquivoIdx(idx, tipo) {
+  var arq = S.arquivos[idx];
+  if (!arq) { logWarn('Processe um pedido primeiro.'); return; }
+  var b64  = tipo==='excel' ? arq.excel : arq.pdf;
+  var mime = tipo==='excel' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'application/pdf';
+  var ext  = tipo==='excel' ? '.xlsx' : '.pdf';
+  var suf  = arq.label ? '_'+arq.label.replace(/\s+/g,'') : '';
+  var nome = 'PataNegra_'+CLIENTES[S.cliente].nome.replace(/\s+/g,'_')+'_'+
+             new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+suf+ext;
+  var bin = atob(b64); var arr = new Uint8Array(bin.length);
+  for (var i=0; i<bin.length; i++) arr[i] = bin.charCodeAt(i);
+  var blob = new Blob([arr],{type:mime});
+  var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nome;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  logOk(nome+' baixado!');
+}
+</script>
 </body>
 </html>
