@@ -749,9 +749,9 @@ def parse_torre_barra(pdf_bytes, produtos):
                     emb_tipo = parts[emb_pos]
                     qtde_emb = int(parts[emb_pos+1])
                     qtde_ped = float(parts[emb_pos+2].replace('.','').replace(',','.'))
-                    # bonif = parts[emb_pos+3]
-                    preco    = float(parts[emb_pos+4].replace('.','').replace(',','.'))
-                    total    = float(parts[emb_pos+5].replace('.','').replace(',','.'))
+                    # Torre Barra: qtdePed + FCP + bonif + precoUnit + valorItem + valorBruto
+                    preco    = float(parts[emb_pos+5].replace('.','').replace(',','.'))
+                    total    = float(parts[emb_pos+6].replace('.','').replace(',','.'))
                 except (IndexError, ValueError):
                     i += 1; continue
                 # coletar sufixos até EANs ou próximo item
@@ -921,17 +921,8 @@ def parse_adonai(pdf_bytes, produtos):
         qtde_ped = float(m.group(4).replace('.','').replace(',','.'))
         preco    = float(m.group(5).replace('.','').replace(',','.'))
         total    = float(m.group(6).replace('.','').replace(',','.'))
-        # SuasVendas: qtde = kg direto; linguiça vem em pacotes → converter para cx
+        # SuasVendas: qtde = quantidade direta (kg ou pacotes), preço unitário direto
         emb_tipo = 'KG'
-        if 'LINGUICA' in nome.upper() or 'LINGUIÇA' in nome.upper():
-            emb_tipo = 'CX'
-            pf_temp = match_perfil(nome, produtos)
-            unid_emb = int(pf_temp['embalagem'].replace('CX-','')) if pf_temp and pf_temp.get('embalagem','').startswith('CX-') else 25
-            qtde_cx  = qtde_ped / unid_emb   # pacotes → caixas
-            preco_cx = preco * unid_emb       # preço/pct → preço/cx
-            # total já vem correto do PDF
-            qtde_ped = qtde_cx
-            preco    = preco_cx
         it = processar_item(m.group(2), nome, emb_tipo, 1, qtde_ped, preco, total, produtos)
         itens.append(it)
 
