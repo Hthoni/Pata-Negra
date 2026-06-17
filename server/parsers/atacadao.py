@@ -8,7 +8,7 @@ import re
 import pdfplumber
 from perfil import processar_item
 CNPJ_INDUSTRIA = '10.171.633'
-CNPJ_RE = r'\d{2}\.\d{3}\.\d{3}\s*/\s*\d{4}\s*-\s*\d{2}'  # tolera espaço ao redor de / e - (artefato do pdfplumber)
+CNPJ_RE = r'\d{2}\.?\d{3}\.?\d{3}\s*/\s*\d{4}\s*-\s*\d{2}'  # pontos opcionais (Atacadão não pontua) + espaço opcional ao redor de / e - (artefato do pdfplumber)
 def parse(pdf_bytes, produtos):
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
         txt = '\n'.join(p.extract_text() or '' for p in pdf.pages)
