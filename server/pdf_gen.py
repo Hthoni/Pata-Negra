@@ -30,7 +30,7 @@ def gerar_pdf(dados, empresa_override=None):
     COR_PAR = colors.HexColor('#F5F5F5')
     COR_CZ = colors.HexColor('#E8E8E8')
 
-    col_w = [8 * mm, 18 * mm, 95 * mm, 24 * mm, 18 * mm, 22 * mm, 22 * mm, 20 * mm, 50 * mm]
+    col_w = [8 * mm, 18 * mm, 95 * mm, 24 * mm, 18 * mm, 22 * mm, 26 * mm, 20 * mm, 46 * mm]
     W = sum(col_w)
 
     ST_TIT = ParagraphStyle('t', fontSize=13, fontName='Helvetica-Bold', alignment=TA_CENTER, leading=16)
@@ -98,7 +98,7 @@ def gerar_pdf(dados, empresa_override=None):
             Paragraph('#', ST_HDR), Paragraph('Cód.\nInterno', ST_HDR),
             Paragraph('Nome Produto no Cliente', ST_HDR), Paragraph('Formato', ST_HDR),
             Paragraph('Caixa', ST_HDR), Paragraph('Kg\nPlanejados', ST_HDR),
-            Paragraph('Kg\nEmbarcados', ST_HDR), Paragraph('Nº\nCaixas', ST_HDR),
+            Paragraph('Kgs\nEmbarcados', ST_HDR), Paragraph('Nº\nCaixas', ST_HDR),
             Paragraph('Obs.', ST_HDR),
         ]
         rows = [header]
