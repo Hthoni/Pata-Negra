@@ -749,9 +749,9 @@ def parse_torre_barra(pdf_bytes, produtos):
                     emb_tipo = parts[emb_pos]
                     qtde_emb = int(parts[emb_pos+1])
                     qtde_ped = float(parts[emb_pos+2].replace('.','').replace(',','.'))
-                    # Torre Barra: qtdePed + FCP + bonif + precoUnit + valorItem + valorBruto
-                    preco    = float(parts[emb_pos+5].replace('.','').replace(',','.'))
-                    total    = float(parts[emb_pos+6].replace('.','').replace(',','.'))
+                    # estrutura: qtdePed + bonif + precoUnit + valorItem + valorBruto
+                    preco    = float(parts[emb_pos+4].replace('.','').replace(',','.'))
+                    total    = float(parts[emb_pos+5].replace('.','').replace(',','.'))
                 except (IndexError, ValueError):
                     i += 1; continue
                 # coletar sufixos até EANs ou próximo item
