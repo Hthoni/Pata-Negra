@@ -1018,7 +1018,7 @@ def processar():
         elif cliente == 'torre_central':
             filiais = parse_torre_central(pdf_bytes, produtos)
         elif cliente == 'torre_barra':
-            filiais = parse_torre_central(pdf_bytes, produtos)  # mesmo formato
+            filiais = parse_torre_barra(pdf_bytes, produtos)
         elif cliente == 'superprix':
             filiais = parse_superprix(pdf_bytes, produtos)
         elif cliente == 'germans':
