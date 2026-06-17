@@ -19,19 +19,30 @@ main{max-width:800px;margin:28px auto;padding:0 16px;display:flex;flex-direction
 .card-header h2{font-size:13px;font-weight:600}
 .csub{font-size:12px;color:var(--muted);margin-left:auto}
 .card-body{padding:18px 20px}
-.client-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
-.cb{border:2px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:10px 10px 8px;cursor:pointer;text-align:center;color:var(--text);transition:border-color .13s,background .13s;font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:6px;min-height:110px}
+
+/* BUSCA */
+.search-row{margin-bottom:12px;position:relative}
+.search-row input{width:100%;padding:9px 12px 9px 34px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:13px;font-family:inherit;background:var(--bg)}
+.search-row input:focus{outline:none;border-color:var(--accent);background:var(--surface)}
+.search-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--muted);pointer-events:none}
+.search-count{font-size:11px;color:var(--muted);margin-top:5px}
+
+/* GRID COMPACTO */
+.client-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px;max-height:420px;overflow-y:auto;padding-right:2px}
+.cb{border:1.5px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:7px 6px 6px;cursor:pointer;text-align:center;color:var(--text);transition:border-color .12s,background .12s,opacity .12s;font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:3px;min-height:74px}
 .cb:hover{border-color:var(--accent);background:var(--accent-lt)}
-.cb.active{border-color:var(--accent);background:var(--accent-lt);box-shadow:0 0 0 3px rgba(139,28,28,.12)}
-.cb-logo{width:100%;height:56px;display:flex;align-items:center;justify-content:center}
-.cb-logo img{max-width:90%;max-height:54px;object-fit:contain}
-.cb-logo-placeholder{width:44px;height:44px;background:var(--bg);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:18px}
-.cb-info{display:flex;flex-direction:column;align-items:center;gap:2px;width:100%}
-.cb .cn{font-size:12px;font-weight:600}
-.cb .ct{font-size:10px;color:var(--muted)}
-.badge{display:inline-block;padding:1px 7px;border-radius:10px;font-size:10px;font-weight:600;background:var(--green-lt);color:var(--green)}
-.badge.p{background:var(--warn-lt);color:var(--warn)}
-.badge.m{background:#F0F0F0;color:#888}
+.cb.active{border-color:var(--accent);background:var(--accent-lt);box-shadow:0 0 0 2px rgba(139,28,28,.15)}
+.cb.hidden{display:none}
+.cb-logo{width:100%;height:32px;display:flex;align-items:center;justify-content:center}
+.cb-logo img{max-width:88%;max-height:30px;object-fit:contain}
+.cb-logo-placeholder{width:26px;height:26px;background:var(--bg);border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px}
+.cb-info{display:flex;flex-direction:column;align-items:center;gap:1px;width:100%}
+.cb .cn{font-size:10.5px;font-weight:600;line-height:1.2;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.badge-dot{width:6px;height:6px;border-radius:50%;background:var(--green);margin-top:1px}
+.badge-dot.p{background:var(--warn)}
+.badge-dot.m{background:#999}
+
+/* UPLOAD */
 .upload-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media(max-width:500px){.upload-row{grid-template-columns:1fr}}
 .ulabel{font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
@@ -76,88 +87,12 @@ main{max-width:800px;margin:28px auto;padding:0 16px;display:flex;flex-direction
 <div class="card">
   <div class="card-header"><div class="step">1</div><h2>Selecionar cliente</h2></div>
   <div class="card-body">
-    <div class="client-grid" id="client-grid">
-
-      <button class="cb" id="btn-assai">
-        <div class="cb-logo">
-          <img src="https://pata-negra-784065203515.us-central1.run.app/logo/assai" alt="Assai" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-          <div class="cb-logo-placeholder" style="display:none">🏪</div>
-        </div>
-        <div class="cb-info"><span class="cn">Assaí</span><span class="ct">PDF Consinco</span><span class="badge">Ativo</span></div>
-      </button>
-
-      <button class="cb" id="btn-atacadao">
-        <div class="cb-logo">
-          <img src="https://pata-negra-784065203515.us-central1.run.app/logo/atacadao" alt="Atacadao" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-          <div class="cb-logo-placeholder" style="display:none">🏪</div>
-        </div>
-        <div class="cb-info"><span class="cn">Atacadão</span><span class="ct">PDF Atacadão</span><span class="badge">Ativo</span></div>
-      </button>
-
-      <button class="cb" id="btn-dom_atacarejo">
-        <div class="cb-logo">
-          <img src="https://pata-negra-784065203515.us-central1.run.app/logo/dom_atacarejo" alt="DOM Atacarejo" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-          <div class="cb-logo-placeholder" style="display:none">🏪</div>
-        </div>
-        <div class="cb-info"><span class="cn">DOM Atacarejo</span><span class="ct">PDF TOTVS</span><span class="badge">Ativo</span></div>
-      </button>
-
-      <button class="cb" id="btn-torre_central">
-        <div class="cb-logo">
-          <img src="https://pata-negra-784065203515.us-central1.run.app/logo/torre_central" alt="Torre Central" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-          <div class="cb-logo-placeholder" style="display:none">🏪</div>
-        </div>
-        <div class="cb-info"><span class="cn">Torre Central</span><span class="ct">PDF TOTVS</span><span class="badge">Ativo</span></div>
-      </button>
-
-      <button class="cb" id="btn-adonai">
-        <div class="cb-logo">
-          <img src="https://pata-negra-784065203515.us-central1.run.app/logo/adonai" alt="Adonai" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-          <div class="cb-logo-placeholder" style="display:none">🏪</div>
-        </div>
-        <div class="cb-info"><span class="cn">Adonai Atacadista</span><span class="ct">SuasVendas</span><span class="badge">Ativo</span></div>
-      </button>
-
-      <button class="cb" id="btn-domatac">
-        <div class="cb-logo"><div class="cb-logo-placeholder">🏪</div></div>
-        <div class="cb-info"><span class="cn">Dom Atacadista</span><span class="ct">PDF texto</span><span class="badge m">A mapear</span></div>
-      </button>
-
-      <button class="cb" id="btn-germans">
-        <div class="cb-logo">
-          <img src="https://pata-negra-784065203515.us-central1.run.app/logo/germans" alt="Germans" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-          <div class="cb-logo-placeholder" style="display:none">🏪</div>
-        </div>
-        <div class="cb-info"><span class="cn">Germans</span><span class="ct">PDF TOTVS</span><span class="badge">Ativo</span></div>
-      </button>
-
-      <button class="cb" id="btn-summer">
-        <div class="cb-logo"><div class="cb-logo-placeholder">🏪</div></div>
-        <div class="cb-info"><span class="cn">Mercado Summer</span><span class="ct">PDF texto</span><span class="badge p">Em breve</span></div>
-      </button>
-
-      <button class="cb" id="btn-superprix">
-        <div class="cb-logo">
-          <img src="https://pata-negra-784065203515.us-central1.run.app/logo/superprix" alt="Superprix" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-          <div class="cb-logo-placeholder" style="display:none">🏪</div>
-        </div>
-        <div class="cb-info"><span class="cn">Superprix</span><span class="ct">PDF próprio</span><span class="badge">Ativo</span></div>
-      </button>
-
-      <button class="cb" id="btn-supjoao">
-        <div class="cb-logo"><div class="cb-logo-placeholder">🏪</div></div>
-        <div class="cb-info"><span class="cn">Superm. do João</span><span class="ct">PDF texto</span><span class="badge p">Em breve</span></div>
-      </button>
-
-      <button class="cb" id="btn-torre_barra">
-        <div class="cb-logo">
-          <img src="https://pata-negra-784065203515.us-central1.run.app/logo/torre_barra" alt="Torre Barra" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-          <div class="cb-logo-placeholder" style="display:none">🏪</div>
-        </div>
-        <div class="cb-info"><span class="cn">Torre Barra</span><span class="ct">PDF TOTVS</span><span class="badge">Ativo</span></div>
-      </button>
-
+    <div class="search-row">
+      <span class="search-icon">🔎</span>
+      <input type="text" id="search-cliente" placeholder="Buscar cliente..." oninput="filtrarClientes(this.value)">
     </div>
+    <div class="client-grid" id="client-grid"></div>
+    <div class="search-count" id="search-count"></div>
   </div>
 </div>
 
@@ -216,38 +151,83 @@ main{max-width:800px;margin:28px auto;padding:0 16px;display:flex;flex-direction
 </main>
 <script>
 'use strict';
-var SERVER_URL = 'https://pata-negra-784065203515.us-central1.run.app';
+var SERVER_URL = 'https://pata-negra-staging-784065203515.us-central1.run.app';
 var S = {cliente:null, perfilFile:null, pedidoFile:null, arquivos:[], perfilServidor:{}};
-var CLIENTES = {
-  assai:         {nome:'Assaí'},
-  atacadao:      {nome:'Atacadão'},
-  dom_atacarejo: {nome:'DOM Atacarejo'},
-  adonai:        {nome:'Adonai Atacadista'},
-  domatac:       {nome:'Dom Atacadista'},
-  germans:       {nome:'Germans'},
-  summer:        {nome:'Mercado Summer'},
-  superprix:     {nome:'Superprix'},
-  supjoao:       {nome:'Superm. do João'},
-  torre_barra:   {nome:'Torre Barra'},
-  torre_central: {nome:'Torre Central'},
-};
+
+// ── LISTA DE CLIENTES (única fonte de verdade — adicionar aqui escala facilmente) ──
+// status: 'ativo' | 'breve' | 'mapear'
+var CLIENTES_LISTA = [
+  {id:'adonai',        nome:'Adonai Atacadista', tipo:'SuasVendas',  status:'ativo'},
+  {id:'assai',         nome:'Assaí',             tipo:'Consinco',    status:'ativo'},
+  {id:'atacadao',      nome:'Atacadão',          tipo:'Atacadão',    status:'ativo'},
+  {id:'dom_atacarejo', nome:'DOM Atacarejo',     tipo:'TOTVS',       status:'ativo'},
+  {id:'domatac',       nome:'Dom Atacadista',    tipo:'texto',       status:'mapear'},
+  {id:'germans',       nome:'Germans',           tipo:'TOTVS',       status:'ativo'},
+  {id:'summer',        nome:'Mercado Summer',    tipo:'texto',       status:'breve'},
+  {id:'superprix',     nome:'Superprix',         tipo:'próprio',     status:'ativo'},
+  {id:'supjoao',       nome:'Superm. do João',   tipo:'texto',       status:'breve'},
+  {id:'torre_barra',   nome:'Torre Barra',       tipo:'TOTVS',       status:'ativo'},
+  {id:'torre_central', nome:'Torre Central',     tipo:'TOTVS',       status:'ativo'},
+];
+
+var CLIENTES = {};
+CLIENTES_LISTA.forEach(function(c){ CLIENTES[c.id] = {nome: c.nome}; });
+
+var LOGOS_CACHE = {};
+var CLIENTES_ATIVOS_COM_LOGO = CLIENTES_LISTA.filter(function(c){return c.status==='ativo';}).map(function(c){return c.id;});
 
 document.getElementById('hdate').textContent =
   new Date().toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
 
-Object.keys(CLIENTES).forEach(function(id) {
-  var btn = document.getElementById('btn-'+id);
-  if (btn) btn.addEventListener('click', function() { selCliente(id, btn); });
-});
+// ── Renderizar grid de clientes a partir da lista ──
+function renderClientGrid() {
+  var grid = document.getElementById('client-grid');
+  grid.innerHTML = '';
+  CLIENTES_LISTA.forEach(function(c) {
+    var btn = document.createElement('button');
+    btn.className = 'cb';
+    btn.id = 'btn-' + c.id;
+    btn.dataset.nome = c.nome.toLowerCase();
 
-var LOGOS_CACHE = {};
+    var dotClass = c.status === 'ativo' ? '' : (c.status === 'breve' ? 'p' : 'm');
+    var logoHtml = c.status === 'ativo'
+      ? '<img src="'+SERVER_URL+'/logo/'+c.id+'" alt="'+c.nome+'" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' +
+        '<div class="cb-logo-placeholder" style="display:none">🏪</div>'
+      : '<div class="cb-logo-placeholder">🏪</div>';
 
+    btn.innerHTML =
+      '<div class="cb-logo">' + logoHtml + '</div>' +
+      '<div class="cb-info">' +
+        '<span class="cn">' + c.nome + '</span>' +
+        '<span class="badge-dot ' + dotClass + '"></span>' +
+      '</div>';
+
+    btn.addEventListener('click', function() { selCliente(c.id, btn); });
+    grid.appendChild(btn);
+  });
+}
+renderClientGrid();
+
+// ── Busca / filtro ──
+function filtrarClientes(termo) {
+  termo = termo.toLowerCase().trim();
+  var visiveis = 0;
+  document.querySelectorAll('.cb').forEach(function(btn) {
+    var match = !termo || btn.dataset.nome.includes(termo);
+    btn.classList.toggle('hidden', !match);
+    if (match) visiveis++;
+  });
+  var count = document.getElementById('search-count');
+  count.textContent = termo ? (visiveis + ' de ' + CLIENTES_LISTA.length + ' clientes') : '';
+}
+
+// ── Pré-carregar perfis + logos ──
 window.addEventListener('load', function() {
   fetch(SERVER_URL+'/health')
     .then(function(r){ return r.json(); })
     .then(function(d){
       S.perfilServidor = d.perfis || {};
-      ['assai','atacadao','dom_atacarejo'].forEach(function(id) {
+      CLIENTES_ATIVOS_COM_LOGO.forEach(function(id) {
         var img = new window.Image();
         img.onload = function() { LOGOS_CACHE[id] = img.src; };
         img.src = SERVER_URL+'/logo/'+id+'?t='+Date.now();
@@ -264,8 +244,8 @@ function selCliente(id, btn) {
   clearLog();
   document.getElementById('results').style.display = 'none';
   S.perfilFile = null;
-  // restaurar logos que possam ter sumido
-  ['assai','atacadao','dom_atacarejo'].forEach(function(cid) {
+  // restaurar logos que possam ter sumido (cold start do servidor)
+  CLIENTES_ATIVOS_COM_LOGO.forEach(function(cid) {
     var imgEl = document.querySelector('#btn-'+cid+' .cb-logo img');
     if (imgEl && LOGOS_CACHE[cid] && imgEl.style.display === 'none') {
       imgEl.src = LOGOS_CACHE[cid];
@@ -340,7 +320,7 @@ async function processar() {
   var btn = document.getElementById('btn-proc');
   btn.disabled = true; btn.textContent = '⏳  Processando…';
   clearLog(); document.getElementById('results').style.display = 'none';
-  S.excelB64 = null; S.pdfB64 = null;
+  S.arquivos = [];
   try {
     logInfo(S.perfilFile ? 'Enviando perfil + pedido…' : 'Usando perfil salvo no servidor · enviando pedido…');
     var form = new FormData();
@@ -353,9 +333,8 @@ async function processar() {
     if (!data.ok) { logErr('Erro: '+data.erro); return; }
     if (S.perfilFile) S.perfilServidor[S.cliente] = S.perfilFile.name;
     S.arquivos = data.arquivos || [];
-    // compatibilidade retroativa
     if (!S.arquivos.length && data.excel) {
-      S.arquivos = [{empresa: data.arquivos, label:'', excel: data.excel, pdf: data.pdf}];
+      S.arquivos = [{empresa: null, label:'', excel: data.excel, pdf: data.pdf}];
     }
     logOk(data.filiais+' filiais | '+data.itens+' itens | '+data.totalKg+'kg | R$ '+moeda(data.totalValor));
     if (data.split) logOk('Pedido misto — gerados arquivos separados por empresa');
@@ -373,7 +352,6 @@ async function processar() {
       '</table><div class="divider"></div>'+
       '<table><tr class="sh"><td>Filial</td><td style="text-align:center">Itens</td>'+
       '<td style="text-align:right">Kg</td><td style="text-align:right">Valor</td></tr>'+linhas+'</table>';
-    // renderizar botões de download
     var rg = document.getElementById('rg-downloads');
     rg.innerHTML = '';
     S.arquivos.forEach(function(arq) {
