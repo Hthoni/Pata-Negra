@@ -18,7 +18,7 @@ import traceback
 from flask_cors import CORS
 
 from storage import perfil_existe, salvar_perfil, carregar_perfil_bytes, perfil_filename
-from perfil import ler_perfil
+from perfil import ler_perfil, ler_filiais, buscar_filial
 from excel_gen import gerar_excel
 from pdf_gen import gerar_pdf
 from parsers import (
@@ -106,6 +106,7 @@ def processar():
             return jsonify({'erro': f'Nenhum perfil disponível para {cliente}. Faça upload do perfil primeiro.'}), 400
 
         meta, produtos = ler_perfil(perfil_bytes)
+        filiais_map = ler_filiais(perfil_bytes)
         pdf_bytes = pedido_file.read()
 
         parse_fn = CLIENTES[cliente]['parse']
@@ -115,6 +116,15 @@ def processar():
 
         if not filiais:
             return jsonify({'erro': 'Nenhuma filial encontrada no pedido'}), 400
+
+        # Enriquecer cada filial com nome oficial e número, buscando pelo CNPJ
+        # (regra única para todos os clientes: CNPJ é o dado mais confiável)
+        for fd in filiais:
+            nome_oficial, num_filial = buscar_filial(fd.get('cnpj', ''), filiais_map)
+            if nome_oficial:
+                fd['filial'] = nome_oficial
+            if num_filial is not None:
+                fd['numFilial'] = num_filial
 
         dados = {**meta, 'filiais': filiais, 'clienteNome': CLIENTES[cliente]['nome']}
 
