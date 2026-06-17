@@ -6,8 +6,6 @@ import io
 import re
 import pdfplumber
 from perfil import processar_item
-
-
 def parse(pdf_bytes, produtos):
     filiais = []
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
@@ -17,11 +15,9 @@ def parse(pdf_bytes, produtos):
             txt2 = pdf.pages[pi + 1].extract_text() if pi + 1 < n_pags else ''
             lines = txt1.split('\n')
             txt_all = txt1 + '\n' + txt2
-
             def fm(pat, txt=txt_all):
                 m = re.search(pat, txt, re.I)
                 return m.group(1).strip() if m else ''
-
             pedidoNum = fm(r'(\d{5,7}/[CL])')
             filial = ''
             for ln in lines:
@@ -30,7 +26,8 @@ def parse(pdf_bytes, produtos):
                     break
             cnpj = ''
             for ln in lines:
-                found = re.findall(r'\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}', ln)
+                # tolera espaços ao redor de / e - (artefato de kerning do pdfplumber em alguns PDFs TOTVS)
+                found = re.findall(r'\d{2}\.\d{3}\.\d{3}\s*/\s*\d{4}\s*-\s*\d{2}', ln)
                 if len(found) >= 2:
                     cnpj = found[1]
                     break
@@ -50,7 +47,6 @@ def parse(pdf_bytes, produtos):
             condPgto = fm(r'Prazo para pagamento\s+(\d+)')
             if condPgto:
                 condPgto += ' dias'
-
             reItem = re.compile(r'^(\d{5,6})\s+\d+\s+(.+?)\s+(KG|CX)\s+(\d+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)', re.M)
             itens = []
             for m in reItem.finditer(txt1):
@@ -60,7 +56,6 @@ def parse(pdf_bytes, produtos):
                 it = processar_item(int(m.group(1)), m.group(2), m.group(3),
                                      int(m.group(4)), qtde_ped, preco, total, produtos)
                 itens.append(it)
-
             if filial and itens:
                 filiais.append({'filial': filial, 'pedidoNum': pedidoNum, 'cnpj': cnpj,
                                  'endereco': endereco, 'dataPedido': dataPedido, 'dataEntrega': dataEntrega,
