@@ -1,0 +1,6 @@
+flask
+flask-cors
+openpyxl
+pdfplumber
+reportlab
+google-cloud-storage
