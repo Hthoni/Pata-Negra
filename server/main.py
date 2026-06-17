@@ -745,15 +745,16 @@ def parse_torre_barra(pdf_bytes, produtos):
                         emb_pos = j; break
                 if emb_pos is None: i += 1; continue
                 try:
-                    # detectar se há 1 ou 2 códigos no início (cod ou cod+seq)
-                    nome_start = 2 if re.match(r'^\d{4,6}$', parts[1]) else 1
+                    # detectar se há 1 ou 2 códigos no início
+                    is_two_codes = re.match(r'^\d{4,6}$', parts[1]) if len(parts) > 1 else False
+                    nome_start = 2 if is_two_codes else 1
                     nome_raw = ' '.join(parts[nome_start:emb_pos])
                     emb_tipo = parts[emb_pos]
                     qtde_emb = int(parts[emb_pos+1])
                     qtde_ped = float(parts[emb_pos+2].replace('.','').replace(',','.'))
-                    # estrutura: qtdePed + bonif + precoUnit + valorItem
-                    preco    = float(parts[emb_pos+4].replace('.','').replace(',','.'))
-                    total    = float(parts[emb_pos+5].replace('.','').replace(',','.'))
+                    # estrutura sempre: qtdePed + bonif(0,00) + precoUnit + valorItem
+                    preco = float(parts[emb_pos+4].replace('.','').replace(',','.'))
+                    total = float(parts[emb_pos+5].replace('.','').replace(',','.'))
                 except (IndexError, ValueError):
                     i += 1; continue
                 # coletar sufixos até EANs ou próximo item
