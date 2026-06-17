@@ -728,36 +728,45 @@ def parse_torre_barra(pdf_bytes, produtos):
             end_m  = re.search(r'Endereço\s+(AVENIDA[^\n]+)', txt1)
             endereco = end_m.group(1).strip() if end_m else ''
 
-            # Parser: cod(+seq?) nome... KG/CX qtdeEmb qtdePed bonif precoUnit valorItem valorBruto
-            reLinhaItem = re.compile(
-                r'^(\d{4,6})(?:\s+\d{4,6})?\s+([A-ZÁÉÍÓÚ].+?)\s+(KG|CX)\s+(\d+)\s+([\d.]+,\d+)\s+[\d,.]+\s+([\d.]+,\d+)\s+([\d.]+,\d+)'
-            )
+            # Parser por split: mais robusto que regex para este formato
+            reLinhaItem = re.compile(r'^(\d{4,6})(?:\s+\d{4,6})?\s+[A-ZÁÉÍÓÚ]')
 
             itens = []; i = 0
             while i < len(lines):
-                m = reLinhaItem.match(lines[i])
-                if m:
-                    nome_raw = m.group(2).strip()
-                    emb_tipo = m.group(3)
-                    qtde_emb = int(m.group(4))
-                    qtde_ped = float(m.group(5).replace('.','').replace(',','.'))
-                    preco    = float(m.group(6).replace('.','').replace(',','.'))
-                    total    = float(m.group(7).replace('.','').replace(',','.'))
-                    # coletar sufixos até EANs ou próximo item
-                    j = i + 1
-                    sufixo_parts = []
-                    while j < len(lines) and not lines[j].startswith('EANs') \
-                          and not re.match(r'^\d{4,6}', lines[j]) \
-                          and not lines[j].startswith('TOTAIS'):
-                        s = re.sub(r'\bKG\b', '', lines[j]).strip()
-                        if s: sufixo_parts.append(s)
-                        j += 1
-                    if sufixo_parts:
-                        nome_raw = (nome_raw + ' ' + ' '.join(sufixo_parts)).strip()
-                    it = processar_item(m.group(1), nome_raw, emb_tipo, qtde_emb, qtde_ped, preco, total, produtos)
-                    itens.append(it); i = j
-                else:
-                    i += 1
+                ln = lines[i]
+                if not reLinhaItem.match(ln):
+                    i += 1; continue
+                parts = ln.split()
+                cod = parts[0]
+                # encontrar KG ou CX
+                emb_pos = None
+                for j, p in enumerate(parts):
+                    if p in ('KG','CX') and j >= 2:
+                        emb_pos = j; break
+                if emb_pos is None: i += 1; continue
+                try:
+                    nome_raw = ' '.join(parts[2:emb_pos])
+                    emb_tipo = parts[emb_pos]
+                    qtde_emb = int(parts[emb_pos+1])
+                    qtde_ped = float(parts[emb_pos+2].replace('.','').replace(',','.'))
+                    # bonif = parts[emb_pos+3]
+                    preco    = float(parts[emb_pos+4].replace('.','').replace(',','.'))
+                    total    = float(parts[emb_pos+5].replace('.','').replace(',','.'))
+                except (IndexError, ValueError):
+                    i += 1; continue
+                # coletar sufixos até EANs ou próximo item
+                j = i + 1
+                sufixo_parts = []
+                while j < len(lines) and not lines[j].startswith('EANs') \
+                      and not re.match(r'^\d{4,6}', lines[j]) \
+                      and not lines[j].startswith('TOTAIS'):
+                    s = re.sub(r'\bKG\b', '', lines[j]).strip()
+                    if s: sufixo_parts.append(s)
+                    j += 1
+                if sufixo_parts:
+                    nome_raw = (nome_raw + ' ' + ' '.join(sufixo_parts)).strip()
+                it = processar_item(cod, nome_raw, emb_tipo, qtde_emb, qtde_ped, preco, total, produtos)
+                itens.append(it); i = j
 
             if itens:
                 filiais.append({'filial':filial,'pedidoNum':pedidoNum,'cnpj':cnpj,
@@ -916,12 +925,13 @@ def parse_adonai(pdf_bytes, produtos):
         emb_tipo = 'KG'
         if 'LINGUICA' in nome.upper() or 'LINGUIÇA' in nome.upper():
             emb_tipo = 'CX'
-            # qtde_ped = nº de pacotes; busca unidEmb no perfil para calcular caixas
             pf_temp = match_perfil(nome, produtos)
             unid_emb = int(pf_temp['embalagem'].replace('CX-','')) if pf_temp and pf_temp.get('embalagem','').startswith('CX-') else 25
-            qtde_cx = qtde_ped / unid_emb  # pacotes → caixas
-            # total já vem correto do PDF (pacotes × preço/pct), não recalcular
+            qtde_cx  = qtde_ped / unid_emb   # pacotes → caixas
+            preco_cx = preco * unid_emb       # preço/pct → preço/cx
+            # total já vem correto do PDF
             qtde_ped = qtde_cx
+            preco    = preco_cx
         it = processar_item(m.group(2), nome, emb_tipo, 1, qtde_ped, preco, total, produtos)
         itens.append(it)
 
