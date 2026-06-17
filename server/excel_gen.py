@@ -112,10 +112,14 @@ def gerar_excel(dados, empresa_override=None):
         subtitulo = (cli + ' — ' + fd['filial']) if cli else fd['filial']
         _ap(ws['A2'], subtitulo, F_SUB, BG_SUB, al=_aln('center'))
 
-        for r in [3, 4, 5, 6, 7]:
+        for r in [3, 4, 6, 7]:
             ws.merge_cells(f'A{r}:B{r}')
             ws.merge_cells(f'C{r}:F{r}')
             ws.merge_cells(f'H{r}:I{r}')
+        # Linha 5 não mescla C:F — fica C:D (nome filial) + E (label) + F (número)
+        ws.merge_cells('A5:B5')
+        ws.merge_cells('C5:D5')
+        ws.merge_cells('H5:I5')
 
         _ap(ws['A3'], 'Pedido Nº:', F_MB, BG_META, al=_aln('left'))
         _ap(ws['C3'], fd.get('pedidoNum', ''), F_M, BG_META)
@@ -129,6 +133,8 @@ def gerar_excel(dados, empresa_override=None):
 
         _ap(ws['A5'], 'Filial:', F_MB, BG_META, al=_aln('left'))
         _ap(ws['C5'], fd['filial'], F_M, BG_META)
+        _ap(ws['E5'], 'Núm. Filial:', F_MB, BG_META, al=_aln('left'))
+        _ap(ws['F5'], fd.get('numFilial', ''), F_M, BG_META, al=_aln('center'))
         _ap(ws['G5'], 'Solicitante:', F_MB, BG_META, al=_aln('left'))
         _ap(ws['H5'], fd.get('solicitante', ''), F_M, BG_META, al=_aln('left'))
         _ap(ws['K5'], 'Código vend.', F_HW, BG_AZL, BALL, _aln('center', True))
