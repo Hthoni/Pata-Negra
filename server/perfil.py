@@ -65,6 +65,44 @@ def ler_perfil(perfil_bytes):
     return meta, produtos
 
 
+def _normaliza_cnpj(cnpj):
+    """Remove pontuação do CNPJ para comparação confiável."""
+    return ''.join(c for c in (cnpj or '') if c.isdigit())
+
+
+def ler_filiais(perfil_bytes):
+    """Lê a tabela de filiais do Perfil Excel (colunas M:N:O, a partir da
+    linha 9): CNPJ | Nome Filial | Número Filial.
+    Retorna dict {cnpj_normalizado: {'nome': str, 'numero': str|int}}.
+    Usado para enriquecer pedidos que só trazem CNPJ (Atacadão) ou
+    CNPJ+nome (DOM) com o número de filial cadastrado uma única vez no perfil."""
+    wb_p = openpyxl.load_workbook(io.BytesIO(perfil_bytes), data_only=True)
+    pws = wb_p[wb_p.sheetnames[0]]
+    pdata = list(pws.iter_rows(values_only=True))
+    filiais = {}
+    for r in pdata[8:]:  # a partir da linha 9 (índice 8)
+        if not r or len(r) < 15:
+            continue
+        cnpj_raw, nome, numero = r[12], r[13], r[14]  # colunas M, N, O
+        if not cnpj_raw:
+            continue
+        cnpj_norm = _normaliza_cnpj(cnpj_raw)
+        if cnpj_norm:
+            filiais[cnpj_norm] = {'nome': str(nome or '').strip(), 'numero': numero}
+    return filiais
+
+
+def buscar_filial(cnpj, filiais_map):
+    """Busca nome e número de filial pelo CNPJ extraído do pedido.
+    Retorna (nome, numero) ou (None, None) se não encontrado."""
+    cnpj_norm = _normaliza_cnpj(cnpj)
+    info = filiais_map.get(cnpj_norm)
+    if info:
+        return info['nome'], info['numero']
+    return None, None
+
+
+
 def processar_item(cod_cli, nome_raw, emb_tipo, qtde_emb, qtde_ped, preco, total, produtos):
     """Normaliza um item do pedido casando com o perfil e calculando
     kg planejados, número de caixas e demais campos derivados."""
