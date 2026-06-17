@@ -5,23 +5,19 @@ Código do produto vem colado ao nome (ex: '1156510BACON LOMBO...').
 import re
 import pdfplumber
 from perfil import processar_item
-
 CNPJ_INDUSTRIA = '10.171.633'
-
-
+CNPJ_RE = r'\d{2}\.\d{3}\.\d{3}\s*/\s*\d{4}\s*-\s*\d{2}'  # tolera espaço ao redor de / e - (artefato do pdfplumber)
 def parse(pdf_bytes, produtos):
     import io
     filiais = []
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
         for page in pdf.pages:
             txt = page.extract_text() or ''
-
             def fm(pat):
                 m = re.search(pat, txt, re.I)
                 return m.group(1).strip() if m else ''
-
             pedidoNum = fm(r'PEDIDO DE COMPRAS\s+(\S+)')
-            cnpj_m = re.search(r'CNPJ\s+([\d./\-]+)\s+Cidade.*?CNPJ\s+([\d./\-]+)', txt, re.S)
+            cnpj_m = re.search(rf'CNPJ\s+({CNPJ_RE})\s+Cidade.*?CNPJ\s+({CNPJ_RE})', txt, re.S)
             cnpj_forn = cnpj_m.group(1) if cnpj_m else ''
             cnpj_loja = cnpj_m.group(2) if cnpj_m else ''
             empresa = 1 if CNPJ_INDUSTRIA.replace('.', '') in cnpj_forn.replace('.', '') else 2
@@ -33,7 +29,6 @@ def parse(pdf_bytes, produtos):
             dataEntrega = fm(r'Previs[aã]o de entrega\s+([\d/]+)')
             cond_m2 = re.search(r'pagamento\s+(\d+)\s*\(', txt)
             condPgto = cond_m2.group(1) + ' dias' if cond_m2 else ''
-
             reItem = re.compile(
                 r'^(\d{7})([A-Z][^\n]+?)\s+(KG|CX)\s+(\d+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)',
                 re.M)
@@ -47,7 +42,6 @@ def parse(pdf_bytes, produtos):
                                      int(m.group(4)), qtde_ped, preco, total, produtos)
                 it['empresa'] = empresa
                 itens.append(it)
-
             if itens:
                 filiais.append({'filial': filial, 'pedidoNum': pedidoNum, 'cnpj': cnpj_loja,
                                  'endereco': endereco, 'dataPedido': dataPedido, 'dataEntrega': dataEntrega,
