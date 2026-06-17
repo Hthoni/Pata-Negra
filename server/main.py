@@ -693,8 +693,77 @@ def parse_torre_central(pdf_bytes, produtos):
 
 
 def parse_torre_barra(pdf_bytes, produtos):
-    """Torre Barra usa o mesmo formato do Torre Central."""
-    return parse_torre_central(pdf_bytes, produtos)
+    """Torre Barra — TOTVS com nome em múltiplas linhas e sem coluna Seq separada."""
+    filiais = []
+    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+        n_pags = len(pdf.pages)
+        for pi in range(0, n_pags, 2):
+            txt1 = pdf.pages[pi].extract_text() or ''
+            txt2 = pdf.pages[pi+1].extract_text() if pi+1 < n_pags else ''
+            lines = [l.strip() for l in txt1.split('\n')]
+            txt_all = txt1+'\n'+txt2
+
+            def fm(pat, txt=txt_all):
+                m = re.search(pat, txt, re.I)
+                return m.group(1).strip() if m else ''
+
+            pedidoNum   = fm(r'(\d{5,7}/[ML])')
+            dataPedido  = fm(r'Data da emiss[aã]o\s+([\d/]+)')
+            dataEntrega = fm(r'Previs[aã]o de entrega\s+([\d/]+)')
+            condPgto    = fm(r'Prazo para pagamento\s+(\d+)')
+            if condPgto: condPgto += ' dias'
+
+            cnpj = fm(r'CNPJ\s+([\d./\-]+)\s+Inscrição Estadual\d')
+            if not cnpj:
+                for ln in lines:
+                    found = re.findall(r'\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}', ln)
+                    validos = [c for c in found if CNPJ_DISTRIBUIDORA not in c and CNPJ_INDUSTRIA not in c]
+                    if validos: cnpj = validos[0]; break
+
+            cnpj_forn = fm(r'CNPJ\s+([\d./\-]+)\s+Insc')
+            empresa = 1 if CNPJ_INDUSTRIA.replace('.','') in cnpj_forn.replace('.','').replace('-','') else 2
+
+            filial_m = re.search(r'TORRE\s*&\s*CIA\s+SUPERMERCADOS\s+S/A\s+(.+?)$', txt1, re.M)
+            filial = filial_m.group(1).strip() if filial_m else 'BARRA DA TIJUCA'
+            end_m  = re.search(r'Endereço\s+(AVENIDA[^\n]+)', txt1)
+            endereco = end_m.group(1).strip() if end_m else ''
+
+            # Parser: cod(+seq?) nome... KG/CX qtdeEmb qtdePed bonif precoUnit valorItem valorBruto
+            reLinhaItem = re.compile(
+                r'^(\d{4,6})(?:\s+\d{4,6})?\s+([A-ZÁÉÍÓÚ].+?)\s+(KG|CX)\s+(\d+)\s+([\d.]+,\d+)\s+[\d,.]+\s+([\d.]+,\d+)\s+([\d.]+,\d+)'
+            )
+
+            itens = []; i = 0
+            while i < len(lines):
+                m = reLinhaItem.match(lines[i])
+                if m:
+                    nome_raw = m.group(2).strip()
+                    emb_tipo = m.group(3)
+                    qtde_emb = int(m.group(4))
+                    qtde_ped = float(m.group(5).replace('.','').replace(',','.'))
+                    preco    = float(m.group(6).replace('.','').replace(',','.'))
+                    total    = float(m.group(7).replace('.','').replace(',','.'))
+                    # coletar sufixos até EANs ou próximo item
+                    j = i + 1
+                    sufixo_parts = []
+                    while j < len(lines) and not lines[j].startswith('EANs') \
+                          and not re.match(r'^\d{4,6}', lines[j]) \
+                          and not lines[j].startswith('TOTAIS'):
+                        s = re.sub(r'\bKG\b', '', lines[j]).strip()
+                        if s: sufixo_parts.append(s)
+                        j += 1
+                    if sufixo_parts:
+                        nome_raw = (nome_raw + ' ' + ' '.join(sufixo_parts)).strip()
+                    it = processar_item(m.group(1), nome_raw, emb_tipo, qtde_emb, qtde_ped, preco, total, produtos)
+                    itens.append(it); i = j
+                else:
+                    i += 1
+
+            if itens:
+                filiais.append({'filial':filial,'pedidoNum':pedidoNum,'cnpj':cnpj,
+                    'endereco':endereco,'dataPedido':dataPedido,'dataEntrega':dataEntrega,
+                    'condPgto':condPgto,'empresa':empresa,'itens':itens})
+    return filiais
 
 def parse_germans(pdf_bytes, produtos):
     """TOTVS Germans — itens numa linha, nome entre seq e emb, sufixo na próxima linha."""
@@ -851,7 +920,7 @@ def parse_adonai(pdf_bytes, produtos):
             pf_temp = match_perfil(nome, produtos)
             unid_emb = int(pf_temp['embalagem'].replace('CX-','')) if pf_temp and pf_temp.get('embalagem','').startswith('CX-') else 25
             qtde_cx = qtde_ped / unid_emb  # pacotes → caixas
-            total   = round(qtde_ped * preco, 2)  # total = pacotes × preço/pct
+            # total já vem correto do PDF (pacotes × preço/pct), não recalcular
             qtde_ped = qtde_cx
         it = processar_item(m.group(2), nome, emb_tipo, 1, qtde_ped, preco, total, produtos)
         itens.append(it)
