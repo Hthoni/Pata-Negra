@@ -110,9 +110,25 @@ main{max-width:800px;margin:28px auto;padding:0 16px;display:flex;flex-direction
         <div class="cb-info"><span class="cn">Torre Central</span><span class="ct">PDF TOTVS</span><span class="badge">Ativo</span></div>
       </button>
 
+      <button class="cb" id="btn-adonai">
+        <div class="cb-logo">
+          <img src="https://pata-negra-784065203515.us-central1.run.app/logo/adonai" alt="Adonai" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+          <div class="cb-logo-placeholder" style="display:none">🏪</div>
+        </div>
+        <div class="cb-info"><span class="cn">Adonai Atacadista</span><span class="ct">SuasVendas</span><span class="badge">Ativo</span></div>
+      </button>
+
       <button class="cb" id="btn-domatac">
         <div class="cb-logo"><div class="cb-logo-placeholder">🏪</div></div>
         <div class="cb-info"><span class="cn">Dom Atacadista</span><span class="ct">PDF texto</span><span class="badge m">A mapear</span></div>
+      </button>
+
+      <button class="cb" id="btn-germans">
+        <div class="cb-logo">
+          <img src="https://pata-negra-784065203515.us-central1.run.app/logo/germans" alt="Germans" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+          <div class="cb-logo-placeholder" style="display:none">🏪</div>
+        </div>
+        <div class="cb-info"><span class="cn">Germans</span><span class="ct">PDF TOTVS</span><span class="badge">Ativo</span></div>
       </button>
 
       <button class="cb" id="btn-summer">
@@ -120,9 +136,25 @@ main{max-width:800px;margin:28px auto;padding:0 16px;display:flex;flex-direction
         <div class="cb-info"><span class="cn">Mercado Summer</span><span class="ct">PDF texto</span><span class="badge p">Em breve</span></div>
       </button>
 
+      <button class="cb" id="btn-superprix">
+        <div class="cb-logo">
+          <img src="https://pata-negra-784065203515.us-central1.run.app/logo/superprix" alt="Superprix" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+          <div class="cb-logo-placeholder" style="display:none">🏪</div>
+        </div>
+        <div class="cb-info"><span class="cn">Superprix</span><span class="ct">PDF próprio</span><span class="badge">Ativo</span></div>
+      </button>
+
       <button class="cb" id="btn-supjoao">
         <div class="cb-logo"><div class="cb-logo-placeholder">🏪</div></div>
         <div class="cb-info"><span class="cn">Superm. do João</span><span class="ct">PDF texto</span><span class="badge p">Em breve</span></div>
+      </button>
+
+      <button class="cb" id="btn-torre_barra">
+        <div class="cb-logo">
+          <img src="https://pata-negra-784065203515.us-central1.run.app/logo/torre_barra" alt="Torre Barra" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+          <div class="cb-logo-placeholder" style="display:none">🏪</div>
+        </div>
+        <div class="cb-info"><span class="cn">Torre Barra</span><span class="ct">PDF TOTVS</span><span class="badge">Ativo</span></div>
       </button>
 
     </div>
@@ -190,10 +222,14 @@ var CLIENTES = {
   assai:         {nome:'Assaí'},
   atacadao:      {nome:'Atacadão'},
   dom_atacarejo: {nome:'DOM Atacarejo'},
-  torre_central: {nome:'Torre Central'},
+  adonai:        {nome:'Adonai Atacadista'},
   domatac:       {nome:'Dom Atacadista'},
+  germans:       {nome:'Germans'},
   summer:        {nome:'Mercado Summer'},
-  supjoao:       {nome:'Superm. do João'}
+  superprix:     {nome:'Superprix'},
+  supjoao:       {nome:'Superm. do João'},
+  torre_barra:   {nome:'Torre Barra'},
+  torre_central: {nome:'Torre Central'},
 };
 
 document.getElementById('hdate').textContent =
