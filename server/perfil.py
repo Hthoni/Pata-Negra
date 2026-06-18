@@ -66,16 +66,22 @@ def ler_perfil(perfil_bytes):
 
 
 def _normaliza_cnpj(cnpj):
-    """Remove pontuação do CNPJ para comparação confiável."""
-    return ''.join(c for c in (cnpj or '') if c.isdigit())
+    """Remove pontuação do CNPJ para comparação confiável. Aceita tanto
+    texto ('31.698.759/0001-13') quanto número puro (a célula do Excel pode
+    vir como int quando não há formatação de texto aplicada)."""
+    return ''.join(c for c in str(cnpj or '') if c.isdigit())
 
 
 def ler_filiais(perfil_bytes):
     """Lê a tabela de filiais do Perfil Excel (colunas M:N:O, a partir da
-    linha 9): CNPJ | Nome Filial | Número Filial.
-    Retorna dict {cnpj_normalizado: {'nome': str, 'numero': str|int}}.
+    linha 9): CNPJ | Nome Filial | Número Filial. Opcionalmente também lê
+    Endereço (col P) e Cidade (col Q), usadas pelo fluxo de pedido manual
+    (clientes sem PDF, ex: grupos com múltiplas lojas como Guanabara Lojas) —
+    para clientes que não têm essas colunas, ficam como string vazia.
+    Retorna dict {cnpj_normalizado: {'nome', 'numero', 'endereco', 'cidade'}}.
     Usado para enriquecer pedidos que só trazem CNPJ (Atacadão) ou
-    CNPJ+nome (DOM) com o número de filial cadastrado uma única vez no perfil."""
+    CNPJ+nome (DOM) com o número de filial cadastrado uma única vez no perfil,
+    e para alimentar o dropdown de filiais no fluxo manual."""
     wb_p = openpyxl.load_workbook(io.BytesIO(perfil_bytes), data_only=True)
     pws = wb_p[wb_p.sheetnames[0]]
     pdata = list(pws.iter_rows(values_only=True))
@@ -84,11 +90,18 @@ def ler_filiais(perfil_bytes):
         if not r or len(r) < 15:
             continue
         cnpj_raw, nome, numero = r[12], r[13], r[14]  # colunas M, N, O
+        endereco = r[15] if len(r) > 15 else None  # coluna P (opcional)
+        cidade = r[16] if len(r) > 16 else None  # coluna Q (opcional)
         if not cnpj_raw:
             continue
         cnpj_norm = _normaliza_cnpj(cnpj_raw)
         if cnpj_norm:
-            filiais[cnpj_norm] = {'nome': str(nome or '').strip(), 'numero': numero}
+            filiais[cnpj_norm] = {
+                'nome': str(nome or '').strip(),
+                'numero': numero,
+                'endereco': str(endereco or '').strip(),
+                'cidade': str(cidade or '').strip(),
+            }
     return filiais
 
 
@@ -101,6 +114,25 @@ def buscar_filial(cnpj, filiais_map):
         return info['nome'], info['numero']
     return None, None
 
+
+def ler_operadores(perfil_bytes):
+    """Lê a lista de operadores (coluna L, a partir da linha 9) do Perfil.
+    Usado nos clientes de pedido manual (sem PDF, ex: Guanabara Lojas), para
+    alimentar o dropdown de quem está lançando o pedido no popup. Cresce
+    livremente, sem depender do tamanho da tabela de produtos ou de filiais
+    — cada lista (produtos, operadores, filiais) avança na sua própria
+    coluna, independente das outras."""
+    wb_p = openpyxl.load_workbook(io.BytesIO(perfil_bytes), data_only=True)
+    pws = wb_p[wb_p.sheetnames[0]]
+    pdata = list(pws.iter_rows(values_only=True))
+    operadores = []
+    for r in pdata[8:]:  # a partir da linha 9 (mesmo início da tabela de filiais)
+        if not r or len(r) < 12:
+            continue
+        nome = r[11]  # coluna L
+        if nome:
+            operadores.append(str(nome).strip())
+    return operadores
 
 
 def processar_item(cod_cli, nome_raw, emb_tipo, qtde_emb, qtde_ped, preco, total, produtos):
