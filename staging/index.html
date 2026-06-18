@@ -213,7 +213,7 @@ var CLIENTES_LISTA = [
   {id:'atacadao',      nome:'Atacadão',          tipo:'Atacadão',    status:'ativo'},
   {id:'dom_atacarejo', nome:'DOM Atacarejo',     tipo:'TOTVS',       status:'ativo'},
   {id:'germans',       nome:'Germans',           tipo:'TOTVS',       status:'ativo'},
-  {id:'summer',        nome:'Mercado Summer',    tipo:'texto',       status:'breve'},
+  {id:'summer',        nome:'Mercado Summer',    tipo:'texto',       status:'ativo'},
   {id:'superprix',     nome:'Superprix',         tipo:'próprio',     status:'ativo'},
   {id:'supjoao',       nome:'Superm. do João',   tipo:'texto',       status:'breve'},
   {id:'torre_barra',   nome:'Torre Barra',       tipo:'TOTVS',       status:'ativo'},
@@ -237,7 +237,10 @@ document.getElementById('hdate').textContent =
 function renderClientGrid() {
   var grid = document.getElementById('client-grid');
   grid.innerHTML = '';
-  CLIENTES_LISTA.forEach(function(c) {
+  var ordenados = CLIENTES_LISTA.slice().sort(function(a, b) {
+    return a.nome.localeCompare(b.nome, 'pt-BR');
+  });
+  ordenados.forEach(function(c) {
     var btn = document.createElement('button');
     btn.className = 'cb';
     btn.id = 'btn-' + c.id;
