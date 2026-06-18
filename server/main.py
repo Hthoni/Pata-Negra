@@ -19,7 +19,7 @@ import traceback
 from flask_cors import CORS
 
 from storage import perfil_existe, salvar_perfil, carregar_perfil_bytes, perfil_filename
-from perfil import ler_perfil, ler_filiais, buscar_filial, ler_operadores
+from perfil import ler_perfil, ler_filiais, buscar_filial, ler_operadores, _normaliza_cnpj
 from excel_gen import gerar_excel
 from pdf_gen import gerar_pdf
 from parsers import (
@@ -45,9 +45,15 @@ CLIENTES = {
 # Registro de clientes sem PDF (pedido lançado manualmente no popup, ex:
 # pedidos por telefone/WhatsApp). Mesma chave usada em /perfil/<cliente> e
 # nos endpoints /operadores, /filiais, /produtos e /processar-manual abaixo.
+# multiFilial=True: cliente tem várias lojas (tabela M:N:O:P:Q do Perfil),
+# o popup pede pra escolher a filial pelo nome.
+# multiFilial=False: cliente tem CNPJ/endereço único — vem direto do
+# cabeçalho do Perfil (linhas 3-6), sem seleção nenhuma no popup.
 CLIENTES_MANUAIS = {
-    'guanabara_lojas': {'nome': 'Guanabara Lojas'},
-    'mundial_lojas': {'nome': 'Mundial Lojas'},
+    'guanabara_lojas': {'nome': 'Guanabara Lojas', 'multiFilial': True},
+    'mundial_lojas': {'nome': 'Mundial Lojas', 'multiFilial': True},
+    'guanabara_central': {'nome': 'Guanabara Central', 'multiFilial': False},
+    'mundial_central': {'nome': 'Mundial Central', 'multiFilial': False},
 }
 
 
@@ -209,20 +215,33 @@ def operadores_cliente(cliente):
 
 @app.route('/filiais/<cliente>')
 def filiais_cliente(cliente):
-    """Lista as filiais cadastradas no Perfil (colunas M:N:O:P:Q) de um
-    cliente do fluxo manual, pra alimentar o dropdown de seleção de filial
-    no popup. Selecionar pelo nome já traz CNPJ, número e endereço."""
+    """Lista as filiais disponíveis pro popup de pedido manual.
+    Clientes multiFilial=True: lê a tabela M:N:O:P:Q do Perfil (várias lojas).
+    Clientes multiFilial=False (ex: Guanabara Central): não existe tabela —
+    devolve uma única filial sintetizada a partir do cabeçalho do Perfil
+    (CNPJ/Filial/Endereço únicos), pra manter o mesmo formato de resposta
+    e o frontend não precisar de um caminho de código totalmente separado."""
     if cliente not in CLIENTES_MANUAIS:
         return jsonify({'erro': f'Cliente {cliente} não usa fluxo manual'}), 400
     if not perfil_existe(cliente):
         return jsonify({'erro': 'Perfil não encontrado'}), 404
     perfil_bytes = carregar_perfil_bytes(cliente)
-    filiais_map = ler_filiais(perfil_bytes)
-    lista = [{'cnpj': cnpj, 'nome': info['nome'], 'numero': info['numero'],
-              'endereco': info['endereco'], 'cidade': info['cidade']}
-             for cnpj, info in filiais_map.items()]
+    if CLIENTES_MANUAIS[cliente].get('multiFilial', True):
+        filiais_map = ler_filiais(perfil_bytes)
+        lista = [{'cnpj': cnpj, 'nome': info['nome'], 'numero': info['numero'],
+                  'endereco': info['endereco'], 'cidade': info['cidade']}
+                 for cnpj, info in filiais_map.items()]
+    else:
+        meta, _ = ler_perfil(perfil_bytes)
+        lista = [{
+            'cnpj': _normaliza_cnpj(meta.get('cnpjPerfil', '')),
+            'nome': meta.get('filialPerfil') or meta.get('clienteNomePerfil') or CLIENTES_MANUAIS[cliente]['nome'],
+            'numero': None,
+            'endereco': meta.get('enderecoPerfil', ''),
+            'cidade': '',
+        }]
     lista.sort(key=lambda f: f['nome'])
-    return jsonify({'filiais': lista})
+    return jsonify({'filiais': lista, 'multiFilial': CLIENTES_MANUAIS[cliente].get('multiFilial', True)})
 
 
 @app.route('/produtos/<cliente>')
@@ -269,25 +288,36 @@ def processar_manual():
             return jsonify({'erro': f'Nenhum perfil disponível para {cliente}'}), 400
         if not operador:
             return jsonify({'erro': 'Selecione o operador'}), 400
-        if not filial_nome:
+
+        multi_filial = CLIENTES_MANUAIS[cliente].get('multiFilial', True)
+        if multi_filial and not filial_nome:
             return jsonify({'erro': 'Selecione a filial'}), 400
 
         perfil_bytes = carregar_perfil_bytes(cliente)
         meta, produtos = ler_perfil(perfil_bytes)
-        filiais_map = ler_filiais(perfil_bytes)
         operadores_validos = ler_operadores(perfil_bytes)
 
         if operador not in operadores_validos:
             return jsonify({'erro': f'Operador "{operador}" não cadastrado no perfil'}), 400
 
-        # encontra a filial selecionada pelo nome (a seleção é direta, não por CNPJ extraído de PDF)
-        cnpj_sel, filial_info = None, None
-        for cnpj, info in filiais_map.items():
-            if info['nome'] == filial_nome:
-                cnpj_sel, filial_info = cnpj, info
-                break
-        if not filial_info:
-            return jsonify({'erro': f'Filial "{filial_nome}" não encontrada no perfil'}), 400
+        if multi_filial:
+            # encontra a filial selecionada pelo nome (a seleção é direta, não por CNPJ extraído de PDF)
+            filiais_map = ler_filiais(perfil_bytes)
+            cnpj_sel, filial_info = None, None
+            for cnpj, info in filiais_map.items():
+                if info['nome'] == filial_nome:
+                    cnpj_sel, filial_info = cnpj, info
+                    break
+            if not filial_info:
+                return jsonify({'erro': f'Filial "{filial_nome}" não encontrada no perfil'}), 400
+        else:
+            # cliente 'Central': CNPJ/Filial/Endereço únicos, vêm do cabeçalho do Perfil
+            cnpj_sel = _normaliza_cnpj(meta.get('cnpjPerfil', ''))
+            filial_info = {
+                'nome': meta.get('filialPerfil') or meta.get('clienteNomePerfil') or CLIENTES_MANUAIS[cliente]['nome'],
+                'numero': None,
+                'endereco': meta.get('enderecoPerfil', ''),
+            }
 
         itens = []
         for it in itens_form:
