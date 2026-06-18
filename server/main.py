@@ -6,6 +6,7 @@ e gera Excel (upload interno) + PDF (expedição) padronizados.
 Arquitetura modular:
   storage.py    -> persistência de perfis no Google Cloud Storage
   perfil.py     -> leitura do Perfil Excel + matching de produtos
+  # build trigger
   excel_gen.py  -> geração do Excel de upload
   pdf_gen.py    -> geração do PDF de expedição
   parsers/      -> um parser por cliente (isolados entre si)
