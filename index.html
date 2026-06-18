@@ -28,16 +28,16 @@ main{max-width:800px;margin:28px auto;padding:0 16px;display:flex;flex-direction
 .search-count{font-size:11px;color:var(--muted);margin-top:5px}
 
 /* GRID COMPACTO */
-.client-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px;max-height:420px;overflow-y:auto;padding-right:2px}
-.cb{border:1.5px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:7px 6px 6px;cursor:pointer;text-align:center;color:var(--text);transition:border-color .12s,background .12s,opacity .12s;font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:3px;min-height:74px}
+.client-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;max-height:420px;overflow-y:auto;padding-right:2px}
+.cb{border:1.5px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:9px 8px 8px;cursor:pointer;text-align:center;color:var(--text);transition:border-color .12s,background .12s,opacity .12s;font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:4px;min-height:88px}
 .cb:hover{border-color:var(--accent);background:var(--accent-lt)}
 .cb.active{border-color:var(--accent);background:var(--accent-lt);box-shadow:0 0 0 2px rgba(139,28,28,.15)}
 .cb.hidden{display:none}
-.cb-logo{width:100%;height:32px;display:flex;align-items:center;justify-content:center}
-.cb-logo img{max-width:88%;max-height:30px;object-fit:contain}
-.cb-logo-placeholder{width:26px;height:26px;background:var(--bg);border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px}
+.cb-logo{width:100%;height:42px;display:flex;align-items:center;justify-content:center}
+.cb-logo img{max-width:90%;max-height:40px;object-fit:contain}
+.cb-logo-placeholder{width:34px;height:34px;background:var(--bg);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:17px}
 .cb-info{display:flex;flex-direction:column;align-items:center;gap:1px;width:100%}
-.cb .cn{font-size:10.5px;font-weight:600;line-height:1.2;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cb .cn{font-size:11.5px;font-weight:600;line-height:1.25;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .badge-dot{width:6px;height:6px;border-radius:50%;background:var(--green);margin-top:1px}
 .badge-dot.p{background:var(--warn)}
 .badge-dot.m{background:#999}
@@ -74,6 +74,47 @@ main{max-width:800px;margin:28px auto;padding:0 16px;display:flex;flex-direction
 .summary td:last-child{text-align:right;font-weight:600}
 .summary tr.sh td{color:var(--muted);font-weight:600;border-bottom:1px solid var(--border);padding-bottom:5px}
 .divider{height:1px;background:var(--border);margin:8px 0}
+
+/* ── PEDIDO MANUAL (popup) ── paleta espelhando excel_gen.py / pdf_gen.py */
+:root {
+  --cor-titulo: #E0E0E0;
+  --cor-subtitulo: #F0F0F0;
+  --cor-meta: #F8F8F8;
+  --cor-header: #D0D0D0;
+  --cor-azul: #2980B9;
+  --cor-azul-claro: #EBF5FB;
+  --cor-par: #F5F5F5;
+  --cor-totv: #D5F5E3;
+  --cor-erro: #C0392B;
+  --cor-texto-fraco: #666666;
+}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;z-index:1000}
+.overlay.aberto{display:flex}
+.popup{background:#fff;width:min(960px,95vw);max-height:92vh;overflow-y:auto;border-radius:4px;box-shadow:0 8px 30px rgba(0,0,0,0.3);font-family:Arial,Helvetica,sans-serif;color:#1a1a1a}
+.titulo-pedido{background:var(--cor-titulo);text-align:center;font-weight:bold;font-size:15px;padding:10px 0}
+.subtitulo-pedido{background:var(--cor-subtitulo);text-align:center;font-weight:bold;font-size:13px;padding:8px 0}
+.meta-grid{display:grid;grid-template-columns:110px 1fr 110px 1fr;background:var(--cor-meta);border-bottom:1px solid #ccc;font-size:13px}
+.meta-grid > div{padding:6px 8px;display:flex;align-items:center}
+.meta-label{font-weight:bold}
+.meta-grid select,.meta-grid input[type=text]{width:100%;padding:4px 6px;font-size:13px;border:1px solid #bbb;border-radius:3px}
+.meta-valor-auto{color:var(--cor-texto-fraco)}
+table.itens{width:100%;border-collapse:collapse;font-size:13px}
+table.itens th{background:var(--cor-header);padding:8px 6px;text-align:center;font-size:12px;border:1px solid #fff}
+table.itens td{padding:6px;border:1px solid #eee;text-align:center}
+table.itens tr:nth-child(even) td{background:var(--cor-par)}
+table.itens td.nome-produto{text-align:left}
+.qtde-wrap{display:flex;align-items:center;justify-content:center;gap:4px}
+.qtde-wrap input{width:64px;padding:4px 6px;text-align:right;border:1px solid #bbb;border-radius:3px;font-size:13px}
+.unidade-label{font-size:11px;font-weight:bold;color:var(--cor-azul);min-width:22px;text-align:left}
+.col-calc{background:var(--cor-azul-claro);color:var(--cor-texto-fraco);font-size:12px}
+.rodape{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:var(--cor-totv);font-size:14px;font-weight:bold}
+.acoes{display:flex;justify-content:flex-end;gap:10px;padding:14px 16px}
+.btn{padding:10px 20px;border:none;border-radius:4px;font-size:14px;cursor:pointer}
+.btn-cancelar{background:#eee;color:#333}
+.btn-gerar{background:var(--cor-azul);color:#fff;font-weight:bold}
+.btn-gerar:disabled{background:#aaa;cursor:not-allowed}
+.erro-msg{color:var(--cor-erro);font-size:13px;padding:0 16px 10px;display:none}
+.carregando{padding:40px;text-align:center;color:var(--cor-texto-fraco)}
 </style>
 </head>
 <body>
@@ -119,7 +160,7 @@ main{max-width:800px;margin:28px auto;padding:0 16px;display:flex;flex-direction
           <div class="zf" id="fn-p"></div>
         </div>
       </div>
-      <div>
+      <div id="bloco-pedido">
         <div class="ulabel">Pedido do cliente <span style="color:var(--accent)">*</span></div>
         <div class="zone" id="zone-o"
              ondragover="event.preventDefault();this.classList.add('drag')"
@@ -132,7 +173,7 @@ main{max-width:800px;margin:28px auto;padding:0 16px;display:flex;flex-direction
         </div>
       </div>
     </div>
-    <button class="btn-proc" id="btn-proc" disabled onclick="processar()">⚙️ &nbsp;Processar pedido</button>
+    <button class="btn-proc" id="btn-proc" disabled onclick="acaoPrincipal()">⚙️ &nbsp;Processar pedido</button>
   </div>
 </div>
 
@@ -149,13 +190,23 @@ main{max-width:800px;margin:28px auto;padding:0 16px;display:flex;flex-direction
 </div>
 
 </main>
+
+<!-- PEDIDO MANUAL: aberto via abrirPedidoManual(), disparado pelo botão "Abrir pedido manual"
+     quando o cliente selecionado no Passo 1 é um cliente sem PDF (CLIENTES[id].manual). -->
+<div class="overlay" id="overlayPedidoManual">
+  <div class="popup" id="popupConteudo">
+    <div class="carregando">Carregando perfil do cliente…</div>
+  </div>
+</div>
+
 <script>
 'use strict';
-var SERVER_URL = 'https://pata-negra-staging-784065203515.us-central1.run.app';
+var SERVER_URL = 'https://pata-negra-784065203515.us-central1.run.app';
 var S = {cliente:null, perfilFile:null, pedidoFile:null, arquivos:[], perfilServidor:{}};
 
 // ── LISTA DE CLIENTES (única fonte de verdade — adicionar aqui escala facilmente) ──
 // status: 'ativo' | 'breve' | 'mapear'
+// manual: true → cliente sem PDF, pedido lançado no popup (ver bloco "PEDIDO MANUAL" no final do arquivo)
 var CLIENTES_LISTA = [
   {id:'adonai',        nome:'Adonai Atacadista', tipo:'SuasVendas',  status:'ativo'},
   {id:'assai',         nome:'Assaí',             tipo:'Consinco',    status:'ativo'},
@@ -167,10 +218,14 @@ var CLIENTES_LISTA = [
   {id:'supjoao',       nome:'Superm. do João',   tipo:'texto',       status:'breve'},
   {id:'torre_barra',   nome:'Torre Barra',       tipo:'TOTVS',       status:'ativo'},
   {id:'torre_central', nome:'Torre Central',     tipo:'TOTVS',       status:'ativo'},
+  {id:'guanabara_lojas', nome:'Guanabara Lojas', tipo:'Manual',      status:'ativo', manual:true},
+  {id:'mundial_lojas',   nome:'Mundial Lojas',   tipo:'Manual',      status:'ativo', manual:true},
+  {id:'guanabara_central', nome:'Guanabara Central', tipo:'Manual',  status:'ativo', manual:true},
+  {id:'mundial_central',   nome:'Mundial Central',   tipo:'Manual',  status:'ativo', manual:true},
 ];
 
 var CLIENTES = {};
-CLIENTES_LISTA.forEach(function(c){ CLIENTES[c.id] = {nome: c.nome}; });
+CLIENTES_LISTA.forEach(function(c){ CLIENTES[c.id] = {nome: c.nome, manual: !!c.manual}; });
 
 var LOGOS_CACHE = {};
 var CLIENTES_ATIVOS_COM_LOGO = CLIENTES_LISTA.filter(function(c){return c.status==='ativo';}).map(function(c){return c.id;});
@@ -243,6 +298,15 @@ function selCliente(id, btn) {
   clearLog();
   document.getElementById('results').style.display = 'none';
   S.perfilFile = null;
+  S.pedidoFile = null;
+  document.getElementById('fn-o').textContent = '';
+  document.getElementById('zone-o').classList.remove('filled');
+
+  // alterna Step 2 conforme o cliente ser de fluxo manual (sem Pedido, vai direto pro popup) ou PDF
+  var manual = CLIENTES[id].manual;
+  document.getElementById('bloco-pedido').style.display = manual ? 'none' : '';
+  document.getElementById('btn-proc').textContent = manual ? '📝  Abrir pedido manual' : '⚙️  Processar pedido';
+
   // restaurar logos que possam ter sumido (cold start do servidor)
   CLIENTES_ATIVOS_COM_LOGO.forEach(function(cid) {
     var imgEl = document.querySelector('#btn-'+cid+' .cb-logo img');
@@ -304,7 +368,10 @@ function temPerfil() {
   return S.perfilFile || (S.cliente && S.perfilServidor[S.cliente]);
 }
 function atualizarBotao() {
-  document.getElementById('btn-proc').disabled = !(S.cliente && S.pedidoFile && temPerfil());
+  var manual = S.cliente && CLIENTES[S.cliente].manual;
+  document.getElementById('btn-proc').disabled = manual
+    ? !(S.cliente && temPerfil())
+    : !(S.cliente && S.pedidoFile && temPerfil());
 }
 
 function addLog(msg,cls){var el=document.getElementById('log');el.style.display='block';var d=document.createElement('div');if(cls)d.className=cls;d.textContent='['+new Date().toLocaleTimeString('pt-BR')+'] '+msg;el.appendChild(d);el.scrollTop=el.scrollHeight;}
@@ -314,6 +381,39 @@ function logErr(m){addLog('✗ '+m,'er');}
 function logInfo(m){addLog('ℹ '+m,'in');}
 function clearLog(){var el=document.getElementById('log');el.innerHTML='';el.style.display='none';}
 function moeda(v){return Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
+
+// ── Dispatcher do botão principal: fluxo PDF (processar) ou fluxo manual (abrir popup) ──
+function acaoPrincipal() {
+  if (S.cliente && CLIENTES[S.cliente].manual) {
+    iniciarPedidoManual();
+  } else {
+    processar();
+  }
+}
+
+async function iniciarPedidoManual() {
+  var btn = document.getElementById('btn-proc');
+  btn.disabled = true; btn.textContent = '⏳  Carregando…';
+  clearLog();
+  try {
+    if (S.perfilFile) {
+      logInfo('Enviando novo perfil de ' + CLIENTES[S.cliente].nome + '…');
+      var form = new FormData();
+      form.append('perfil', S.perfilFile);
+      var resp = await fetch(SERVER_URL+'/perfil/'+S.cliente, {method:'POST', body:form});
+      var data = await resp.json();
+      if (!resp.ok || data.erro) { logErr('Erro ao salvar perfil: '+(data.erro||resp.status)); return; }
+      S.perfilServidor[S.cliente] = S.perfilFile.name;
+      S.perfilFile = null;
+      logOk('Perfil salvo no servidor.');
+    }
+    abrirPedidoManual(S.cliente, CLIENTES[S.cliente].nome);
+  } catch(e) {
+    logErr('Erro de conexão: '+e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '📝  Abrir pedido manual';
+  }
+}
 
 async function processar() {
   var btn = document.getElementById('btn-proc');
@@ -331,51 +431,58 @@ async function processar() {
     var data = await resp.json();
     if (!data.ok) { logErr('Erro: '+data.erro); return; }
     if (S.perfilFile) S.perfilServidor[S.cliente] = S.perfilFile.name;
-    S.arquivos = data.arquivos || [];
-    if (!S.arquivos.length && data.excel) {
-      S.arquivos = [{empresa: null, label:'', excel: data.excel, pdf: data.pdf}];
-    }
-    logOk(data.filiais+' filiais | '+data.itens+' itens | '+data.totalKg+'kg | R$ '+moeda(data.totalValor));
-    if (data.split) logOk('Pedido misto — gerados arquivos separados por empresa');
-    var linhas = data.resumo.map(function(f){
-      return '<tr><td>'+f.filial+'</td><td style="text-align:center">'+f.itens+'</td>'+
-             '<td style="text-align:right">'+f.kg+' kg</td>'+
-             '<td style="text-align:right">R$ '+moeda(f.valor)+'</td></tr>';
-    }).join('');
-    document.getElementById('summary').innerHTML =
-      '<table>'+
-      '<tr><td><b>Filiais</b></td><td>'+data.filiais+'</td></tr>'+
-      '<tr><td><b>Total itens</b></td><td>'+data.itens+'</td></tr>'+
-      '<tr><td><b>Total Kg</b></td><td>'+data.totalKg+' kg</td></tr>'+
-      '<tr><td><b>Total Valor</b></td><td>R$ '+moeda(data.totalValor)+'</td></tr>'+
-      '</table><div class="divider"></div>'+
-      '<table><tr class="sh"><td>Filial</td><td style="text-align:center">Itens</td>'+
-      '<td style="text-align:right">Kg</td><td style="text-align:right">Valor</td></tr>'+linhas+'</table>';
-    var rg = document.getElementById('rg-downloads');
-    rg.innerHTML = '';
-    S.arquivos.forEach(function(arq) {
-      var sufixo = arq.label ? ' — '+arq.label : '';
-      rg.innerHTML +=
-        '<div class="rc">'+
-          '<div class="ri">📊</div>'+
-          '<div class="rt">Excel de Upload'+sufixo+'</div>'+
-          '<div class="rd">Formatação completa · fórmulas vivas · uma aba por filial</div>'+
-          '<button class="btn-dl xl" onclick="dlArquivoIdx('+S.arquivos.indexOf(arq)+',\'excel\')">⬇ Baixar Excel'+sufixo+'</button>'+
-        '</div>'+
-        '<div class="rc">'+
-          '<div class="ri">🖨️</div>'+
-          '<div class="rt">PDF de Expedição'+sufixo+'</div>'+
-          '<div class="rd">Espelho das colunas A–I · para o encarregado</div>'+
-          '<button class="btn-dl pd" onclick="dlArquivoIdx('+S.arquivos.indexOf(arq)+',\'pdf\')">⬇ Baixar PDF'+sufixo+'</button>'+
-        '</div>';
-    });
-    document.getElementById('results').style.display = 'block';
-    document.getElementById('results').scrollIntoView({behavior:'smooth'});
+    mostrarResultados(data);
   } catch(e) {
     logErr('Erro de conexão: '+e.message);
   } finally {
     btn.disabled = false; btn.textContent = '⚙️  Processar pedido';
   }
+}
+
+// ── Renderiza o card "Pedido processado" (resumo + botões de download).
+// Compartilhado entre o fluxo de PDF (processar) e o fluxo manual (gerarPedido),
+// já que a resposta dos dois endpoints tem o mesmo formato. ──
+function mostrarResultados(data) {
+  S.arquivos = data.arquivos || [];
+  if (!S.arquivos.length && data.excel) {
+    S.arquivos = [{empresa: null, label:'', excel: data.excel, pdf: data.pdf}];
+  }
+  logOk(data.filiais+' filiais | '+data.itens+' itens | '+data.totalKg+'kg | R$ '+moeda(data.totalValor));
+  if (data.split) logOk('Pedido misto — gerados arquivos separados por empresa');
+  var linhas = data.resumo.map(function(f){
+    return '<tr><td>'+f.filial+'</td><td style="text-align:center">'+f.itens+'</td>'+
+           '<td style="text-align:right">'+f.kg+' kg</td>'+
+           '<td style="text-align:right">R$ '+moeda(f.valor)+'</td></tr>';
+  }).join('');
+  document.getElementById('summary').innerHTML =
+    '<table>'+
+    '<tr><td><b>Filiais</b></td><td>'+data.filiais+'</td></tr>'+
+    '<tr><td><b>Total itens</b></td><td>'+data.itens+'</td></tr>'+
+    '<tr><td><b>Total Kg</b></td><td>'+data.totalKg+' kg</td></tr>'+
+    '<tr><td><b>Total Valor</b></td><td>R$ '+moeda(data.totalValor)+'</td></tr>'+
+    '</table><div class="divider"></div>'+
+    '<table><tr class="sh"><td>Filial</td><td style="text-align:center">Itens</td>'+
+    '<td style="text-align:right">Kg</td><td style="text-align:right">Valor</td></tr>'+linhas+'</table>';
+  var rg = document.getElementById('rg-downloads');
+  rg.innerHTML = '';
+  S.arquivos.forEach(function(arq) {
+    var sufixo = arq.label ? ' — '+arq.label : '';
+    rg.innerHTML +=
+      '<div class="rc">'+
+        '<div class="ri">📊</div>'+
+        '<div class="rt">Excel de Upload'+sufixo+'</div>'+
+        '<div class="rd">Formatação completa · fórmulas vivas · uma aba por filial</div>'+
+        '<button class="btn-dl xl" onclick="dlArquivoIdx('+S.arquivos.indexOf(arq)+',\'excel\')">⬇ Baixar Excel'+sufixo+'</button>'+
+      '</div>'+
+      '<div class="rc">'+
+        '<div class="ri">🖨️</div>'+
+        '<div class="rt">PDF de Expedição'+sufixo+'</div>'+
+        '<div class="rd">Espelho das colunas A–I · para o encarregado</div>'+
+        '<button class="btn-dl pd" onclick="dlArquivoIdx('+S.arquivos.indexOf(arq)+',\'pdf\')">⬇ Baixar PDF'+sufixo+'</button>'+
+      '</div>';
+  });
+  document.getElementById('results').style.display = 'block';
+  document.getElementById('results').scrollIntoView({behavior:'smooth'});
 }
 
 function dlArquivoIdx(idx, tipo) {
@@ -393,6 +500,251 @@ function dlArquivoIdx(idx, tipo) {
   var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nome;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   logOk(nome+' baixado!');
+}
+
+// ── PEDIDO MANUAL: popup de lançamento de pedido sem PDF (Guanabara Lojas, Mundial Lojas) ──
+let _estado = null; // { cliente, clienteNome, operadores, filiais, produtos }
+
+async function abrirPedidoManual(cliente, clienteNome) {
+  const overlay = document.getElementById('overlayPedidoManual');
+  const conteudo = document.getElementById('popupConteudo');
+  overlay.classList.add('aberto');
+  conteudo.innerHTML = '<div class="carregando">Carregando perfil do cliente…</div>';
+
+  try {
+    const [opRes, filRes, prodRes] = await Promise.all([
+      fetch(`${SERVER_URL}/operadores/${cliente}`).then(r => r.json()),
+      fetch(`${SERVER_URL}/filiais/${cliente}`).then(r => r.json()),
+      fetch(`${SERVER_URL}/produtos/${cliente}`).then(r => r.json()),
+    ]);
+
+    if (opRes.erro || filRes.erro || prodRes.erro) {
+      throw new Error(opRes.erro || filRes.erro || prodRes.erro);
+    }
+
+    _estado = {
+      cliente, clienteNome,
+      multiFilial: filRes.multiFilial !== false,
+      operadores: opRes.operadores,
+      filiais: filRes.filiais,
+      produtos: prodRes.produtos.map(p => ({ ...p, quantidade: '' })),
+    };
+
+    renderizarPopup();
+  } catch (e) {
+    conteudo.innerHTML = `<div class="carregando" style="color:#C0392B">
+      Não foi possível carregar o perfil de ${clienteNome}: ${e.message}
+    </div>`;
+  }
+}
+
+function fecharPedidoManual() {
+  document.getElementById('overlayPedidoManual').classList.remove('aberto');
+}
+
+function dataHojeBR() {
+  const d = new Date();
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+}
+
+function renderizarPopup() {
+  const { clienteNome, operadores, filiais, multiFilial } = _estado;
+
+  const opcoesOperador = operadores.map(o => `<option value="${o}">${o}</option>`).join('');
+  const filialUnica = !multiFilial ? (filiais[0] || null) : null;
+
+  const subtituloInicial = multiFilial
+    ? `${clienteNome} — selecione a filial`
+    : `${clienteNome}${filialUnica ? ' — ' + filialUnica.nome : ''}`;
+  const cnpjInicial = filialUnica ? (filialUnica.cnpj || '—') : '—';
+  const enderecoInicial = filialUnica
+    ? (filialUnica.endereco || '—') + (filialUnica.cidade ? ' — ' + filialUnica.cidade : '')
+    : '—';
+
+  const linhaFilial = multiFilial
+    ? `<div class="meta-label">Filial:</div>
+       <div>
+         <select id="selFilial" onchange="onFilialSelecionada()">
+           <option value="">Selecione…</option>
+           ${filiais.map(f => `<option value="${f.nome}">${f.nome} - ${f.numero}</option>`).join('')}
+         </select>
+       </div>
+       <div class="meta-label">Núm. Filial:</div>
+       <div class="meta-valor-auto" id="numFilialAuto">—</div>`
+    : `<div class="meta-label">Filial:</div>
+       <div class="meta-valor-auto">${filialUnica ? filialUnica.nome : '—'}</div>
+       <div class="meta-label">Núm. Filial:</div>
+       <div class="meta-valor-auto">—</div>`;
+
+  document.getElementById('popupConteudo').innerHTML = `
+    <div class="titulo-pedido">PEDIDO ${clienteNome.toUpperCase()}</div>
+    <div class="subtitulo-pedido" id="subtituloFilial">${subtituloInicial}</div>
+
+    <div class="meta-grid">
+      <div class="meta-label">Pedido Nº:</div>
+      <div class="meta-valor-auto">(gerado ao confirmar)</div>
+      <div class="meta-label">Data Pedido:</div>
+      <div class="meta-valor-auto">${dataHojeBR()}</div>
+
+      <div class="meta-label">CNPJ:</div>
+      <div class="meta-valor-auto" id="cnpjAuto">${cnpjInicial}</div>
+      <div class="meta-label">Operador:</div>
+      <div>
+        <select id="selOperador" onchange="validarFormulario()">
+          <option value="">Selecione…</option>
+          ${opcoesOperador}
+        </select>
+      </div>
+
+      ${linhaFilial}
+
+      <div class="meta-label">Endereço:</div>
+      <div class="meta-valor-auto" id="enderecoAuto" style="grid-column: span 3;">${enderecoInicial}</div>
+    </div>
+
+    <table class="itens">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Cód. Interno</th>
+          <th>Nome Produto</th>
+          <th>Formato</th>
+          <th>Embalagem</th>
+          <th>Quantidade</th>
+          <th>Kg Planejados</th>
+          <th>Preço Unit.</th>
+          <th>Valor R$</th>
+        </tr>
+      </thead>
+      <tbody id="corpoTabelaItens"></tbody>
+    </table>
+
+    <div class="rodape">
+      <span>Total: <span id="totalItens">0</span> itens</span>
+      <span>Kg: <span id="totalKg">0,0</span></span>
+      <span>Valor: R$ <span id="totalValor">0,00</span></span>
+    </div>
+
+    <div class="erro-msg" id="erroMsg"></div>
+
+    <div class="acoes">
+      <button class="btn btn-cancelar" onclick="fecharPedidoManual()">Cancelar</button>
+      <button class="btn btn-gerar" id="btnGerar" disabled onclick="gerarPedido()">Gerar Pedido</button>
+    </div>
+  `;
+
+  renderizarLinhasProdutos();
+}
+
+function renderizarLinhasProdutos() {
+  const corpo = document.getElementById('corpoTabelaItens');
+  corpo.innerHTML = _estado.produtos.map((p, i) => `
+    <tr>
+      <td>${i + 1}</td>
+      <td>${p.codInterno ?? ''}</td>
+      <td class="nome-produto">${p.nomePerfil}</td>
+      <td>${p.formato || '—'}</td>
+      <td>${p.embalagem || '—'}</td>
+      <td>
+        <div class="qtde-wrap">
+          <input type="number" min="0" step="0.1" data-index="${i}"
+                 oninput="recalcularLinha(${i})" placeholder="0">
+          <span class="unidade-label">${p.unidFat.toUpperCase()}</span>
+        </div>
+      </td>
+      <td class="col-calc" id="kgCalc${i}">—</td>
+      <td>${formatarReal(p.precoUnit)}</td>
+      <td class="col-calc" id="valorCalc${i}">—</td>
+    </tr>
+  `).join('');
+}
+
+function formatarReal(v) {
+  return (v || 0).toFixed(2).replace('.', ',');
+}
+
+function onFilialSelecionada() {
+  const nome = document.getElementById('selFilial').value;
+  const filial = _estado.filiais.find(f => f.nome === nome);
+  document.getElementById('cnpjAuto').textContent = filial ? filial.cnpj : '—';
+  document.getElementById('numFilialAuto').textContent = filial ? filial.numero : '—';
+  document.getElementById('enderecoAuto').textContent = filial ? `${filial.endereco} — ${filial.cidade}` : '—';
+  document.getElementById('subtituloFilial').textContent =
+    `${_estado.clienteNome} — ${nome || 'selecione a filial'}`;
+  validarFormulario();
+}
+
+function recalcularLinha(i) {
+  const input = document.querySelector(`input[data-index="${i}"]`);
+  const qtde = parseFloat(input.value) || 0;
+  const p = _estado.produtos[i];
+  p.quantidade = qtde;
+
+  const kg = p.unidFat === 'cx' ? qtde * p.kgCx : qtde;
+  document.getElementById(`kgCalc${i}`).textContent = qtde > 0 ? kg.toFixed(1) : '—';
+  document.getElementById(`valorCalc${i}`).textContent = qtde > 0 ? formatarReal(kg * p.precoUnit) : '—';
+
+  atualizarTotais();
+  validarFormulario();
+}
+
+function atualizarTotais() {
+  let totalItens = 0, totalKg = 0, totalValor = 0;
+  _estado.produtos.forEach((p) => {
+    const qtde = parseFloat(p.quantidade) || 0;
+    if (qtde > 0) {
+      totalItens++;
+      const kg = p.unidFat === 'cx' ? qtde * p.kgCx : qtde;
+      totalKg += kg;
+      totalValor += kg * p.precoUnit;
+    }
+  });
+  document.getElementById('totalItens').textContent = totalItens;
+  document.getElementById('totalKg').textContent = totalKg.toFixed(1).replace('.', ',');
+  document.getElementById('totalValor').textContent = formatarReal(totalValor);
+}
+
+function validarFormulario() {
+  const operador = document.getElementById('selOperador')?.value;
+  const filialOk = _estado.multiFilial ? !!document.getElementById('selFilial')?.value : true;
+  const temItem = _estado.produtos.some(p => (parseFloat(p.quantidade) || 0) > 0);
+  document.getElementById('btnGerar').disabled = !(operador && filialOk && temItem);
+}
+
+async function gerarPedido() {
+  const operador = document.getElementById('selOperador').value;
+  const filialNome = _estado.multiFilial ? document.getElementById('selFilial').value : '';
+  const erroMsg = document.getElementById('erroMsg');
+  erroMsg.style.display = 'none';
+
+  const itens = _estado.produtos
+    .map((p, i) => ({ index: i, quantidade: parseFloat(p.quantidade) || 0 }))
+    .filter(it => it.quantidade > 0);
+
+  const btn = document.getElementById('btnGerar');
+  btn.disabled = true;
+  btn.textContent = 'Gerando…';
+
+  try {
+    const resp = await fetch(`${SERVER_URL}/processar-manual`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cliente: _estado.cliente, operador, filialNome, itens }),
+    });
+    const result = await resp.json();
+
+    if (!result.ok) {
+      throw new Error(result.erro || 'Erro desconhecido ao gerar o pedido');
+    }
+
+    fecharPedidoManual();
+    mostrarResultados(result);
+  } catch (e) {
+    erroMsg.textContent = e.message;
+    erroMsg.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Gerar Pedido';
+  }
 }
 </script>
 </body>
