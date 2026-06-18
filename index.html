@@ -237,7 +237,10 @@ document.getElementById('hdate').textContent =
 function renderClientGrid() {
   var grid = document.getElementById('client-grid');
   grid.innerHTML = '';
-  CLIENTES_LISTA.forEach(function(c) {
+  var ordenados = CLIENTES_LISTA.slice().sort(function(a, b) {
+    return a.nome.localeCompare(b.nome, 'pt-BR');
+  });
+  ordenados.forEach(function(c) {
     var btn = document.createElement('button');
     btn.className = 'cb';
     btn.id = 'btn-' + c.id;
