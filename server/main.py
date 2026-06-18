@@ -91,11 +91,21 @@ def _gerar_arquivos_por_empresa(dados, filiais):
 
 @app.route('/health')
 def health():
+    # DIAGNÓSTICO TEMPORÁRIO (18/06): captura erro por cliente em vez de
+    # deixar uma exceção silenciosa esconder o motivo de um perfil não
+    # aparecer. Reverter pra versão simples depois de identificar a causa.
     perfis = {}
+    erros = {}
     for c in {**CLIENTES, **CLIENTES_MANUAIS}:
-        if perfil_existe(c):
-            perfis[c] = perfil_filename(c)
-    return jsonify({'status': 'ok', 'perfis': perfis})
+        try:
+            if perfil_existe(c):
+                perfis[c] = perfil_filename(c)
+        except Exception as e:
+            erros[c] = f'{type(e).__name__}: {e}'
+    resp = {'status': 'ok', 'perfis': perfis}
+    if erros:
+        resp['erros'] = erros
+    return jsonify(resp)
 
 
 @app.route('/perfil/<cliente>', methods=['POST'])
