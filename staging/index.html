@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pata Negra — Processamento de Pedidos</title>
+<style>
+:root{--bg:#F7F5F2;--surface:#fff;--border:#E2DDD8;--text:#1A1714;--muted:#7A7470;--accent:#8B1C1C;--accent-lt:#F9EFEF;--green:#1A6B3C;--green-lt:#EBF5F0;--warn:#B85C00;--warn-lt:#FEF3E2;--radius:6px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line-height:1.5}
+header{background:var(--accent);color:#fff;padding:0 24px;height:56px;display:flex;align-items:center;gap:12px;box-shadow:0 2px 8px rgba(139,28,28,.25)}
+.logo{width:30px;height:30px;background:rgba(255,255,255,.18);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;flex-shrink:0}
+header h1{font-size:15px;font-weight:600}
+header span{font-size:12px;opacity:.65;margin-left:auto}
+main{max-width:800px;margin:28px auto;padding:0 16px;display:flex;flex-direction:column;gap:18px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 1px 3px rgba(0,0,0,.08);overflow:hidden}
+.card-header{padding:13px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.step{width:22px;height:22px;background:var(--accent);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+.card-header h2{font-size:13px;font-weight:600}
+.csub{font-size:12px;color:var(--muted);margin-left:auto}
+.card-body{padding:18px 20px}
+
+/* BUSCA */
+.search-row{margin-bottom:12px;position:relative}
+.search-row input{width:100%;padding:9px 12px 9px 34px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:13px;font-family:inherit;background:var(--bg)}
+.search-row input:focus{outline:none;border-color:var(--accent);background:var(--surface)}
+.search-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--muted);pointer-events:none}
+.search-count{font-size:11px;color:var(--muted);margin-top:5px}
+
+/* GRID COMPACTO */
+.client-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;max-height:420px;overflow-y:auto;padding-right:2px}
+.cb{border:1.5px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:9px 8px 8px;cursor:pointer;text-align:center;color:var(--text);transition:border-color .12s,background .12s,opacity .12s;font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:4px;min-height:88px}
+.cb:hover{border-color:var(--accent);background:var(--accent-lt)}
+.cb.active{border-color:var(--accent);background:var(--accent-lt);box-shadow:0 0 0 2px rgba(139,28,28,.15)}
+.cb.hidden{display:none}
+.cb-logo{width:100%;height:42px;display:flex;align-items:center;justify-content:center}
+.cb-logo img{max-width:90%;max-height:40px;object-fit:contain}
+.cb-logo-placeholder{width:34px;height:34px;background:var(--bg);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:17px}
+.cb-info{display:flex;flex-direction:column;align-items:center;gap:1px;width:100%}
+.cb .cn{font-size:11.5px;font-weight:600;line-height:1.25;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.badge-dot{width:6px;height:6px;border-radius:50%;background:var(--green);margin-top:1px}
+.badge-dot.p{background:var(--warn)}
+.badge-dot.m{background:#999}
+
+/* UPLOAD */
+.upload-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:500px){.upload-row{grid-template-columns:1fr}}
+.ulabel{font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.perfil-salvo{font-size:10px;color:var(--green);background:var(--green-lt);padding:2px 8px;border-radius:10px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
+.zone{border:2px dashed var(--border);border-radius:var(--radius);padding:16px 12px;text-align:center;cursor:pointer;position:relative;transition:border-color .13s,background .13s;min-height:100px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.zone:hover,.zone.drag{border-color:var(--accent);background:var(--accent-lt)}
+.zone.filled{border-style:solid;border-color:var(--green);background:var(--green-lt)}
+.zone.server{border-style:solid;border-color:var(--green);background:var(--green-lt);opacity:.8}
+.zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.zi{font-size:20px;margin-bottom:4px}.zl{font-size:12px;font-weight:600}
+.zh{font-size:10px;color:var(--muted);margin-top:2px}
+.zf{font-size:10px;color:var(--green);font-weight:600;margin-top:4px;word-break:break-all;max-width:100%;padding:0 4px}
+.btn-proc{width:100%;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius);font-size:14px;font-weight:600;cursor:pointer;margin-top:12px;font-family:inherit;transition:background .13s}
+.btn-proc:hover:not(:disabled){background:#6F1515}
+.btn-proc:disabled{opacity:.4;cursor:not-allowed}
+#log{display:none;background:#1A1714;color:#E8E4DF;border-radius:var(--radius);padding:14px 18px;font-family:monospace;font-size:12px;line-height:1.7;max-height:260px;overflow-y:auto}
+#log .ok{color:#5CB85C}#log .wn{color:#F0AD4E}#log .er{color:#D9534F}#log .in{color:#5BC0DE}
+#results{display:none}
+.rg{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+@media(max-width:500px){.rg{grid-template-columns:1fr}}
+.rc{border:1px solid var(--border);border-radius:var(--radius);padding:14px;display:flex;flex-direction:column;gap:7px}
+.ri{font-size:26px}.rt{font-size:13px;font-weight:600}.rd{font-size:11px;color:var(--muted)}
+.btn-dl{padding:9px 14px;border-radius:var(--radius);border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:background .13s}
+.btn-dl.xl{background:var(--green-lt);color:var(--green)}.btn-dl.xl:hover{background:#D4EDDA}
+.btn-dl.pd{background:var(--accent-lt);color:var(--accent)}.btn-dl.pd:hover{background:#F5D5D5}
+.summary{background:var(--bg);border-radius:4px;padding:12px 14px;font-size:12px}
+.summary table{width:100%;border-collapse:collapse}
+.summary td{padding:3px 5px;vertical-align:top}
+.summary td:last-child{text-align:right;font-weight:600}
+.summary tr.sh td{color:var(--muted);font-weight:600;border-bottom:1px solid var(--border);padding-bottom:5px}
+.divider{height:1px;background:var(--border);margin:8px 0}
+
+/* ── PEDIDO MANUAL (popup) ── paleta espelhando excel_gen.py / pdf_gen.py */
+:root {
+  --cor-titulo: #E0E0E0;
+  --cor-subtitulo: #F0F0F0;
+  --cor-meta: #F8F8F8;
+  --cor-header: #D0D0D0;
+  --cor-azul: #2980B9;
+  --cor-azul-claro: #EBF5FB;
+  --cor-par: #F5F5F5;
+  --cor-totv: #D5F5E3;
+  --cor-erro: #C0392B;
+  --cor-texto-fraco: #666666;
+}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;z-index:1000}
+.overlay.aberto{display:flex}
+.popup{background:#fff;width:min(960px,95vw);max-height:92vh;overflow-y:auto;border-radius:4px;box-shadow:0 8px 30px rgba(0,0,0,0.3);font-family:Arial,Helvetica,sans-serif;color:#1a1a1a}
+.titulo-pedido{background:var(--cor-titulo);text-align:center;font-weight:bold;font-size:15px;padding:10px 0}
+.subtitulo-pedido{background:var(--cor-subtitulo);text-align:center;font-weight:bold;font-size:13px;padding:8px 0}
+.meta-grid{display:grid;grid-template-columns:110px 1fr 110px 1fr;background:var(--cor-meta);border-bottom:1px solid #ccc;font-size:13px}
+.meta-grid > div{padding:6px 8px;display:flex;align-items:center}
+.meta-label{font-weight:bold}
+.meta-grid select,.meta-grid input[type=text]{width:100%;padding:4px 6px;font-size:13px;border:1px solid #bbb;border-radius:3px}
+.meta-valor-auto{color:var(--cor-texto-fraco)}
+table.itens{width:100%;border-collapse:collapse;font-size:13px}
+table.itens th{background:var(--cor-header);padding:8px 6px;text-align:center;font-size:12px;border:1px solid #fff}
+table.itens td{padding:6px;border:1px solid #eee;text-align:center}
+table.itens tr:nth-child(even) td{background:var(--cor-par)}
+table.itens td.nome-produto{text-align:left}
+.qtde-wrap{display:flex;align-items:center;justify-content:center;gap:4px}
+.qtde-wrap input{width:64px;padding:4px 6px;text-align:right;border:1px solid #bbb;border-radius:3px;font-size:13px}
+.unidade-label{font-size:11px;font-weight:bold;color:var(--cor-azul);min-width:22px;text-align:left}
+.col-calc{background:var(--cor-azul-claro);color:var(--cor-texto-fraco);font-size:12px}
+.rodape{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:var(--cor-totv);font-size:14px;font-weight:bold}
+.acoes{display:flex;justify-content:flex-end;gap:10px;padding:14px 16px}
+.btn{padding:10px 20px;border:none;border-radius:4px;font-size:14px;cursor:pointer}
+.btn-cancelar{background:#eee;color:#333}
+.btn-gerar{background:var(--cor-azul);color:#fff;font-weight:bold}
+.btn-gerar:disabled{background:#aaa;cursor:not-allowed}
+.erro-msg{color:var(--cor-erro);font-size:13px;padding:0 16px 10px;display:none}
+.carregando{padding:40px;text-align:center;color:var(--cor-texto-fraco)}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">PN</div>
+  <h1>Pata Negra — Processamento de Pedidos</h1>
+  <span id="hdate"></span>
+</header>
+<main>
+
+<div class="card">
+  <div class="card-header"><div class="step">1</div><h2>Selecionar cliente</h2></div>
+  <div class="card-body">
+    <div class="search-row">
+      <span class="search-icon">🔎</span>
+      <input type="text" id="search-cliente" placeholder="Buscar cliente..." oninput="filtrarClientes(this.value)">
+    </div>
+    <div class="client-grid" id="client-grid"></div>
+    <div class="search-count" id="search-count"></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <div class="step">2</div><h2>Upload dos arquivos</h2>
+    <span class="csub" id="sub-c">— selecione um cliente acima</span>
+  </div>
+  <div class="card-body">
+    <div class="upload-row">
+      <div>
+        <div class="ulabel">
+          Perfil do cliente
+          <span id="perfil-salvo-badge" style="display:none" class="perfil-salvo"></span>
+        </div>
+        <div class="zone" id="zone-p"
+             ondragover="event.preventDefault();this.classList.add('drag')"
+             ondragleave="this.classList.remove('drag')"
+             ondrop="dropFile(event,'perfil')">
+          <input type="file" id="inp-p" accept=".xlsx,.xls" onchange="pickFile(this,'perfil')">
+          <div class="zi">📋</div>
+          <div class="zl" id="zone-p-label">Perfil Excel</div>
+          <div class="zh" id="zone-p-hint">.xlsx — necessário para primeiro uso</div>
+          <div class="zf" id="fn-p"></div>
+        </div>
+      </div>
+      <div id="bloco-pedido">
+        <div class="ulabel">Pedido do cliente <span style="color:var(--accent)">*</span></div>
+        <div class="zone" id="zone-o"
+             ondragover="event.preventDefault();this.classList.add('drag')"
+             ondragleave="this.classList.remove('drag')"
+             ondrop="dropFile(event,'pedido')">
+          <input type="file" id="inp-o" accept=".pdf,.xlsx,.xls,.jpg,.jpeg,.png,.webp" onchange="pickFile(this,'pedido')">
+          <div class="zi">📦</div><div class="zl">Pedido</div>
+          <div class="zh">PDF · Excel · Imagem</div>
+          <div class="zf" id="fn-o"></div>
+        </div>
+      </div>
+    </div>
+    <button class="btn-proc" id="btn-proc" disabled onclick="acaoPrincipal()">⚙️ &nbsp;Processar pedido</button>
+  </div>
+</div>
+
+<div id="log"></div>
+
+<div class="card" id="results">
+  <div class="card-header">
+    <div class="step" style="background:var(--green)">✓</div><h2>Pedido processado</h2>
+  </div>
+  <div class="card-body">
+    <div class="summary" id="summary"></div>
+    <div class="rg" id="rg-downloads"></div>
+  </div>
+</div>
+
+</main>
+
+<!-- PEDIDO MANUAL: aberto via abrirPedidoManual(), disparado pelo botão "Abrir pedido manual"
+     quando o cliente selecionado no Passo 1 é um cliente sem PDF (CLIENTES[id].manual). -->
+<div class="overlay" id="overlayPedidoManual">
+  <div class="popup" id="popupConteudo">
+    <div class="carregando">Carregando perfil do cliente…</div>
+  </div>
+</div>
+
+<script>
+'use strict';
+var SERVER_URL = 'https://pata-negra-staging-784065203515.us-central1.run.app';
+var S = {cliente:null, perfilFile:null, pedidoFile:null, arquivos:[], perfilServidor:{}};
+
+// ── LISTA DE CLIENTES (única fonte de verdade — adicionar aqui escala facilmente) ──
+// status: 'ativo' | 'breve' | 'mapear'
+// manual: true → cliente sem PDF, pedido lançado no popup (ver bloco "PEDIDO MANUAL" no final do arquivo)
+var CLIENTES_LISTA = [
+  {id:'adonai',        nome:'Adonai Atacadista', tipo:'SuasVendas',  status:'ativo'},
+  {id:'assai',         nome:'Assaí',             tipo:'Consinco',    status:'ativo'},
+  {id:'atacadao',      nome:'Atacadão',          tipo:'Atacadão',    status:'ativo'},
+  {id:'dom_atacarejo', nome:'DOM Atacarejo',     tipo:'TOTVS',       status:'ativo'},
+  {id:'germans',       nome:'Germans',           tipo:'TOTVS',       status:'ativo'},
+  {id:'summer',        nome:'Mercado Summer',    tipo:'texto',       status:'breve'},
+  {id:'superprix',     nome:'Superprix',         tipo:'próprio',     status:'ativo'},
+  {id:'supjoao',       nome:'Superm. do João',   tipo:'texto',       status:'breve'},
+  {id:'torre_barra',   nome:'Torre Barra',       tipo:'TOTVS',       status:'ativo'},
+  {id:'torre_central', nome:'Torre Central',     tipo:'TOTVS',       status:'ativo'},
+  {id:'guanabara_lojas', nome:'Guanabara Lojas', tipo:'Manual',      status:'ativo', manual:true},
+  {id:'mundial_lojas',   nome:'Mundial Lojas',   tipo:'Manual',      status:'ativo', manual:true},
+  {id:'guanabara_central', nome:'Guanabara Central', tipo:'Manual',  status:'ativo', manual:true},
+  {id:'mundial_central',   nome:'Mundial Central',   tipo:'Manual',  status:'ativo', manual:true},
+];
+
+var CLIENTES = {};
+CLIENTES_LISTA.forEach(function(c){ CLIENTES[c.id] = {nome: c.nome, manual: !!c.manual}; });
+
+var LOGOS_CACHE = {};
+var CLIENTES_ATIVOS_COM_LOGO = CLIENTES_LISTA.filter(function(c){return c.status==='ativo';}).map(function(c){return c.id;});
+
+document.getElementById('hdate').textContent =
+  new Date().toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
+
+// ── Renderizar grid de clientes a partir da lista ──
+function renderClientGrid() {
+  var grid = document.getElementById('client-grid');
+  grid.innerHTML = '';
+  CLIENTES_LISTA.forEach(function(c) {
+    var btn = document.createElement('button');
+    btn.className = 'cb';
+    btn.id = 'btn-' + c.id;
+    btn.dataset.nome = c.nome.toLowerCase();
+
+    var dotClass = c.status === 'ativo' ? '' : (c.status === 'breve' ? 'p' : 'm');
+    var logoHtml = c.status === 'ativo'
+      ? '<img src="'+SERVER_URL+'/logo/'+c.id+'" alt="'+c.nome+'" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' +
+        '<div class="cb-logo-placeholder" style="display:none">🏪</div>'
+      : '<div class="cb-logo-placeholder">🏪</div>';
+
+    btn.innerHTML =
+      '<div class="cb-logo">' + logoHtml + '</div>' +
+      '<div class="cb-info">' +
+        '<span class="cn">' + c.nome + '</span>' +
+        '<span class="badge-dot ' + dotClass + '"></span>' +
+      '</div>';
+
+    btn.addEventListener('click', function() { selCliente(c.id, btn); });
+    grid.appendChild(btn);
+  });
+}
+renderClientGrid();
+
+// ── Busca / filtro ──
+function filtrarClientes(termo) {
+  termo = termo.toLowerCase().trim();
+  var visiveis = 0;
+  document.querySelectorAll('.cb').forEach(function(btn) {
+    var match = !termo || btn.dataset.nome.includes(termo);
+    btn.classList.toggle('hidden', !match);
+    if (match) visiveis++;
+  });
+  var count = document.getElementById('search-count');
+  count.textContent = termo ? (visiveis + ' de ' + CLIENTES_LISTA.length + ' clientes') : '';
+}
+
+// ── Pré-carregar perfis + logos ──
+window.addEventListener('load', function() {
+  fetch(SERVER_URL+'/health')
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      S.perfilServidor = d.perfis || {};
+      CLIENTES_ATIVOS_COM_LOGO.forEach(function(id) {
+        var img = new window.Image();
+        img.onload = function() { LOGOS_CACHE[id] = img.src; };
+        img.src = SERVER_URL+'/logo/'+id+'?t='+Date.now();
+      });
+    })
+    .catch(function(){});
+});
+
+function selCliente(id, btn) {
+  S.cliente = id;
+  document.querySelectorAll('.cb').forEach(function(b){ b.classList.remove('active'); });
+  btn.classList.add('active');
+  document.getElementById('sub-c').textContent = '— ' + CLIENTES[id].nome;
+  clearLog();
+  document.getElementById('results').style.display = 'none';
+  S.perfilFile = null;
+  S.pedidoFile = null;
+  document.getElementById('fn-o').textContent = '';
+  document.getElementById('zone-o').classList.remove('filled');
+
+  // alterna Step 2 conforme o cliente ser de fluxo manual (sem Pedido, vai direto pro popup) ou PDF
+  var manual = CLIENTES[id].manual;
+  document.getElementById('bloco-pedido').style.display = manual ? 'none' : '';
+  document.getElementById('btn-proc').textContent = manual ? '📝  Abrir pedido manual' : '⚙️  Processar pedido';
+
+  // restaurar logos que possam ter sumido (cold start do servidor)
+  CLIENTES_ATIVOS_COM_LOGO.forEach(function(cid) {
+    var imgEl = document.querySelector('#btn-'+cid+' .cb-logo img');
+    if (imgEl && LOGOS_CACHE[cid] && imgEl.style.display === 'none') {
+      imgEl.src = LOGOS_CACHE[cid];
+      imgEl.style.display = '';
+      var ph = imgEl.nextElementSibling;
+      if (ph) ph.style.display = 'none';
+    }
+  });
+  var badge = document.getElementById('perfil-salvo-badge');
+  var zoneP = document.getElementById('zone-p');
+  var label = document.getElementById('zone-p-label');
+  var hint  = document.getElementById('zone-p-hint');
+  var fnP   = document.getElementById('fn-p');
+  var filename = S.perfilServidor[id] || '';
+  fnP.textContent = '';
+  if (filename) {
+    badge.textContent = '📋 ' + filename;
+    badge.style.display = 'inline-block';
+    zoneP.className = 'zone server';
+    label.textContent = 'Perfil salvo no servidor';
+    hint.textContent  = 'Clique para substituir';
+  } else {
+    badge.style.display = 'none';
+    zoneP.className = 'zone';
+    label.textContent = 'Perfil Excel';
+    hint.textContent  = '.xlsx — necessário para primeiro uso';
+  }
+  atualizarBotao();
+}
+
+function pickFile(inp, tipo) { var f = inp.files[0]; if (!f) return; setFile(f, tipo); }
+function dropFile(ev, tipo) {
+  ev.preventDefault();
+  document.getElementById(tipo==='perfil' ? 'zone-p' : 'zone-o').classList.remove('drag');
+  var f = ev.dataTransfer.files[0]; if (!f) return; setFile(f, tipo);
+}
+function setFile(f, tipo) {
+  if (tipo === 'perfil') {
+    S.perfilFile = f;
+    document.getElementById('fn-p').textContent = f.name;
+    var zoneP = document.getElementById('zone-p');
+    zoneP.className = 'zone filled';
+    document.getElementById('zone-p-label').textContent = 'Novo perfil selecionado';
+    document.getElementById('zone-p-hint').textContent  = 'Será salvo no servidor ao processar';
+    var badge = document.getElementById('perfil-salvo-badge');
+    badge.textContent = '📋 ' + f.name;
+    badge.style.display = 'inline-block';
+  } else {
+    S.pedidoFile = f;
+    document.getElementById('fn-o').textContent = f.name;
+    document.getElementById('zone-o').classList.add('filled');
+  }
+  atualizarBotao();
+}
+
+function temPerfil() {
+  return S.perfilFile || (S.cliente && S.perfilServidor[S.cliente]);
+}
+function atualizarBotao() {
+  var manual = S.cliente && CLIENTES[S.cliente].manual;
+  document.getElementById('btn-proc').disabled = manual
+    ? !(S.cliente && temPerfil())
+    : !(S.cliente && S.pedidoFile && temPerfil());
+}
+
+function addLog(msg,cls){var el=document.getElementById('log');el.style.display='block';var d=document.createElement('div');if(cls)d.className=cls;d.textContent='['+new Date().toLocaleTimeString('pt-BR')+'] '+msg;el.appendChild(d);el.scrollTop=el.scrollHeight;}
+function logOk(m){addLog('✓ '+m,'ok');}
+function logWarn(m){addLog('⚠ '+m,'wn');}
+function logErr(m){addLog('✗ '+m,'er');}
+function logInfo(m){addLog('ℹ '+m,'in');}
+function clearLog(){var el=document.getElementById('log');el.innerHTML='';el.style.display='none';}
+function moeda(v){return Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
+
+// ── Dispatcher do botão principal: fluxo PDF (processar) ou fluxo manual (abrir popup) ──
+function acaoPrincipal() {
+  if (S.cliente && CLIENTES[S.cliente].manual) {
+    iniciarPedidoManual();
+  } else {
+    processar();
+  }
+}
+
+async function iniciarPedidoManual() {
+  var btn = document.getElementById('btn-proc');
+  btn.disabled = true; btn.textContent = '⏳  Carregando…';
+  clearLog();
+  try {
+    if (S.perfilFile) {
+      logInfo('Enviando novo perfil de ' + CLIENTES[S.cliente].nome + '…');
+      var form = new FormData();
+      form.append('perfil', S.perfilFile);
+      var resp = await fetch(SERVER_URL+'/perfil/'+S.cliente, {method:'POST', body:form});
+      var data = await resp.json();
+      if (!resp.ok || data.erro) { logErr('Erro ao salvar perfil: '+(data.erro||resp.status)); return; }
+      S.perfilServidor[S.cliente] = S.perfilFile.name;
+      S.perfilFile = null;
+      logOk('Perfil salvo no servidor.');
+    }
+    abrirPedidoManual(S.cliente, CLIENTES[S.cliente].nome);
+  } catch(e) {
+    logErr('Erro de conexão: '+e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '📝  Abrir pedido manual';
+  }
+}
+
+async function processar() {
+  var btn = document.getElementById('btn-proc');
+  btn.disabled = true; btn.textContent = '⏳  Processando…';
+  clearLog(); document.getElementById('results').style.display = 'none';
+  S.arquivos = [];
+  try {
+    logInfo(S.perfilFile ? 'Enviando perfil + pedido…' : 'Usando perfil salvo no servidor · enviando pedido…');
+    var form = new FormData();
+    if (S.perfilFile) form.append('perfil', S.perfilFile);
+    form.append('pedido', S.pedidoFile);
+    form.append('cliente', S.cliente);
+    var resp = await fetch(SERVER_URL+'/processar', {method:'POST', body:form});
+    if (!resp.ok) { var err = await resp.json(); logErr('Erro: '+(err.erro||resp.status)); return; }
+    var data = await resp.json();
+    if (!data.ok) { logErr('Erro: '+data.erro); return; }
+    if (S.perfilFile) S.perfilServidor[S.cliente] = S.perfilFile.name;
+    mostrarResultados(data);
+  } catch(e) {
+    logErr('Erro de conexão: '+e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '⚙️  Processar pedido';
+  }
+}
+
+// ── Renderiza o card "Pedido processado" (resumo + botões de download).
+// Compartilhado entre o fluxo de PDF (processar) e o fluxo manual (gerarPedido),
+// já que a resposta dos dois endpoints tem o mesmo formato. ──
+function mostrarResultados(data) {
+  S.arquivos = data.arquivos || [];
+  if (!S.arquivos.length && data.excel) {
+    S.arquivos = [{empresa: null, label:'', excel: data.excel, pdf: data.pdf}];
+  }
+  logOk(data.filiais+' filiais | '+data.itens+' itens | '+data.totalKg+'kg | R$ '+moeda(data.totalValor));
+  if (data.split) logOk('Pedido misto — gerados arquivos separados por empresa');
+  var linhas = data.resumo.map(function(f){
+    return '<tr><td>'+f.filial+'</td><td style="text-align:center">'+f.itens+'</td>'+
+           '<td style="text-align:right">'+f.kg+' kg</td>'+
+           '<td style="text-align:right">R$ '+moeda(f.valor)+'</td></tr>';
+  }).join('');
+  document.getElementById('summary').innerHTML =
+    '<table>'+
+    '<tr><td><b>Filiais</b></td><td>'+data.filiais+'</td></tr>'+
+    '<tr><td><b>Total itens</b></td><td>'+data.itens+'</td></tr>'+
+    '<tr><td><b>Total Kg</b></td><td>'+data.totalKg+' kg</td></tr>'+
+    '<tr><td><b>Total Valor</b></td><td>R$ '+moeda(data.totalValor)+'</td></tr>'+
+    '</table><div class="divider"></div>'+
+    '<table><tr class="sh"><td>Filial</td><td style="text-align:center">Itens</td>'+
+    '<td style="text-align:right">Kg</td><td style="text-align:right">Valor</td></tr>'+linhas+'</table>';
+  var rg = document.getElementById('rg-downloads');
+  rg.innerHTML = '';
+  S.arquivos.forEach(function(arq) {
+    var sufixo = arq.label ? ' — '+arq.label : '';
+    rg.innerHTML +=
+      '<div class="rc">'+
+        '<div class="ri">📊</div>'+
+        '<div class="rt">Excel de Upload'+sufixo+'</div>'+
+        '<div class="rd">Formatação completa · fórmulas vivas · uma aba por filial</div>'+
+        '<button class="btn-dl xl" onclick="dlArquivoIdx('+S.arquivos.indexOf(arq)+',\'excel\')">⬇ Baixar Excel'+sufixo+'</button>'+
+      '</div>'+
+      '<div class="rc">'+
+        '<div class="ri">🖨️</div>'+
+        '<div class="rt">PDF de Expedição'+sufixo+'</div>'+
+        '<div class="rd">Espelho das colunas A–I · para o encarregado</div>'+
+        '<button class="btn-dl pd" onclick="dlArquivoIdx('+S.arquivos.indexOf(arq)+',\'pdf\')">⬇ Baixar PDF'+sufixo+'</button>'+
+      '</div>';
+  });
+  document.getElementById('results').style.display = 'block';
+  document.getElementById('results').scrollIntoView({behavior:'smooth'});
+}
+
+function dlArquivoIdx(idx, tipo) {
+  var arq = S.arquivos[idx];
+  if (!arq) { logWarn('Processe um pedido primeiro.'); return; }
+  var b64  = tipo==='excel' ? arq.excel : arq.pdf;
+  var mime = tipo==='excel' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'application/pdf';
+  var ext  = tipo==='excel' ? '.xlsx' : '.pdf';
+  var suf  = arq.label ? '_'+arq.label.replace(/\s+/g,'') : '';
+  var nome = 'PataNegra_'+CLIENTES[S.cliente].nome.replace(/\s+/g,'_')+'_'+
+             new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+suf+ext;
+  var bin = atob(b64); var arr = new Uint8Array(bin.length);
+  for (var i=0; i<bin.length; i++) arr[i] = bin.charCodeAt(i);
+  var blob = new Blob([arr],{type:mime});
+  var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nome;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  logOk(nome+' baixado!');
+}
+
+// ── PEDIDO MANUAL: popup de lançamento de pedido sem PDF (Guanabara Lojas, Mundial Lojas) ──
+let _estado = null; // { cliente, clienteNome, operadores, filiais, produtos }
+
+async function abrirPedidoManual(cliente, clienteNome) {
+  const overlay = document.getElementById('overlayPedidoManual');
+  const conteudo = document.getElementById('popupConteudo');
+  overlay.classList.add('aberto');
+  conteudo.innerHTML = '<div class="carregando">Carregando perfil do cliente…</div>';
+
+  try {
+    const [opRes, filRes, prodRes] = await Promise.all([
+      fetch(`${SERVER_URL}/operadores/${cliente}`).then(r => r.json()),
+      fetch(`${SERVER_URL}/filiais/${cliente}`).then(r => r.json()),
+      fetch(`${SERVER_URL}/produtos/${cliente}`).then(r => r.json()),
+    ]);
+
+    if (opRes.erro || filRes.erro || prodRes.erro) {
+      throw new Error(opRes.erro || filRes.erro || prodRes.erro);
+    }
+
+    _estado = {
+      cliente, clienteNome,
+      multiFilial: filRes.multiFilial !== false,
+      operadores: opRes.operadores,
+      filiais: filRes.filiais,
+      produtos: prodRes.produtos.map(p => ({ ...p, quantidade: '' })),
+    };
+
+    renderizarPopup();
+  } catch (e) {
+    conteudo.innerHTML = `<div class="carregando" style="color:#C0392B">
+      Não foi possível carregar o perfil de ${clienteNome}: ${e.message}
+    </div>`;
+  }
+}
+
+function fecharPedidoManual() {
+  document.getElementById('overlayPedidoManual').classList.remove('aberto');
+}
+
+function dataHojeBR() {
+  const d = new Date();
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+}
+
+function renderizarPopup() {
+  const { clienteNome, operadores, filiais, multiFilial } = _estado;
+
+  const opcoesOperador = operadores.map(o => `<option value="${o}">${o}</option>`).join('');
+  const filialUnica = !multiFilial ? (filiais[0] || null) : null;
+
+  const subtituloInicial = multiFilial
+    ? `${clienteNome} — selecione a filial`
+    : `${clienteNome}${filialUnica ? ' — ' + filialUnica.nome : ''}`;
+  const cnpjInicial = filialUnica ? (filialUnica.cnpj || '—') : '—';
+  const enderecoInicial = filialUnica
+    ? (filialUnica.endereco || '—') + (filialUnica.cidade ? ' — ' + filialUnica.cidade : '')
+    : '—';
+
+  const linhaFilial = multiFilial
+    ? `<div class="meta-label">Filial:</div>
+       <div>
+         <select id="selFilial" onchange="onFilialSelecionada()">
+           <option value="">Selecione…</option>
+           ${filiais.map(f => `<option value="${f.nome}">${f.nome} - ${f.numero}</option>`).join('')}
+         </select>
+       </div>
+       <div class="meta-label">Núm. Filial:</div>
+       <div class="meta-valor-auto" id="numFilialAuto">—</div>`
+    : `<div class="meta-label">Filial:</div>
+       <div class="meta-valor-auto">${filialUnica ? filialUnica.nome : '—'}</div>
+       <div class="meta-label">Núm. Filial:</div>
+       <div class="meta-valor-auto">—</div>`;
+
+  document.getElementById('popupConteudo').innerHTML = `
+    <div class="titulo-pedido">PEDIDO ${clienteNome.toUpperCase()}</div>
+    <div class="subtitulo-pedido" id="subtituloFilial">${subtituloInicial}</div>
+
+    <div class="meta-grid">
+      <div class="meta-label">Pedido Nº:</div>
+      <div class="meta-valor-auto">(gerado ao confirmar)</div>
+      <div class="meta-label">Data Pedido:</div>
+      <div class="meta-valor-auto">${dataHojeBR()}</div>
+
+      <div class="meta-label">CNPJ:</div>
+      <div class="meta-valor-auto" id="cnpjAuto">${cnpjInicial}</div>
+      <div class="meta-label">Operador:</div>
+      <div>
+        <select id="selOperador" onchange="validarFormulario()">
+          <option value="">Selecione…</option>
+          ${opcoesOperador}
+        </select>
+      </div>
+
+      ${linhaFilial}
+
+      <div class="meta-label">Endereço:</div>
+      <div class="meta-valor-auto" id="enderecoAuto" style="grid-column: span 3;">${enderecoInicial}</div>
+    </div>
+
+    <table class="itens">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Cód. Interno</th>
+          <th>Nome Produto</th>
+          <th>Formato</th>
+          <th>Embalagem</th>
+          <th>Quantidade</th>
+          <th>Kg Planejados</th>
+          <th>Preço Unit.</th>
+          <th>Valor R$</th>
+        </tr>
+      </thead>
+      <tbody id="corpoTabelaItens"></tbody>
+    </table>
+
+    <div class="rodape">
+      <span>Total: <span id="totalItens">0</span> itens</span>
+      <span>Kg: <span id="totalKg">0,0</span></span>
+      <span>Valor: R$ <span id="totalValor">0,00</span></span>
+    </div>
+
+    <div class="erro-msg" id="erroMsg"></div>
+
+    <div class="acoes">
+      <button class="btn btn-cancelar" onclick="fecharPedidoManual()">Cancelar</button>
+      <button class="btn btn-gerar" id="btnGerar" disabled onclick="gerarPedido()">Gerar Pedido</button>
+    </div>
+  `;
+
+  renderizarLinhasProdutos();
+}
+
+function renderizarLinhasProdutos() {
+  const corpo = document.getElementById('corpoTabelaItens');
+  corpo.innerHTML = _estado.produtos.map((p, i) => `
+    <tr>
+      <td>${i + 1}</td>
+      <td>${p.codInterno ?? ''}</td>
+      <td class="nome-produto">${p.nomePerfil}</td>
+      <td>${p.formato || '—'}</td>
+      <td>${p.embalagem || '—'}</td>
+      <td>
+        <div class="qtde-wrap">
+          <input type="number" min="0" step="0.1" data-index="${i}"
+                 oninput="recalcularLinha(${i})" placeholder="0">
+          <span class="unidade-label">${p.unidFat.toUpperCase()}</span>
+        </div>
+      </td>
+      <td class="col-calc" id="kgCalc${i}">—</td>
+      <td>${formatarReal(p.precoUnit)}</td>
+      <td class="col-calc" id="valorCalc${i}">—</td>
+    </tr>
+  `).join('');
+}
+
+function formatarReal(v) {
+  return (v || 0).toFixed(2).replace('.', ',');
+}
+
+function onFilialSelecionada() {
+  const nome = document.getElementById('selFilial').value;
+  const filial = _estado.filiais.find(f => f.nome === nome);
+  document.getElementById('cnpjAuto').textContent = filial ? filial.cnpj : '—';
+  document.getElementById('numFilialAuto').textContent = filial ? filial.numero : '—';
+  document.getElementById('enderecoAuto').textContent = filial ? `${filial.endereco} — ${filial.cidade}` : '—';
+  document.getElementById('subtituloFilial').textContent =
+    `${_estado.clienteNome} — ${nome || 'selecione a filial'}`;
+  validarFormulario();
+}
+
+function recalcularLinha(i) {
+  const input = document.querySelector(`input[data-index="${i}"]`);
+  const qtde = parseFloat(input.value) || 0;
+  const p = _estado.produtos[i];
+  p.quantidade = qtde;
+
+  const kg = p.unidFat === 'cx' ? qtde * p.kgCx : qtde;
+  document.getElementById(`kgCalc${i}`).textContent = qtde > 0 ? kg.toFixed(1) : '—';
+  document.getElementById(`valorCalc${i}`).textContent = qtde > 0 ? formatarReal(kg * p.precoUnit) : '—';
+
+  atualizarTotais();
+  validarFormulario();
+}
+
+function atualizarTotais() {
+  let totalItens = 0, totalKg = 0, totalValor = 0;
+  _estado.produtos.forEach((p) => {
+    const qtde = parseFloat(p.quantidade) || 0;
+    if (qtde > 0) {
+      totalItens++;
+      const kg = p.unidFat === 'cx' ? qtde * p.kgCx : qtde;
+      totalKg += kg;
+      totalValor += kg * p.precoUnit;
+    }
+  });
+  document.getElementById('totalItens').textContent = totalItens;
+  document.getElementById('totalKg').textContent = totalKg.toFixed(1).replace('.', ',');
+  document.getElementById('totalValor').textContent = formatarReal(totalValor);
+}
+
+function validarFormulario() {
+  const operador = document.getElementById('selOperador')?.value;
+  const filialOk = _estado.multiFilial ? !!document.getElementById('selFilial')?.value : true;
+  const temItem = _estado.produtos.some(p => (parseFloat(p.quantidade) || 0) > 0);
+  document.getElementById('btnGerar').disabled = !(operador && filialOk && temItem);
+}
+
+async function gerarPedido() {
+  const operador = document.getElementById('selOperador').value;
+  const filialNome = _estado.multiFilial ? document.getElementById('selFilial').value : '';
+  const erroMsg = document.getElementById('erroMsg');
+  erroMsg.style.display = 'none';
+
+  const itens = _estado.produtos
+    .map((p, i) => ({ index: i, quantidade: parseFloat(p.quantidade) || 0 }))
+    .filter(it => it.quantidade > 0);
+
+  const btn = document.getElementById('btnGerar');
+  btn.disabled = true;
+  btn.textContent = 'Gerando…';
+
+  try {
+    const resp = await fetch(`${SERVER_URL}/processar-manual`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cliente: _estado.cliente, operador, filialNome, itens }),
+    });
+    const result = await resp.json();
+
+    if (!result.ok) {
+      throw new Error(result.erro || 'Erro desconhecido ao gerar o pedido');
+    }
+
+    fecharPedidoManual();
+    mostrarResultados(result);
+  } catch (e) {
+    erroMsg.textContent = e.message;
+    erroMsg.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Gerar Pedido';
+  }
+}
+</script>
+</body>
+</html>
