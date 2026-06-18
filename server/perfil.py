@@ -46,6 +46,13 @@ def ler_perfil(perfil_bytes):
         'codCond': str(pdata[3][6]) if pdata[3][6] else '',
         'vendedor': pdata[2][8] or '',
         'telefone': pdata[2][9] or '',
+        # Campos de cabeçalho (linhas 3-6, coluna C) — usados pelos clientes
+        # 'Central' (sem tabela de filiais M:N:O): CNPJ/Filial/Endereço únicos,
+        # preenchidos direto aqui em vez de vir de uma seleção de loja.
+        'clienteNomePerfil': str(pdata[2][2]).strip() if pdata[2][2] else '',
+        'cnpjPerfil': str(pdata[3][2]).strip() if pdata[3][2] else '',
+        'filialPerfil': str(pdata[4][2]).strip() if pdata[4][2] else '',
+        'enderecoPerfil': str(pdata[5][2]).strip() if pdata[5][2] else '',
     }
     produtos = []
     for r in pdata[7:]:
