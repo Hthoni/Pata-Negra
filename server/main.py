@@ -14,11 +14,12 @@ from flask import Flask, request, jsonify, send_file
 import openpyxl
 import io
 import base64
+import datetime
 import traceback
 from flask_cors import CORS
 
 from storage import perfil_existe, salvar_perfil, carregar_perfil_bytes, perfil_filename
-from perfil import ler_perfil, ler_filiais, buscar_filial
+from perfil import ler_perfil, ler_filiais, buscar_filial, ler_operadores
 from excel_gen import gerar_excel
 from pdf_gen import gerar_pdf
 from parsers import (
@@ -29,7 +30,7 @@ from parsers import (
 app = Flask(__name__)
 CORS(app)
 
-# Registro central de clientes: nome de exibição + função de parsing
+# Registro central de clientes que mandam PDF: nome de exibição + função de parsing
 CLIENTES = {
     'dom_atacarejo': {'nome': 'DOM Atacarejo', 'parse': dom_atacarejo.parse},
     'atacadao': {'nome': 'Atacadão', 'parse': atacadao.parse},
@@ -41,11 +42,51 @@ CLIENTES = {
     'adonai': {'nome': 'Adonai Atacadista', 'parse': adonai.parse},
 }
 
+# Registro de clientes sem PDF (pedido lançado manualmente no popup, ex:
+# pedidos por telefone/WhatsApp). Mesma chave usada em /perfil/<cliente> e
+# nos endpoints /operadores, /filiais, /produtos e /processar-manual abaixo.
+CLIENTES_MANUAIS = {
+    'guanabara_lojas': {'nome': 'Guanabara Lojas'},
+    'mundial_lojas': {'nome': 'Mundial Lojas'},
+}
+
+
+def _gerar_arquivos_por_empresa(dados, filiais):
+    """Detecta split por empresa (produtos de Indústria e Distribuidora no
+    mesmo pedido) e gera os pares Excel+PDF correspondentes. Compartilhado
+    entre /processar (pedidos parseados de PDF) e /processar-manual
+    (pedidos lançados na tela, sem PDF) — a lógica de split não depende de
+    como os itens chegaram, só do campo 'empresa' de cada item."""
+    empresas_nos_itens = set(
+        it.get('empresa') or dados.get('empresa', 2)
+        for f in filiais for it in f['itens']
+    )
+    empresas_nos_itens.discard(None)
+    if not empresas_nos_itens:
+        empresas_nos_itens = {dados.get('empresa', 2)}
+
+    arquivos = []
+    eb_simples = pb_simples = None  # guarda o único par gerado quando não há split, p/ reaproveitar
+    for emp_split in sorted(empresas_nos_itens):
+        override = emp_split if len(empresas_nos_itens) > 1 else None
+        eb = gerar_excel(dados, empresa_override=override)
+        pb = gerar_pdf(dados, empresa_override=override)
+        if len(empresas_nos_itens) == 1:
+            eb_simples, pb_simples = eb, pb
+        label = ('Indústria' if emp_split == 1 else 'Distribuidora') if len(empresas_nos_itens) > 1 else ''
+        arquivos.append({
+            'empresa': emp_split,
+            'label': label,
+            'excel': base64.b64encode(eb).decode(),
+            'pdf': base64.b64encode(pb).decode(),
+        })
+    return arquivos, eb_simples, pb_simples, len(empresas_nos_itens) > 1
+
 
 @app.route('/health')
 def health():
     perfis = {}
-    for c in CLIENTES:
+    for c in {**CLIENTES, **CLIENTES_MANUAIS}:
         if perfil_existe(c):
             perfis[c] = perfil_filename(c)
     return jsonify({'status': 'ok', 'perfis': perfis})
@@ -54,7 +95,7 @@ def health():
 @app.route('/perfil/<cliente>', methods=['POST'])
 def upload_perfil(cliente):
     """Salva ou atualiza o perfil de um cliente no servidor."""
-    if cliente not in CLIENTES:
+    if cliente not in CLIENTES and cliente not in CLIENTES_MANUAIS:
         return jsonify({'erro': f'Cliente inválido: {cliente}'}), 400
     f = request.files.get('perfil')
     if not f:
@@ -128,32 +169,12 @@ def processar():
 
         dados = {**meta, 'filiais': filiais, 'clienteNome': CLIENTES[cliente]['nome']}
 
-        # detectar se há itens de empresas diferentes (split)
-        empresas_nos_itens = set(
-            it.get('empresa') or dados.get('empresa', 2)
-            for f in filiais for it in f['itens']
-        )
-        empresas_nos_itens.discard(None)
-        if not empresas_nos_itens:
-            empresas_nos_itens = {dados.get('empresa', 2)}
-
-        arquivos = []
-        for emp_split in sorted(empresas_nos_itens):
-            override = emp_split if len(empresas_nos_itens) > 1 else None
-            eb = gerar_excel(dados, empresa_override=override)
-            pb = gerar_pdf(dados, empresa_override=override)
-            label = ('Indústria' if emp_split == 1 else 'Distribuidora') if len(empresas_nos_itens) > 1 else ''
-            arquivos.append({
-                'empresa': emp_split,
-                'label': label,
-                'excel': base64.b64encode(eb).decode(),
-                'pdf': base64.b64encode(pb).decode(),
-            })
+        arquivos, eb_simples, pb_simples, split = _gerar_arquivos_por_empresa(dados, filiais)
 
         todos_itens = [i for f in filiais for i in f['itens']]
         return jsonify({
             'ok': True,
-            'split': len(empresas_nos_itens) > 1,
+            'split': split,
             'filiais': len(filiais),
             'itens': len(todos_itens),
             'totalKg': round(sum(i['kgPlanejados'] for i in todos_itens), 1),
@@ -164,9 +185,182 @@ def processar():
                         'valor': round(sum(i['valorPedido'] for i in f['itens']), 2)}
                        for f in filiais],
             'arquivos': arquivos,
-            # compatibilidade retroativa (caso simples)
-            'excel': base64.b64encode(gerar_excel(dados)).decode() if len(empresas_nos_itens) == 1 else '',
-            'pdf': base64.b64encode(gerar_pdf(dados)).decode() if len(empresas_nos_itens) == 1 else '',
+            # compatibilidade retroativa (caso simples) — reaproveita o que já foi gerado acima
+            'excel': base64.b64encode(eb_simples).decode() if eb_simples is not None else '',
+            'pdf': base64.b64encode(pb_simples).decode() if pb_simples is not None else '',
+        })
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'erro': str(e)}), 500
+
+
+@app.route('/operadores/<cliente>')
+def operadores_cliente(cliente):
+    """Lista os operadores cadastrados no Perfil de um cliente do fluxo
+    manual, pra alimentar o dropdown de quem está lançando o pedido."""
+    if cliente not in CLIENTES_MANUAIS:
+        return jsonify({'erro': f'Cliente {cliente} não usa fluxo manual'}), 400
+    if not perfil_existe(cliente):
+        return jsonify({'erro': 'Perfil não encontrado'}), 404
+    perfil_bytes = carregar_perfil_bytes(cliente)
+    return jsonify({'operadores': ler_operadores(perfil_bytes)})
+
+
+@app.route('/filiais/<cliente>')
+def filiais_cliente(cliente):
+    """Lista as filiais cadastradas no Perfil (colunas M:N:O:P:Q) de um
+    cliente do fluxo manual, pra alimentar o dropdown de seleção de filial
+    no popup. Selecionar pelo nome já traz CNPJ, número e endereço."""
+    if cliente not in CLIENTES_MANUAIS:
+        return jsonify({'erro': f'Cliente {cliente} não usa fluxo manual'}), 400
+    if not perfil_existe(cliente):
+        return jsonify({'erro': 'Perfil não encontrado'}), 404
+    perfil_bytes = carregar_perfil_bytes(cliente)
+    filiais_map = ler_filiais(perfil_bytes)
+    lista = [{'cnpj': cnpj, 'nome': info['nome'], 'numero': info['numero'],
+              'endereco': info['endereco'], 'cidade': info['cidade']}
+             for cnpj, info in filiais_map.items()]
+    lista.sort(key=lambda f: f['nome'])
+    return jsonify({'filiais': lista})
+
+
+@app.route('/produtos/<cliente>')
+def produtos_cliente(cliente):
+    """Lista os produtos cadastrados no Perfil de um cliente do fluxo
+    manual, pra pré-popular as linhas do popup (nome, formato, embalagem
+    e a unidade em que a quantidade deve ser digitada — cx ou kg)."""
+    if cliente not in CLIENTES_MANUAIS:
+        return jsonify({'erro': f'Cliente {cliente} não usa fluxo manual'}), 400
+    if not perfil_existe(cliente):
+        return jsonify({'erro': 'Perfil não encontrado'}), 404
+    perfil_bytes = carregar_perfil_bytes(cliente)
+    _, produtos = ler_perfil(perfil_bytes)
+    lista = [{
+        'index': i,
+        'codInterno': p['codInterno'],
+        'nomePerfil': p['nomePerfil'],
+        'formato': p['formato'],
+        'embalagem': p['embalagem'],
+        'unidFat': p['unidFat'],
+        'kgCx': p['kgCx'],
+        'precoUnit': p['precoUnit'],
+    } for i, p in enumerate(produtos)]
+    return jsonify({'produtos': lista})
+
+
+@app.route('/processar-manual', methods=['POST'])
+def processar_manual():
+    """Gera Excel+PDF a partir de um pedido lançado manualmente no popup
+    (clientes sem PDF de pedido — pedidos por telefone/WhatsApp em formato
+    livre). O operador escolhe a filial pelo nome e digita a quantidade de
+    cada produto já pré-carregado do Perfil; nenhum parsing de texto livre
+    é necessário, já que o produto e a filial vêm de seleção direta."""
+    try:
+        body = request.get_json(force=True) or {}
+        cliente = body.get('cliente', '')
+        operador = body.get('operador', '')
+        filial_nome = body.get('filialNome', '')
+        itens_form = body.get('itens', [])
+
+        if cliente not in CLIENTES_MANUAIS:
+            return jsonify({'erro': f'Cliente {cliente} não usa fluxo manual'}), 400
+        if not perfil_existe(cliente):
+            return jsonify({'erro': f'Nenhum perfil disponível para {cliente}'}), 400
+        if not operador:
+            return jsonify({'erro': 'Selecione o operador'}), 400
+        if not filial_nome:
+            return jsonify({'erro': 'Selecione a filial'}), 400
+
+        perfil_bytes = carregar_perfil_bytes(cliente)
+        meta, produtos = ler_perfil(perfil_bytes)
+        filiais_map = ler_filiais(perfil_bytes)
+        operadores_validos = ler_operadores(perfil_bytes)
+
+        if operador not in operadores_validos:
+            return jsonify({'erro': f'Operador "{operador}" não cadastrado no perfil'}), 400
+
+        # encontra a filial selecionada pelo nome (a seleção é direta, não por CNPJ extraído de PDF)
+        cnpj_sel, filial_info = None, None
+        for cnpj, info in filiais_map.items():
+            if info['nome'] == filial_nome:
+                cnpj_sel, filial_info = cnpj, info
+                break
+        if not filial_info:
+            return jsonify({'erro': f'Filial "{filial_nome}" não encontrada no perfil'}), 400
+
+        itens = []
+        for it in itens_form:
+            qtde = it.get('quantidade')
+            if not qtde:
+                continue  # linha em branco, produto não pedido nessa ligação
+            qtde = float(qtde)
+            if qtde <= 0:
+                continue
+            idx = it.get('index')
+            produto = produtos[idx] if isinstance(idx, int) and 0 <= idx < len(produtos) else None
+            if not produto:
+                continue
+            kgCx = produto['kgCx']
+            unidFat = produto['unidFat']
+            kgPlan = qtde * kgCx if unidFat == 'cx' else qtde
+            preco = produto['precoUnit']
+            itens.append({
+                'empresa': produto.get('empresa'),
+                'codInterno': produto['codInterno'],
+                'nomeProduto': produto['nomePerfil'],
+                'formato': produto.get('formato', ''),
+                'embalagem': produto.get('embalagem', ''),
+                'kgCx': kgCx,
+                'kgPlanejados': kgPlan,
+                'nrCaixas': round(kgPlan / kgCx, 1) if kgCx else 0,
+                'obs': produto.get('obs', ''),
+                'qtdeMultipl': qtde if unidFat == 'cx' else kgPlan,
+                'precoUnit': preco,
+                'valorPedido': round(kgPlan * preco, 2),
+                'precoSistema': preco,
+                'unidFat': unidFat,
+            })
+
+        if not itens:
+            return jsonify({'erro': 'Nenhum item com quantidade preenchida'}), 400
+
+        agora = datetime.datetime.now()
+        pedido_num = f"MANUAL-{agora.strftime('%Y%m%d-%H%M%S')}"
+
+        filiais = [{
+            'filial': filial_info['nome'],
+            'numFilial': filial_info['numero'],
+            'pedidoNum': pedido_num,
+            'cnpj': cnpj_sel,
+            'endereco': filial_info['endereco'],
+            'dataPedido': agora.strftime('%d/%m/%Y'),
+            'dataEntrega': '',
+            'condPgto': '',
+            'solicitante': operador,
+            'empresa': meta.get('empresa', 2),
+            'itens': itens,
+        }]
+
+        dados = {**meta, 'filiais': filiais, 'clienteNome': CLIENTES_MANUAIS[cliente]['nome']}
+
+        arquivos, eb_simples, pb_simples, split = _gerar_arquivos_por_empresa(dados, filiais)
+
+        return jsonify({
+            'ok': True,
+            'split': split,
+            'filiais': 1,
+            'itens': len(itens),
+            'totalKg': round(sum(i['kgPlanejados'] for i in itens), 1),
+            'totalValor': round(sum(i['valorPedido'] for i in itens), 2),
+            'pedidoNum': pedido_num,
+            'resumo': [{'filial': filial_info['nome'], 'pedidoNum': pedido_num,
+                        'itens': len(itens),
+                        'kg': round(sum(i['kgPlanejados'] for i in itens), 1),
+                        'valor': round(sum(i['valorPedido'] for i in itens), 2)}],
+            'arquivos': arquivos,
+            'excel': base64.b64encode(eb_simples).decode() if eb_simples is not None else '',
+            'pdf': base64.b64encode(pb_simples).decode() if pb_simples is not None else '',
         })
 
     except Exception as e:
