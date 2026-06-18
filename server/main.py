@@ -19,9 +19,15 @@ import traceback
 from flask_cors import CORS
 
 from storage import perfil_existe, salvar_perfil, carregar_perfil_bytes, perfil_filename
-from perfil import ler_perfil, ler_filiais, buscar_filial, ler_operadores, _normaliza_cnpj
+from perfil import ler_perfil, ler_filiais, buscar_filial, ler_operadores
 from excel_gen import gerar_excel
 from pdf_gen import gerar_pdf
+
+import re as _re
+def _normaliza_cnpj(cnpj):
+    """Remove formatação do CNPJ, deixando só dígitos. Definida aqui
+    localmente pra não depender da versão do perfil.py no servidor."""
+    return _re.sub(r'\D', '', str(cnpj or ''))
 from parsers import (
     dom_atacarejo, atacadao, assai, torre_central,
     torre_barra, germans, superprix, adonai,
