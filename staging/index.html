@@ -28,16 +28,16 @@ main{max-width:800px;margin:28px auto;padding:0 16px;display:flex;flex-direction
 .search-count{font-size:11px;color:var(--muted);margin-top:5px}
 
 /* GRID COMPACTO */
-.client-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px;max-height:420px;overflow-y:auto;padding-right:2px}
-.cb{border:1.5px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:7px 6px 6px;cursor:pointer;text-align:center;color:var(--text);transition:border-color .12s,background .12s,opacity .12s;font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:3px;min-height:74px}
+.client-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;max-height:420px;overflow-y:auto;padding-right:2px}
+.cb{border:1.5px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:9px 8px 8px;cursor:pointer;text-align:center;color:var(--text);transition:border-color .12s,background .12s,opacity .12s;font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:4px;min-height:88px}
 .cb:hover{border-color:var(--accent);background:var(--accent-lt)}
 .cb.active{border-color:var(--accent);background:var(--accent-lt);box-shadow:0 0 0 2px rgba(139,28,28,.15)}
 .cb.hidden{display:none}
-.cb-logo{width:100%;height:32px;display:flex;align-items:center;justify-content:center}
-.cb-logo img{max-width:88%;max-height:30px;object-fit:contain}
-.cb-logo-placeholder{width:26px;height:26px;background:var(--bg);border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px}
+.cb-logo{width:100%;height:42px;display:flex;align-items:center;justify-content:center}
+.cb-logo img{max-width:90%;max-height:40px;object-fit:contain}
+.cb-logo-placeholder{width:34px;height:34px;background:var(--bg);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:17px}
 .cb-info{display:flex;flex-direction:column;align-items:center;gap:1px;width:100%}
-.cb .cn{font-size:10.5px;font-weight:600;line-height:1.2;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cb .cn{font-size:11.5px;font-weight:600;line-height:1.25;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .badge-dot{width:6px;height:6px;border-radius:50%;background:var(--green);margin-top:1px}
 .badge-dot.p{background:var(--warn)}
 .badge-dot.m{background:#999}
@@ -114,8 +114,6 @@ table.itens td.nome-produto{text-align:left}
 .btn-gerar{background:var(--cor-azul);color:#fff;font-weight:bold}
 .btn-gerar:disabled{background:#aaa;cursor:not-allowed}
 .erro-msg{color:var(--cor-erro);font-size:13px;padding:0 16px 10px;display:none}
-.resultado{padding:16px;display:none}
-.resultado a{display:inline-block;margin:4px 8px 4px 0;padding:8px 14px;background:var(--cor-azul);color:#fff;text-decoration:none;border-radius:4px;font-size:13px}
 .carregando{padding:40px;text-align:center;color:var(--cor-texto-fraco)}
 </style>
 </head>
@@ -431,51 +429,58 @@ async function processar() {
     var data = await resp.json();
     if (!data.ok) { logErr('Erro: '+data.erro); return; }
     if (S.perfilFile) S.perfilServidor[S.cliente] = S.perfilFile.name;
-    S.arquivos = data.arquivos || [];
-    if (!S.arquivos.length && data.excel) {
-      S.arquivos = [{empresa: null, label:'', excel: data.excel, pdf: data.pdf}];
-    }
-    logOk(data.filiais+' filiais | '+data.itens+' itens | '+data.totalKg+'kg | R$ '+moeda(data.totalValor));
-    if (data.split) logOk('Pedido misto — gerados arquivos separados por empresa');
-    var linhas = data.resumo.map(function(f){
-      return '<tr><td>'+f.filial+'</td><td style="text-align:center">'+f.itens+'</td>'+
-             '<td style="text-align:right">'+f.kg+' kg</td>'+
-             '<td style="text-align:right">R$ '+moeda(f.valor)+'</td></tr>';
-    }).join('');
-    document.getElementById('summary').innerHTML =
-      '<table>'+
-      '<tr><td><b>Filiais</b></td><td>'+data.filiais+'</td></tr>'+
-      '<tr><td><b>Total itens</b></td><td>'+data.itens+'</td></tr>'+
-      '<tr><td><b>Total Kg</b></td><td>'+data.totalKg+' kg</td></tr>'+
-      '<tr><td><b>Total Valor</b></td><td>R$ '+moeda(data.totalValor)+'</td></tr>'+
-      '</table><div class="divider"></div>'+
-      '<table><tr class="sh"><td>Filial</td><td style="text-align:center">Itens</td>'+
-      '<td style="text-align:right">Kg</td><td style="text-align:right">Valor</td></tr>'+linhas+'</table>';
-    var rg = document.getElementById('rg-downloads');
-    rg.innerHTML = '';
-    S.arquivos.forEach(function(arq) {
-      var sufixo = arq.label ? ' — '+arq.label : '';
-      rg.innerHTML +=
-        '<div class="rc">'+
-          '<div class="ri">📊</div>'+
-          '<div class="rt">Excel de Upload'+sufixo+'</div>'+
-          '<div class="rd">Formatação completa · fórmulas vivas · uma aba por filial</div>'+
-          '<button class="btn-dl xl" onclick="dlArquivoIdx('+S.arquivos.indexOf(arq)+',\'excel\')">⬇ Baixar Excel'+sufixo+'</button>'+
-        '</div>'+
-        '<div class="rc">'+
-          '<div class="ri">🖨️</div>'+
-          '<div class="rt">PDF de Expedição'+sufixo+'</div>'+
-          '<div class="rd">Espelho das colunas A–I · para o encarregado</div>'+
-          '<button class="btn-dl pd" onclick="dlArquivoIdx('+S.arquivos.indexOf(arq)+',\'pdf\')">⬇ Baixar PDF'+sufixo+'</button>'+
-        '</div>';
-    });
-    document.getElementById('results').style.display = 'block';
-    document.getElementById('results').scrollIntoView({behavior:'smooth'});
+    mostrarResultados(data);
   } catch(e) {
     logErr('Erro de conexão: '+e.message);
   } finally {
     btn.disabled = false; btn.textContent = '⚙️  Processar pedido';
   }
+}
+
+// ── Renderiza o card "Pedido processado" (resumo + botões de download).
+// Compartilhado entre o fluxo de PDF (processar) e o fluxo manual (gerarPedido),
+// já que a resposta dos dois endpoints tem o mesmo formato. ──
+function mostrarResultados(data) {
+  S.arquivos = data.arquivos || [];
+  if (!S.arquivos.length && data.excel) {
+    S.arquivos = [{empresa: null, label:'', excel: data.excel, pdf: data.pdf}];
+  }
+  logOk(data.filiais+' filiais | '+data.itens+' itens | '+data.totalKg+'kg | R$ '+moeda(data.totalValor));
+  if (data.split) logOk('Pedido misto — gerados arquivos separados por empresa');
+  var linhas = data.resumo.map(function(f){
+    return '<tr><td>'+f.filial+'</td><td style="text-align:center">'+f.itens+'</td>'+
+           '<td style="text-align:right">'+f.kg+' kg</td>'+
+           '<td style="text-align:right">R$ '+moeda(f.valor)+'</td></tr>';
+  }).join('');
+  document.getElementById('summary').innerHTML =
+    '<table>'+
+    '<tr><td><b>Filiais</b></td><td>'+data.filiais+'</td></tr>'+
+    '<tr><td><b>Total itens</b></td><td>'+data.itens+'</td></tr>'+
+    '<tr><td><b>Total Kg</b></td><td>'+data.totalKg+' kg</td></tr>'+
+    '<tr><td><b>Total Valor</b></td><td>R$ '+moeda(data.totalValor)+'</td></tr>'+
+    '</table><div class="divider"></div>'+
+    '<table><tr class="sh"><td>Filial</td><td style="text-align:center">Itens</td>'+
+    '<td style="text-align:right">Kg</td><td style="text-align:right">Valor</td></tr>'+linhas+'</table>';
+  var rg = document.getElementById('rg-downloads');
+  rg.innerHTML = '';
+  S.arquivos.forEach(function(arq) {
+    var sufixo = arq.label ? ' — '+arq.label : '';
+    rg.innerHTML +=
+      '<div class="rc">'+
+        '<div class="ri">📊</div>'+
+        '<div class="rt">Excel de Upload'+sufixo+'</div>'+
+        '<div class="rd">Formatação completa · fórmulas vivas · uma aba por filial</div>'+
+        '<button class="btn-dl xl" onclick="dlArquivoIdx('+S.arquivos.indexOf(arq)+',\'excel\')">⬇ Baixar Excel'+sufixo+'</button>'+
+      '</div>'+
+      '<div class="rc">'+
+        '<div class="ri">🖨️</div>'+
+        '<div class="rt">PDF de Expedição'+sufixo+'</div>'+
+        '<div class="rd">Espelho das colunas A–I · para o encarregado</div>'+
+        '<button class="btn-dl pd" onclick="dlArquivoIdx('+S.arquivos.indexOf(arq)+',\'pdf\')">⬇ Baixar PDF'+sufixo+'</button>'+
+      '</div>';
+  });
+  document.getElementById('results').style.display = 'block';
+  document.getElementById('results').scrollIntoView({behavior:'smooth'});
 }
 
 function dlArquivoIdx(idx, tipo) {
@@ -608,8 +613,6 @@ function renderizarPopup() {
       <button class="btn btn-cancelar" onclick="fecharPedidoManual()">Cancelar</button>
       <button class="btn btn-gerar" id="btnGerar" disabled onclick="gerarPedido()">Gerar Pedido</button>
     </div>
-
-    <div class="resultado" id="resultadoArea"></div>
   `;
 
   renderizarLinhasProdutos();
@@ -716,57 +719,14 @@ async function gerarPedido() {
       throw new Error(result.erro || 'Erro desconhecido ao gerar o pedido');
     }
 
-    mostrarResultado(result);
+    fecharPedidoManual();
+    mostrarResultados(result);
   } catch (e) {
     erroMsg.textContent = e.message;
     erroMsg.style.display = 'block';
     btn.disabled = false;
     btn.textContent = 'Gerar Pedido';
   }
-}
-
-function baixarBase64(base64, nomeArquivo, mime) {
-  const link = document.createElement('a');
-  link.href = `data:${mime};base64,${base64}`;
-  link.download = nomeArquivo;
-  link.click();
-}
-
-function mostrarResultado(result) {
-  const area = document.getElementById('resultadoArea');
-  const pedidoNum = result.pedidoNum;
-
-  let links = '';
-  if (result.split) {
-    result.arquivos.forEach(arq => {
-      links += `
-        <a href="#" onclick="baixarBase64('${arq.excel}','${pedidoNum}_${arq.label}.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); return false;">
-          Excel — ${arq.label}
-        </a>
-        <a href="#" onclick="baixarBase64('${arq.pdf}','${pedidoNum}_${arq.label}.pdf','application/pdf'); return false;">
-          PDF — ${arq.label}
-        </a>`;
-    });
-  } else {
-    links = `
-      <a href="#" onclick="baixarBase64('${result.excel}','${pedidoNum}.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); return false;">
-        Baixar Excel
-      </a>
-      <a href="#" onclick="baixarBase64('${result.pdf}','${pedidoNum}.pdf','application/pdf'); return false;">
-        Baixar PDF
-      </a>`;
-  }
-
-  area.innerHTML = `
-    <p><strong>Pedido ${pedidoNum} gerado com sucesso.</strong><br>
-    ${result.itens} itens · ${result.totalKg.toFixed(1)} kg · R$ ${result.totalValor.toFixed(2)}</p>
-    ${links}
-  `;
-  area.style.display = 'block';
-
-  document.querySelector('.acoes').style.display = 'none';
-  document.querySelector('table.itens').style.opacity = '0.5';
-  document.querySelector('.rodape').style.display = 'none';
 }
 </script>
 </body>
