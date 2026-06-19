@@ -55,6 +55,23 @@ def parse(pdf_bytes, produtos):
     pedidoNum = fm(r'Pedido\s+N[oº°]:\s*(\d+)')
     data_pedido = fm(r'Data\s+Pedido:\s*(\d{2}/\d{2}/\d{4})')
 
+    # Endereço de entrega: "ENTREGA  Av. Carlos Marighella, 7974..."
+    endereco = ''
+    capturando = False
+    for ln in linhas:
+        if ln.strip().startswith('ENTREGA'):
+            # O endereço pode estar na mesma linha ou na seguinte
+            resto = re.sub(r'^ENTREGA\s*', '', ln).strip()
+            if resto:
+                endereco = resto
+            else:
+                capturando = True
+        elif capturando:
+            endereco = ln.strip()
+            capturando = False
+        if endereco:
+            break
+
     # CNPJ da filial vem na linha "Filial: Fil XX CD - 12.968.606/0004-47"
     cnpj_raw = ''
     filial_nome = ''
@@ -131,6 +148,7 @@ def parse(pdf_bytes, produtos):
         'dataPedido': data_pedido,
         'condPgto':   cond_pgto,
         'solicitante': solicitante,
+        'endereco':   endereco,
         'empresa':    2,   # Pata Negra Distribuidora (CNPJ ...0001-90 no PDF)
         'itens':      itens,
     }]
