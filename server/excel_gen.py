@@ -56,8 +56,9 @@ F_NR = _fnt(sz=8, color='FFC0392B')
 F_CX = _fnt(True, 9, 'FF854F0B')
 F_DIF = _fnt(True, 9, 'FFCC0000')
 
-FMT_MONEY = '#,##0.00'
-FMT_NUM = '0.0'
+FMT_MONEY = '#.##0,00'
+FMT_NUM  = '#.##0,0'
+FMT_INT  = '0'       # número inteiro (ex: nº caixas)
 
 
 def _ap(cell, val=None, fn=None, bg=None, bo=None, al=None, fmt=None):
@@ -188,7 +189,7 @@ def gerar_excel(dados, empresa_override=None):
                 c('K').value = f'=IF(G{r}<>"",G{r},F{r})'
             _ap(c('K'), None, F_IT, BG_AZLT, BALL, _aln('center'))
             c('H').value = f'=IF(G{r}<>"",G{r}/{kgcx},F{r}/{kgcx})'
-            _ap(c('H'), None, F_IT, bg, BALL, _aln('center'), FMT_NUM)
+            _ap(c('H'), None, F_IT, bg, BALL, _aln('center'), FMT_INT)
             _ap(c('I'), it.get('obs') or None, F_IT, bg, BALL, _aln('center'))
             _ap(c('L'), it.get('precoUnit'), F_IT, BG_AZLT, BALL, _aln('center'), FMT_MONEY)
             c('M').value = f'=L{r}*K{r}' if isCx else f'=IF(G{r}<>"",L{r}*G{r},L{r}*F{r})'
