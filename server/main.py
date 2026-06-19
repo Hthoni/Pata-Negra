@@ -31,7 +31,7 @@ def _normaliza_cnpj(cnpj):
     return _re.sub(r'\D', '', str(cnpj or ''))
 from parsers import (
     dom_atacarejo, atacadao, assai, torre_central,
-    torre_barra, germans, superprix, adonai, summer,
+    torre_barra, germans, superprix, adonai, summer, prezunic,
 )
 
 app = Flask(__name__)
@@ -48,6 +48,7 @@ CLIENTES = {
     'superprix': {'nome': 'Superprix', 'parse': superprix.parse},
     'adonai': {'nome': 'Adonai Atacadista', 'parse': adonai.parse},
     'summer': {'nome': 'Mercado Summer', 'parse': summer.parse},
+    'prezunic': {'nome': 'Prezunic', 'parse': prezunic.parse},
 }
 
 # Registro de clientes sem PDF (pedido lançado manualmente no popup, ex:
