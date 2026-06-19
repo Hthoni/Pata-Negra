@@ -78,10 +78,13 @@ def gerar_pdf(dados, empresa_override=None):
         def mv(t):
             return Paragraph(str(t) if t else '—', ST_MV)
 
+        def fl(t):
+            return Paragraph(str(t) if t else '—', ST_MV)
+
         meta = [
             [ml('Pedido Nº:'), mv(fd.get('pedidoNum', '')), ml('Data Pedido:'), mv(fd.get('dataPedido', ''))],
             [ml('CNPJ:'), mv(fd.get('cnpj', '')), ml('Data Entrega:'), mv(fd.get('dataEntrega', ''))],
-            [ml('Filial:'), mv(fd['filial']), ml('Solicitante:'), mv('')],
+            [ml('Filial:'), Paragraph((str(fd['filial']) + ('   |   Núm. Filial: ' + str(fd['numFilial']) if fd.get('numFilial') is not None else '')), ST_MV), ml('Solicitante:'), mv(fd.get('solicitante', ''))],
             [ml('Endereço:'), mv(fd.get('endereco', '')), ml('Vendedor:'), mv(vend)],
             [ml('Cond. Pgto.:'), mv(fd.get('condPgto', '')), ml('Tel. Vendedor:'), mv(tel)],
         ]
@@ -105,14 +108,14 @@ def gerar_pdf(dados, empresa_override=None):
         for idx, it in enumerate(its):
             kgcx = it.get('kgCx', 20)
             kgPlan = it.get('kgPlanejados', 0) or 0
-            nrCx = round(kgPlan / kgcx, 1) if kgcx else ''
+            nrCx = int(round(kgPlan / kgcx, 0)) if kgcx else ""
             rows.append([
                 Paragraph(str(idx + 1), ST_ITC),
                 Paragraph(str(it.get('codInterno', '')), ST_ITC),
                 Paragraph(str(it.get('nomeProduto', '')), ST_IT),
                 Paragraph(str(it.get('formato', '') or ''), ST_ITC),
                 Paragraph(str(it.get('embalagem', '')), ST_ITC),
-                Paragraph(f"{kgPlan:.1f}" if kgPlan else '', ST_ITR),
+                Paragraph(f"{kgPlan:.1f}".replace(".",",") if kgPlan else "", ST_ITR),
                 Paragraph('', ST_ITC),
                 Paragraph(str(nrCx) if nrCx else '', ST_ITR),
                 Paragraph(str(it.get('obs', '') or ''), ST_IT),
@@ -120,7 +123,7 @@ def gerar_pdf(dados, empresa_override=None):
 
         rows.append([
             Paragraph(f'TOTAL — {n} itens', ST_TOT), '', '', '', '',
-            Paragraph(f'{tkg:.1f}', ST_TOTR), '', '', ''
+            Paragraph(f"{tkg:.1f}".replace(".",","), ST_TOTR), '', '', ''
         ])
 
         tbl_itens = Table(rows, colWidths=col_w, repeatRows=1)
