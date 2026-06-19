@@ -78,13 +78,10 @@ def gerar_pdf(dados, empresa_override=None):
         def mv(t):
             return Paragraph(str(t) if t else '—', ST_MV)
 
-        def fl(t):
-            return Paragraph(str(t) if t else '—', ST_MV)
-
         meta = [
             [ml('Pedido Nº:'), mv(fd.get('pedidoNum', '')), ml('Data Pedido:'), mv(fd.get('dataPedido', ''))],
             [ml('CNPJ:'), mv(fd.get('cnpj', '')), ml('Data Entrega:'), mv(fd.get('dataEntrega', ''))],
-            [ml('Filial:'), Paragraph((str(fd['filial']) + ('   |   Núm. Filial: ' + str(fd['numFilial']) if fd.get('numFilial') is not None else '')), ST_MV), ml('Solicitante:'), mv(fd.get('solicitante', ''))],
+            [ml('Filial:'), mv(fd['filial']), ml('Solicitante:'), mv('')],
             [ml('Endereço:'), mv(fd.get('endereco', '')), ml('Vendedor:'), mv(vend)],
             [ml('Cond. Pgto.:'), mv(fd.get('condPgto', '')), ml('Tel. Vendedor:'), mv(tel)],
         ]
