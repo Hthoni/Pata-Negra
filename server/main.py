@@ -1,5 +1,6 @@
 """
 Pata Negra — Sistema de Processamento de Pedidos
+# rebuild trigger summer
 Servidor Flask: recebe pedidos de clientes em PDF, faz o parsing,
 e gera Excel (upload interno) + PDF (expedição) padronizados.
 
