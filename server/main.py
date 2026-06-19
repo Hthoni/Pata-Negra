@@ -1,12 +1,12 @@
 """
 Pata Negra — Sistema de Processamento de Pedidos
+# rebuild trigger summer
 Servidor Flask: recebe pedidos de clientes em PDF, faz o parsing,
 e gera Excel (upload interno) + PDF (expedição) padronizados.
 
 Arquitetura modular:
   storage.py    -> persistência de perfis no Google Cloud Storage
   perfil.py     -> leitura do Perfil Excel + matching de produtos
-  # build trigger
   excel_gen.py  -> geração do Excel de upload
   pdf_gen.py    -> geração do PDF de expedição
   parsers/      -> um parser por cliente (isolados entre si)
@@ -31,7 +31,7 @@ def _normaliza_cnpj(cnpj):
     return _re.sub(r'\D', '', str(cnpj or ''))
 from parsers import (
     dom_atacarejo, atacadao, assai, torre_central,
-    torre_barra, germans, superprix, adonai, summer,
+    torre_barra, germans, superprix, adonai, summer, prezunic,
 )
 
 app = Flask(__name__)
@@ -47,7 +47,8 @@ CLIENTES = {
     'germans': {'nome': 'Germans', 'parse': germans.parse},
     'superprix': {'nome': 'Superprix', 'parse': superprix.parse},
     'adonai': {'nome': 'Adonai Atacadista', 'parse': adonai.parse},
-      'summer': {'nome': 'Mercado Summer', 'parse': summer.parse},
+    'summer': {'nome': 'Mercado Summer', 'parse': summer.parse},
+    'prezunic': {'nome': 'Prezunic', 'parse': prezunic.parse},
 }
 
 # Registro de clientes sem PDF (pedido lançado manualmente no popup, ex:
