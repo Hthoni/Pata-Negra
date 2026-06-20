@@ -29,27 +29,29 @@ def _normaliza_cnpj(cnpj):
     """Remove formatação do CNPJ, deixando só dígitos. Definida aqui
     localmente pra não depender da versão do perfil.py no servidor."""
     return _re.sub(r'\D', '', str(cnpj or ''))
-from parsers import (
-    dom_atacarejo, atacadao, assai, torre_central,
-    torre_barra, germans, superprix, adonai, summer, prezunic,
-)
+import importlib
+import pkgutil
+import parsers
 
 app = Flask(__name__)
 CORS(app)
 
-# Registro central de clientes que mandam PDF: nome de exibição + função de parsing
-CLIENTES = {
-    'dom_atacarejo': {'nome': 'DOM Atacarejo', 'parse': dom_atacarejo.parse},
-    'atacadao': {'nome': 'Atacadão', 'parse': atacadao.parse},
-    'assai': {'nome': 'Assaí', 'parse': assai.parse},
-    'torre_central': {'nome': 'Torre Central', 'parse': torre_central.parse},
-    'torre_barra': {'nome': 'Torre Barra', 'parse': torre_barra.parse},
-    'germans': {'nome': 'Germans', 'parse': germans.parse},
-    'superprix': {'nome': 'Superprix', 'parse': superprix.parse},
-    'adonai': {'nome': 'Adonai Atacadista', 'parse': adonai.parse},
-    'summer': {'nome': 'Mercado Summer', 'parse': summer.parse},
-    'prezunic': {'nome': 'Prezunic', 'parse': prezunic.parse},
-}
+# Descoberta automática de parsers: qualquer módulo em parsers/ que
+# exponha uma função parse() é registrado automaticamente.
+# O nome de exibição pode ser definido como __cliente_nome__ no módulo;
+# caso contrário usa o nome do módulo com capitalização automática.
+CLIENTES = {}
+for _info in pkgutil.iter_modules(parsers.__path__):
+    if _info.name.startswith('_'):
+        continue
+    try:
+        _mod = importlib.import_module(f'parsers.{_info.name}')
+        if not hasattr(_mod, 'parse'):
+            continue
+        _nome = getattr(_mod, '__cliente_nome__', _info.name.replace('_', ' ').title())
+        CLIENTES[_info.name] = {'nome': _nome, 'parse': _mod.parse}
+    except Exception as _e:
+        print(f'[WARN] parser {_info.name} não carregado: {_e}')
 
 # Registro de clientes sem PDF (pedido lançado manualmente no popup, ex:
 # pedidos por telefone/WhatsApp). Mesma chave usada em /perfil/<cliente> e
