@@ -204,32 +204,11 @@ table.itens td.nome-produto{text-align:left}
 var SERVER_URL = 'https://pata-negra-staging-784065203515.us-central1.run.app';
 var S = {cliente:null, perfilFile:null, pedidoFile:null, arquivos:[], perfilServidor:{}};
 
-// ── LISTA DE CLIENTES (única fonte de verdade — adicionar aqui escala facilmente) ──
-// status: 'ativo' | 'breve' | 'mapear'
-// manual: true → cliente sem PDF, pedido lançado no popup (ver bloco "PEDIDO MANUAL" no final do arquivo)
-var CLIENTES_LISTA = [
-  {id:'adonai',        nome:'Adonai Atacadista', tipo:'SuasVendas',  status:'ativo'},
-  {id:'assai',         nome:'Assaí',             tipo:'Consinco',    status:'ativo'},
-  {id:'atacadao',      nome:'Atacadão',          tipo:'Atacadão',    status:'ativo'},
-  {id:'dom_atacarejo', nome:'DOM Atacarejo',     tipo:'TOTVS',       status:'ativo'},
-  {id:'germans',       nome:'Germans',           tipo:'TOTVS',       status:'ativo'},
-  {id:'summer',        nome:'Mercado Summer',    tipo:'texto',       status:'ativo'},
-  {id:'prezunic',      nome:'Prezunic',          tipo:'próprio',     status:'ativo'},
-  {id:'superprix',     nome:'Superprix',         tipo:'próprio',     status:'ativo'},
-  {id:'supjoao',       nome:'Superm. do João',   tipo:'próprio',     status:'ativo'},
-  {id:'torre_barra',   nome:'Torre Barra',       tipo:'TOTVS',       status:'ativo'},
-  {id:'torre_central', nome:'Torre Central',     tipo:'TOTVS',       status:'ativo'},
-  {id:'guanabara_lojas', nome:'Guanabara Lojas', tipo:'Manual',      status:'ativo', manual:true},
-  {id:'mundial_lojas',   nome:'Mundial Lojas',   tipo:'Manual',      status:'ativo', manual:true},
-  {id:'guanabara_central', nome:'Guanabara Central', tipo:'Manual',  status:'ativo', manual:true},
-  {id:'mundial_central',   nome:'Mundial Central',   tipo:'Manual',  status:'ativo', manual:true},
-];
-
+// ── CLIENTES: carregados dinamicamente do backend via /health ──
+// Não é mais necessário editar este arquivo para adicionar novos clientes.
+var CLIENTES_LISTA = [];
 var CLIENTES = {};
-CLIENTES_LISTA.forEach(function(c){ CLIENTES[c.id] = {nome: c.nome, manual: !!c.manual}; });
-
 var LOGOS_CACHE = {};
-var CLIENTES_ATIVOS_COM_LOGO = CLIENTES_LISTA.filter(function(c){return c.status==='ativo';}).map(function(c){return c.id;});
 
 document.getElementById('hdate').textContent =
   new Date().toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
@@ -247,24 +226,20 @@ function renderClientGrid() {
     btn.id = 'btn-' + c.id;
     btn.dataset.nome = c.nome.toLowerCase();
 
-    var dotClass = c.status === 'ativo' ? '' : (c.status === 'breve' ? 'p' : 'm');
-    var logoHtml = c.status === 'ativo'
-      ? '<img src="'+SERVER_URL+'/logo/'+c.id+'" alt="'+c.nome+'" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' +
-        '<div class="cb-logo-placeholder" style="display:none">🏪</div>'
-      : '<div class="cb-logo-placeholder">🏪</div>';
+    var logoHtml = '<img src="'+SERVER_URL+'/logo/'+c.id+'" alt="'+c.nome+'" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' +
+      '<div class="cb-logo-placeholder" style="display:none">🏪</div>';
 
     btn.innerHTML =
       '<div class="cb-logo">' + logoHtml + '</div>' +
       '<div class="cb-info">' +
         '<span class="cn">' + c.nome + '</span>' +
-        '<span class="badge-dot ' + dotClass + '"></span>' +
+        '<span class="badge-dot"></span>' +
       '</div>';
 
     btn.addEventListener('click', function() { selCliente(c.id, btn); });
     grid.appendChild(btn);
   });
 }
-renderClientGrid();
 
 // ── Busca / filtro ──
 function filtrarClientes(termo) {
@@ -279,19 +254,39 @@ function filtrarClientes(termo) {
   count.textContent = termo ? (visiveis + ' de ' + CLIENTES_LISTA.length + ' clientes') : '';
 }
 
-// ── Pré-carregar perfis + logos ──
+// ── Carregar clientes + perfis + logos do backend ──
 window.addEventListener('load', function() {
   fetch(SERVER_URL+'/health')
     .then(function(r){ return r.json(); })
     .then(function(d){
       S.perfilServidor = d.perfis || {};
-      CLIENTES_ATIVOS_COM_LOGO.forEach(function(id) {
+
+      // Montar CLIENTES_LISTA a partir da resposta do backend
+      var clientesBackend = d.clientes || {};
+      CLIENTES_LISTA = [];
+      CLIENTES = {};
+      Object.keys(clientesBackend).sort().forEach(function(id) {
+        var c = clientesBackend[id];
+        var item = {id: id, nome: c.nome, tipo: c.tipo, manual: !!c.manual};
+        if (c.multiFilial !== undefined) item.multiFilial = c.multiFilial;
+        CLIENTES_LISTA.push(item);
+        CLIENTES[id] = {nome: c.nome, manual: !!c.manual};
+      });
+
+      renderClientGrid();
+
+      // Pré-carregar logos
+      CLIENTES_LISTA.forEach(function(c) {
         var img = new window.Image();
-        img.onload = function() { LOGOS_CACHE[id] = img.src; };
-        img.src = SERVER_URL+'/logo/'+id+'?t='+Date.now();
+        img.onload = function() { LOGOS_CACHE[c.id] = img.src; };
+        img.src = SERVER_URL+'/logo/'+c.id+'?t='+Date.now();
       });
     })
-    .catch(function(){});
+    .catch(function(){
+      // Fallback: grid vazio com mensagem
+      document.getElementById('client-grid').innerHTML =
+        '<p style="color:#999;padding:16px">Não foi possível carregar os clientes. Verifique a conexão.</p>';
+    });
 });
 
 function selCliente(id, btn) {
@@ -753,3 +748,4 @@ async function gerarPedido() {
 </script>
 </body>
 </html>
+
