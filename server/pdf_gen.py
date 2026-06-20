@@ -6,12 +6,12 @@ import io
 from reportlab.lib.pagesizes import landscape, A4
 from reportlab.lib import colors
 from reportlab.lib.units import mm
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, KeepTogether
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, KeepTogether, Image
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
 
-def gerar_pdf(dados, empresa_override=None):
+def gerar_pdf(dados, empresa_override=None, logo_bytes=None):
     """Gera o PDF completo. Se empresa_override for passado, filtra
     apenas os itens daquela empresa (usado no modo split)."""
     buf = io.BytesIO()
@@ -88,14 +88,51 @@ def gerar_pdf(dados, empresa_override=None):
             [ml('Endereço:'), mv(fd.get('endereco', '')), ml('Vendedor:'), mv(vend)],
             [ml('Cond. Pgto.:'), mv(fd.get('condPgto', '')), ml('Tel. Vendedor:'), mv(tel)],
         ]
-        tbl_meta = Table(meta, colWidths=[25 * mm, 100 * mm, 32 * mm, W - 25 * mm - 100 * mm - 32 * mm])
-        tbl_meta.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), COR_META),
-            ('FONTSIZE', (0, 0), (-1, -1), 10),
-            ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-            ('LEFTPADDING', (0, 0), (-1, -1), 4),
-            ('LINEBELOW', (0, 4), (-1, 4), 0.5, colors.grey),
-        ]))
+        LOGO_W = 38 * mm
+        VAL4_W = W - 25 * mm - 100 * mm - 32 * mm - LOGO_W
+        if logo_bytes:
+            try:
+                # Preservar proporção: deixar ReportLab calcular dimensões reais
+                # e escalar respeitando max_w e max_h
+                _tmp = Image(io.BytesIO(logo_bytes))
+                orig_w, orig_h = _tmp.imageWidth, _tmp.imageHeight
+                max_h = 22 * mm
+                max_w = LOGO_W - 4 * mm
+                ratio = min(max_w / orig_w, max_h / orig_h)
+                logo_img = Image(io.BytesIO(logo_bytes), width=orig_w * ratio, height=orig_h * ratio)
+                logo_img.hAlign = 'CENTER'
+                for row in meta:
+                    row.append('')
+                meta[0][4] = logo_img
+                tbl_meta = Table(meta, colWidths=[25*mm, 100*mm, 32*mm, VAL4_W, LOGO_W])
+                tbl_meta.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, -1), COR_META),
+                    ('FONTSIZE', (0, 0), (-1, -1), 10),
+                    ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 4),
+                    ('LINEBELOW', (0, 4), (-1, 4), 0.5, colors.grey),
+                    ('SPAN', (4, 0), (4, 4)),
+                    ('VALIGN', (4, 0), (4, 4), 'MIDDLE'),
+                    ('ALIGN', (4, 0), (4, 4), 'CENTER'),
+                ]))
+            except Exception:
+                tbl_meta = Table(meta, colWidths=[25*mm, 100*mm, 32*mm, W - 25*mm - 100*mm - 32*mm])
+                tbl_meta.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, -1), COR_META),
+                    ('FONTSIZE', (0, 0), (-1, -1), 10),
+                    ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 4),
+                    ('LINEBELOW', (0, 4), (-1, 4), 0.5, colors.grey),
+                ]))
+        else:
+            tbl_meta = Table(meta, colWidths=[25*mm, 100*mm, 32*mm, W - 25*mm - 100*mm - 32*mm])
+            tbl_meta.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), COR_META),
+                ('FONTSIZE', (0, 0), (-1, -1), 10),
+                ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                ('LEFTPADDING', (0, 0), (-1, -1), 4),
+                ('LINEBELOW', (0, 4), (-1, 4), 0.5, colors.grey),
+            ]))
 
         header = [
             Paragraph('#', ST_HDR), Paragraph('Cód.\nInterno', ST_HDR),
