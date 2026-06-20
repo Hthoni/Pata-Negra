@@ -92,7 +92,14 @@ def gerar_pdf(dados, empresa_override=None, logo_bytes=None):
         VAL4_W = W - 25 * mm - 100 * mm - 32 * mm - LOGO_W
         if logo_bytes:
             try:
-                logo_img = Image(io.BytesIO(logo_bytes), width=LOGO_W - 4*mm, height=22*mm)
+                # Preservar proporção: deixar ReportLab calcular dimensões reais
+                # e escalar respeitando max_w e max_h
+                _tmp = Image(io.BytesIO(logo_bytes))
+                orig_w, orig_h = _tmp.imageWidth, _tmp.imageHeight
+                max_h = 22 * mm
+                max_w = LOGO_W - 4 * mm
+                ratio = min(max_w / orig_w, max_h / orig_h)
+                logo_img = Image(io.BytesIO(logo_bytes), width=orig_w * ratio, height=orig_h * ratio)
                 logo_img.hAlign = 'CENTER'
                 for row in meta:
                     row.append('')
