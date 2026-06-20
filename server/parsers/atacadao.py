@@ -9,6 +9,9 @@ agrupadas pelo CNPJ de "Local de Entrega" + número do pedido — cada loja
 tem o seu — para gerar uma entrada de filial por loja, não uma única
 filial com todos os itens misturados.
 """
+
+__cliente_nome__ = "Atacadão"
+
 import io
 import re
 import pdfplumber
