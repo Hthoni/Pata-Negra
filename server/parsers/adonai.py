@@ -7,6 +7,9 @@ IMPORTANTE: SuasVendas sempre fatura na mesma unidade do pedido
 original (kg ou pacotes), nunca convertendo para caixas — o cliente
 exige a nota fiscal na mesma unidade pedida.
 """
+
+__cliente_nome__ = "Adonai Atacadista"
+
 import io
 import re
 import pdfplumber
