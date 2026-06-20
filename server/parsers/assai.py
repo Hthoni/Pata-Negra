@@ -2,6 +2,9 @@
 Parser Assaí — formato Consinco/TOTVS, uma página por filial.
 Código do produto vem colado ao nome (ex: '1156510BACON LOMBO...').
 """
+
+__cliente_nome__ = "Assaí"
+
 import re
 import pdfplumber
 from perfil import processar_item
