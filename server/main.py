@@ -113,7 +113,23 @@ def health():
                 perfis[c] = perfil_filename(c)
         except Exception as e:
             erros[c] = f'{type(e).__name__}: {e}'
-    resp = {'status': 'ok', 'perfis': perfis}
+    # Lista de clientes disponíveis (PDF + manuais) para o frontend
+    clientes_info = {}
+    for cid, cdata in CLIENTES.items():
+        clientes_info[cid] = {
+            'nome': cdata['nome'],
+            'tipo': 'proprio',
+            'manual': False,
+        }
+    for cid, cdata in CLIENTES_MANUAIS.items():
+        clientes_info[cid] = {
+            'nome': cdata['nome'],
+            'tipo': 'manual',
+            'manual': True,
+            'multiFilial': cdata.get('multiFilial', True),
+        }
+
+    resp = {'status': 'ok', 'perfis': perfis, 'clientes': clientes_info}
     if erros:
         resp['erros'] = erros
     return jsonify(resp)
