@@ -4,6 +4,9 @@ Layout: 1 filial por PDF, cabeçalho no topo, linhas de itens com colunas
 separadas por múltiplos espaços. Unidade sempre KG no PDF, exceto quando
 a embalagem começa com KG-N (indica venda por caixa de N kg).
 """
+
+__cliente_nome__ = "Mercado Summer"
+
 import re
 import pdfplumber
 from perfil import processar_item
