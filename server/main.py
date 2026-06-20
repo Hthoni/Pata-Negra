@@ -66,7 +66,7 @@ CLIENTES_MANUAIS = {
 }
 
 
-def _gerar_arquivos_por_empresa(dados, filiais):
+def _gerar_arquivos_por_empresa(dados, filiais, logo_bytes=None):
     """Detecta split por empresa (produtos de Indústria e Distribuidora no
     mesmo pedido) e gera os pares Excel+PDF correspondentes. Compartilhado
     entre /processar (pedidos parseados de PDF) e /processar-manual
@@ -85,7 +85,7 @@ def _gerar_arquivos_por_empresa(dados, filiais):
     for emp_split in sorted(empresas_nos_itens):
         override = emp_split if len(empresas_nos_itens) > 1 else None
         eb = gerar_excel(dados, empresa_override=override)
-        pb = gerar_pdf(dados, empresa_override=override)
+        pb = gerar_pdf(dados, empresa_override=override, logo_bytes=logo_bytes)
         if len(empresas_nos_itens) == 1:
             eb_simples, pb_simples = eb, pb
         label = ('Indústria' if emp_split == 1 else 'Distribuidora') if len(empresas_nos_itens) > 1 else ''
@@ -194,7 +194,18 @@ def processar():
 
         dados = {**meta, 'filiais': filiais, 'clienteNome': CLIENTES[cliente]['nome']}
 
-        arquivos, eb_simples, pb_simples, split = _gerar_arquivos_por_empresa(dados, filiais)
+        # Extrair logo do perfil para o PDF
+        logo_bytes = None
+        try:
+            wb_logo = openpyxl.load_workbook(io.BytesIO(perfil_bytes))
+            ws_logo = wb_logo[wb_logo.sheetnames[0]]
+            if ws_logo._images:
+                ws_logo._images[0].ref.seek(0)
+                logo_bytes = ws_logo._images[0].ref.read()
+        except Exception:
+            pass
+
+        arquivos, eb_simples, pb_simples, split = _gerar_arquivos_por_empresa(dados, filiais, logo_bytes=logo_bytes)
 
         todos_itens = [i for f in filiais for i in f['itens']]
         return jsonify({
