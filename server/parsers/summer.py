@@ -1,156 +1,157 @@
 """
-Gerador do PDF de expedição — espelho das colunas A-I do Excel,
-para o encarregado de embarque conferir e preencher kg embarcados.
+Parser Mercado Summer — formato proprietário (rptPedido.rdlc).
+Layout: 1 filial por PDF, cabeçalho no topo, linhas de itens com colunas
+separadas por múltiplos espaços. Unidade sempre KG no PDF, exceto quando
+a embalagem começa com KG-N (indica venda por caixa de N kg).
 """
-import io
-from reportlab.lib.pagesizes import landscape, A4
-from reportlab.lib import colors
-from reportlab.lib.units import mm
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, KeepTogether
-from reportlab.lib.styles import ParagraphStyle
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+
+__cliente_nome__ = "Mercado Summer"
+
+import re
+import pdfplumber
+from perfil import processar_item
+
+CNPJ_RE = re.compile(r'\d{2}\.?\d{3}\.?\d{3}\s*/\s*\d{4}\s*-\s*\d{2}')
 
 
-def gerar_pdf(dados, empresa_override=None):
-    """Gera o PDF completo. Se empresa_override for passado, filtra
-    apenas os itens daquela empresa (usado no modo split)."""
-    buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
-                             leftMargin=10 * mm, rightMargin=10 * mm,
-                             topMargin=8 * mm, bottomMargin=8 * mm)
+_SINONIMOS_SUMMER = [
+    (re.compile(r'\bRABO\b', re.IGNORECASE), 'RABINHO'),
+]
 
-    cli = dados.get('clienteNome', '')
-    vend = dados.get('vendedor', '')
-    tel = dados.get('telefone', '')
+_SUFIXOS_GENERICOS = re.compile(
+    r'\b(?:PATA\s+NEGRA|PCT|SUINO|SALG|SALGADO|SALGADA|DEFUMADO|DEFUMADA)\b',
+    re.IGNORECASE
+)
 
-    COR_TIT = colors.HexColor('#E0E0E0')
-    COR_SUB = colors.HexColor('#F0F0F0')
-    COR_META = colors.HexColor('#F8F8F8')
-    COR_HDR = colors.HexColor('#D0D0D0')
-    COR_PAR = colors.HexColor('#F5F5F5')
-    COR_CZ = colors.HexColor('#E8E8E8')
+def _nome_limpo(nome):
+    """Remove termos genéricos e expande sinônimos Summer-específicos
+    pra melhorar o fuzzy matching com o Perfil."""
+    s = nome
+    for pat, sub in _SINONIMOS_SUMMER:
+        s = pat.sub(sub, s)
+    s = _SUFIXOS_GENERICOS.sub(' ', s)
+    return re.sub(r'\s{2,}', ' ', s).strip()
 
-    col_w = [8 * mm, 18 * mm, 95 * mm, 24 * mm, 18 * mm, 22 * mm, 26 * mm, 20 * mm, 46 * mm]
-    W = sum(col_w)
 
-    ST_TIT = ParagraphStyle('t', fontSize=13, fontName='Helvetica-Bold', alignment=TA_CENTER, leading=16)
-    ST_SUB = ParagraphStyle('s', fontSize=11, fontName='Helvetica-Bold', alignment=TA_CENTER, leading=14)
-    ST_MB = ParagraphStyle('mb', fontSize=10, fontName='Helvetica-Bold', alignment=TA_LEFT, leading=12)
-    ST_MV = ParagraphStyle('mv', fontSize=10, fontName='Helvetica', alignment=TA_LEFT, leading=12)
-    ST_HDR = ParagraphStyle('h', fontSize=10, fontName='Helvetica-Bold', alignment=TA_CENTER, leading=11)
-    ST_IT = ParagraphStyle('i', fontSize=10, fontName='Helvetica', alignment=TA_LEFT, leading=11)
-    ST_ITC = ParagraphStyle('ic', fontSize=10, fontName='Helvetica', alignment=TA_CENTER, leading=11)
-    ST_ITR = ParagraphStyle('ir', fontSize=10, fontName='Helvetica', alignment=TA_RIGHT, leading=11)
-    ST_TOT = ParagraphStyle('to', fontSize=10, fontName='Helvetica-Bold', alignment=TA_LEFT, leading=11)
-    ST_TOTR = ParagraphStyle('tr', fontSize=10, fontName='Helvetica-Bold', alignment=TA_RIGHT, leading=11)
-    ST_NOTA = ParagraphStyle('n', fontSize=8, fontName='Helvetica', textColor=colors.HexColor('#666666'))
+def _limpa_float(txt):
+    """Converte '24.408,00' → 24408.0"""
+    txt = txt.strip().replace('.', '').replace(',', '.')
+    try:
+        return float(txt)
+    except ValueError:
+        return 0.0
 
-    story = []
 
-    for fd in dados['filiais']:
-        if empresa_override:
-            its = [it for it in fd['itens']
-                   if (it.get('empresa') or empresa_override) == empresa_override]
-        else:
-            its = fd['itens']
-        if not its:
+def parse(pdf_bytes, produtos):
+    texto = ''
+    with pdfplumber.open(__import__('io').BytesIO(pdf_bytes)) as pdf:
+        for page in pdf.pages:
+            texto += (page.extract_text() or '') + '\n'
+
+    linhas = texto.splitlines()
+
+    def fm(pat, txt=texto):
+        m = re.search(pat, txt)
+        return m.group(1).strip() if m else ''
+
+    # ── Cabeçalho ──────────────────────────────────────────────────────────
+    pedidoNum = fm(r'Pedido\s+N[oº°]:\s*(\d+)')
+    data_pedido = fm(r'Data\s+Pedido:\s*(\d{2}/\d{2}/\d{4})')
+
+    # Endereço de entrega: "ENTREGA  Av. Carlos Marighella, 7974..."
+    endereco = ''
+    capturando = False
+    for ln in linhas:
+        if ln.strip().startswith('ENTREGA'):
+            # O endereço pode estar na mesma linha ou na seguinte
+            resto = re.sub(r'^ENTREGA\s*', '', ln).strip()
+            if resto:
+                endereco = resto
+            else:
+                capturando = True
+        elif capturando:
+            endereco = ln.strip()
+            capturando = False
+        if endereco:
+            break
+
+    # CNPJ da filial vem na linha "Filial: Fil XX CD - 12.968.606/0004-47"
+    cnpj_raw = ''
+    filial_nome = ''
+    for ln in linhas:
+        if ln.startswith('Filial:'):
+            m = CNPJ_RE.search(ln)
+            if m:
+                cnpj_raw = m.group(0)
+            # nome da filial: texto entre "Fil XX CD -" e o CNPJ
+            mf = re.search(r'Filial:\s*(.*?)\s*(?:' + re.escape(cnpj_raw) + r')', ln)
+            if mf:
+                filial_nome = mf.group(1).strip().rstrip('-').strip()
+            break
+
+    solicitante = fm(r'Solicitante:\s*(.+)')
+    cond_pgto   = fm(r'(\d+\s+dias)')
+
+    # ── Itens ──────────────────────────────────────────────────────────────
+    # Cada linha de item começa com um número de sequência, depois o cód,
+    # depois o nome (com sufixo " kg"), depois a embalagem (KG ou KG-N),
+    # depois a qtde, depois o cód EAN, depois o cód fab, depois valores.
+    #
+    # Exemplo real:
+    # "1 36205 BACON DEFUMADO PATA NEGRA PCT kg KG-20 36 1213 678,00 0 678,00 43,46 24.408,00"
+    # "3 34515 COSTELA SUINO SALG PATA NEGRA kg KG 140 34516 26,90 0 26,90 26,90 3.766,00"
+    #
+    # Regex: seq  cod  nome(+kg)  embalagem  qtde  codEAN  (codFab)  valorNF  %desc  *IPI  %ST  custoNF  unitario  (bon)  valor
+    ITEM_RE = re.compile(
+        r'^\s*(\d+)\s+'           # seq
+        r'(\d{4,6})\s+'           # cód produto
+        r'(.+?)\s+kg\s+'          # nome produto (termina com " kg")
+        r'(KG-?\d*)\s+'           # embalagem: KG, KG-10, KG-20 etc
+        r'(\d+)\s+'               # qtde
+        r'\d+\s+'                 # cód EAN
+        r'(?:\d+\s+)?'            # cód fab (opcional)
+        r'([\d.,]+)\s+'           # valor NF
+        r'(?:\d+\s+)'             # % desc
+        r'([\d.,]+)',              # custo NF / unitário
+        re.IGNORECASE
+    )
+
+    itens = []
+    for ln in linhas:
+        m = ITEM_RE.match(ln)
+        if not m:
             continue
-        n = len(its)
-        emp_fd = empresa_override if empresa_override else fd.get('empresa', dados.get('empresa', 2))
-        tit_fd = 'PEDIDO PATA NEGRA DISTRIBUIDORA' if emp_fd == 2 else 'PEDIDO INDÚSTRIA PATA NEGRA'
-        nota_empresa = 'Pata Negra Distribuidora' if emp_fd == 2 else 'Indústria Pata Negra'
-        tkg = sum(float(it.get('kgPlanejados', 0)) for it in its)
-        subtitulo = (cli + ' — ' + fd['filial']) if cli else fd['filial']
+        cod_cli  = int(m.group(2))
+        nome_raw = m.group(3).strip()
+        emb_str  = m.group(4).upper()   # KG, KG-20, KG-10 …
+        qtde     = float(m.group(5))
+        preco    = _limpa_float(m.group(7))
+        total    = _limpa_float(m.group(7)) * qtde  # recalculado — PDF pode ter arredondamento
 
-        tbl_tit = Table([[Paragraph(tit_fd, ST_TIT)]], colWidths=[W])
-        tbl_tit.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), COR_TIT),
-            ('TOPPADDING', (0, 0), (-1, -1), 5), ('BOTTOMPADDING', (0, 0), (-1, -1), 5)]))
+        # Se embalagem é KG-N (ex: KG-20), é venda por caixa de N kg
+        # Se embalagem é simplesmente KG, é venda por kg
+        if re.match(r'KG-\d+', emb_str):
+            emb_tipo = 'CX'
+            n = int(re.search(r'\d+', emb_str).group())
+            qtde_emb = n    # kg por caixa
+        else:
+            emb_tipo = 'KG'
+            qtde_emb = 1
 
-        tbl_sub = Table([[Paragraph(subtitulo, ST_SUB)]], colWidths=[W])
-        tbl_sub.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), COR_SUB),
-            ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4)]))
+        it = processar_item(cod_cli, _nome_limpo(nome_raw), emb_tipo, qtde_emb, qtde, preco, total, produtos)
+        itens.append(it)
 
-        def ml(t):
-            return Paragraph(t, ST_MB)
+    if not itens:
+        return []
 
-        def mv(t):
-            return Paragraph(str(t) if t else '—', ST_MV)
-
-        def fl(t):
-            return Paragraph(str(t) if t else '—', ST_MV)
-
-        meta = [
-            [ml('Pedido Nº:'), mv(fd.get('pedidoNum', '')), ml('Data Pedido:'), mv(fd.get('dataPedido', ''))],
-            [ml('CNPJ:'), mv(fd.get('cnpj', '')), ml('Data Entrega:'), mv(fd.get('dataEntrega', ''))],
-            [ml('Filial:'), Paragraph((str(fd['filial']) + ('   |   Núm. Filial: ' + str(fd['numFilial']) if fd.get('numFilial') is not None else '')), ST_MV), ml('Solicitante:'), mv(fd.get('solicitante', ''))],
-            [ml('Endereço:'), mv(fd.get('endereco', '')), ml('Vendedor:'), mv(vend)],
-            [ml('Cond. Pgto.:'), mv(fd.get('condPgto', '')), ml('Tel. Vendedor:'), mv(tel)],
-        ]
-        tbl_meta = Table(meta, colWidths=[25 * mm, 100 * mm, 32 * mm, W - 25 * mm - 100 * mm - 32 * mm])
-        tbl_meta.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), COR_META),
-            ('FONTSIZE', (0, 0), (-1, -1), 10),
-            ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-            ('LEFTPADDING', (0, 0), (-1, -1), 4),
-            ('LINEBELOW', (0, 4), (-1, 4), 0.5, colors.grey),
-        ]))
-
-        header = [
-            Paragraph('#', ST_HDR), Paragraph('Cód.\nInterno', ST_HDR),
-            Paragraph('Nome Produto no Cliente', ST_HDR), Paragraph('Formato', ST_HDR),
-            Paragraph('Caixa', ST_HDR), Paragraph('Kg\nPlanejados', ST_HDR),
-            Paragraph('Kgs\nEmbarcados', ST_HDR), Paragraph('Nº\nCaixas', ST_HDR),
-            Paragraph('Obs.', ST_HDR),
-        ]
-        rows = [header]
-        for idx, it in enumerate(its):
-            kgcx = it.get('kgCx', 20)
-            kgPlan = it.get('kgPlanejados', 0) or 0
-            nrCx = int(round(kgPlan / kgcx, 0)) if kgcx else ""
-            rows.append([
-                Paragraph(str(idx + 1), ST_ITC),
-                Paragraph(str(it.get('codInterno', '')), ST_ITC),
-                Paragraph(str(it.get('nomeProduto', '')), ST_IT),
-                Paragraph(str(it.get('formato', '') or ''), ST_ITC),
-                Paragraph(str(it.get('embalagem', '')), ST_ITC),
-                Paragraph(f"{kgPlan:.1f}".replace(".",",") if kgPlan else "", ST_ITR),
-                Paragraph('', ST_ITC),
-                Paragraph(str(nrCx) if nrCx else '', ST_ITR),
-                Paragraph(str(it.get('obs', '') or ''), ST_IT),
-            ])
-
-        rows.append([
-            Paragraph(f'TOTAL — {n} itens', ST_TOT), '', '', '', '',
-            Paragraph(f"{tkg:.1f}".replace(".",","), ST_TOTR), '', '', ''
-        ])
-
-        tbl_itens = Table(rows, colWidths=col_w, repeatRows=1)
-        cmds = [
-            ('BACKGROUND', (0, 0), (-1, 0), COR_HDR),
-            ('FONTSIZE', (0, 0), (-1, -1), 10),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('GRID', (0, 0), (-1, -2), 0.5, colors.HexColor('#BBBBBB')),
-            ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-            ('LEFTPADDING', (0, 0), (-1, -1), 3), ('RIGHTPADDING', (0, 0), (-1, -1), 3),
-            ('BACKGROUND', (6, 1), (6, -2), COR_CZ),
-            ('BACKGROUND', (0, -1), (-1, -1), COR_HDR),
-            ('SPAN', (0, -1), (4, -1)),
-            ('LINEABOVE', (0, -1), (-1, -1), 0.8, colors.grey),
-            ('LINEBELOW', (0, -1), (-1, -1), 0.8, colors.grey),
-        ]
-        for i in range(1, len(rows) - 1):
-            if i % 2 == 0:
-                cmds.append(('BACKGROUND', (0, i), (-1, i), COR_PAR))
-        tbl_itens.setStyle(TableStyle(cmds))
-
-        nota = Paragraph(
-            f'Col. G — Kg Embarcados: preenchida pelo encarregado de embarque.   |   {nota_empresa}',
-            ST_NOTA)
-
-        story.append(KeepTogether([tbl_tit, tbl_sub, tbl_meta, tbl_itens, nota]))
-
-    doc.build(story)
-    buf.seek(0)
-    return buf.read()
+    return [{
+        'filial':     filial_nome,
+        'pedidoNum':  pedidoNum,
+        'cnpj':       cnpj_raw,
+        'dataPedido': data_pedido,
+        'condPgto':   cond_pgto,
+        'solicitante': solicitante,
+        'endereco':   endereco,
+        'empresa':    2,   # Pata Negra Distribuidora (CNPJ ...0001-90 no PDF)
+        'itens':      itens,
+    }]
