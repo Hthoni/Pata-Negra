@@ -2,6 +2,9 @@
 Parser DOM Atacarejo — formato TOTVS, multi-filial.
 PDF tem 2 páginas por filial: ímpar = dados do pedido, par = datas/assinaturas.
 """
+
+__cliente_nome__ = "DOM Atacarejo"
+
 import io
 import re
 import pdfplumber
