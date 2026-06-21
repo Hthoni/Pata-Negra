@@ -307,10 +307,10 @@ function selCliente(id, btn) {
   document.getElementById('btn-proc').textContent = manual ? '📝  Abrir pedido manual' : '⚙️  Processar pedido';
 
   // restaurar logos que possam ter sumido (cold start do servidor)
-  CLIENTES_ATIVOS_COM_LOGO.forEach(function(cid) {
-    var imgEl = document.querySelector('#btn-'+cid+' .cb-logo img');
-    if (imgEl && LOGOS_CACHE[cid] && imgEl.style.display === 'none') {
-      imgEl.src = LOGOS_CACHE[cid];
+  CLIENTES_LISTA.forEach(function(c) {
+    var imgEl = document.querySelector('#btn-'+c.id+' .cb-logo img');
+    if (imgEl && LOGOS_CACHE[c.id] && imgEl.style.display === 'none') {
+      imgEl.src = LOGOS_CACHE[c.id];
       imgEl.style.display = '';
       var ph = imgEl.nextElementSibling;
       if (ph) ph.style.display = 'none';
