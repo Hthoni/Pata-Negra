@@ -422,7 +422,18 @@ def processar_manual():
 
         dados = {**meta, 'filiais': filiais, 'clienteNome': CLIENTES_MANUAIS[cliente]['nome']}
 
-        arquivos, eb_simples, pb_simples, split = _gerar_arquivos_por_empresa(dados, filiais)
+        # Extrair logo do perfil para o PDF
+        logo_bytes = None
+        try:
+            wb_logo = openpyxl.load_workbook(io.BytesIO(perfil_bytes))
+            ws_logo = wb_logo[wb_logo.sheetnames[0]]
+            if ws_logo._images:
+                ws_logo._images[0].ref.seek(0)
+                logo_bytes = ws_logo._images[0].ref.read()
+        except Exception:
+            pass
+
+        arquivos, eb_simples, pb_simples, split = _gerar_arquivos_por_empresa(dados, filiais, logo_bytes=logo_bytes)
 
         return jsonify({
             'ok': True,
