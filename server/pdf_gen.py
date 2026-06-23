@@ -6,7 +6,7 @@ import io
 from reportlab.lib.pagesizes import landscape, A4
 from reportlab.lib import colors
 from reportlab.lib.units import mm
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, KeepTogether, Image
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, KeepTogether, Image, PageBreak
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
@@ -187,6 +187,11 @@ def gerar_pdf(dados, empresa_override=None, logo_bytes=None):
             ST_NOTA)
 
         story.append(KeepTogether([tbl_tit, tbl_sub, tbl_meta, tbl_itens, nota]))
+        story.append(PageBreak())
+
+    # Remover o último PageBreak (não precisa após a última filial)
+    if story and isinstance(story[-1], PageBreak):
+        story.pop()
 
     doc.build(story)
     buf.seek(0)
