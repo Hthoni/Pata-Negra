@@ -19,7 +19,7 @@ import datetime
 import traceback
 from flask_cors import CORS
 
-from storage import perfil_existe, salvar_perfil, carregar_perfil_bytes, perfil_filename
+from storage import perfil_existe, salvar_perfil, carregar_perfil_bytes, perfil_filename, salvar_romaneio, listar_romaneios, deletar_romaneio
 from perfil import ler_perfil, ler_filiais, buscar_filial, ler_operadores
 from excel_gen import gerar_excel
 from pdf_gen import gerar_pdf
@@ -98,6 +98,27 @@ def _gerar_arquivos_por_empresa(dados, filiais, logo_bytes=None):
             'pdf': base64.b64encode(pb).decode(),
         })
     return arquivos, eb_simples, pb_simples, len(empresas_nos_itens) > 1
+
+
+@app.route('/romaneios')
+def get_romaneios():
+    """Lista todos os romaneios pendentes para o mapa."""
+    try:
+        return jsonify(listar_romaneios())
+    except Exception as e:
+        return jsonify({'erro': str(e)}), 500
+
+
+@app.route('/romaneio/<romaneio_id>', methods=['DELETE'])
+def delete_romaneio(romaneio_id):
+    """Marca pedido como entregue deletando o pin do mapa."""
+    try:
+        ok = deletar_romaneio(romaneio_id)
+        if ok:
+            return jsonify({'ok': True})
+        return jsonify({'erro': 'Romaneio não encontrado'}), 404
+    except Exception as e:
+        return jsonify({'erro': str(e)}), 500
 
 
 @app.route('/health')
@@ -224,6 +245,33 @@ def processar():
             pass
 
         arquivos, eb_simples, pb_simples, split = _gerar_arquivos_por_empresa(dados, filiais, logo_bytes=logo_bytes)
+
+        # Salvar pin de mapa para cada filial com coordenadas
+        from datetime import datetime
+        for fd in filiais:
+            lat = fd.get('lat')
+            lng = fd.get('lng')
+            if lat is None or lng is None:
+                continue
+            its = fd.get('itens', [])
+            if not its:
+                continue
+            ts = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+            filial_slug = re.sub(r'[^a-z0-9]', '_', fd['filial'].lower())
+            rid = f"{cliente}_{filial_slug}_{ts}"
+            salvar_romaneio(rid, {
+                'id': rid,
+                'cliente': cliente,
+                'clienteNome': CLIENTES[cliente]['nome'],
+                'filial': fd['filial'],
+                'cnpj': fd.get('cnpj', ''),
+                'lat': lat,
+                'lng': lng,
+                'dataPedido': fd.get('dataPedido', fd.get('dataEmissao', '')),
+                'dataGeracao': datetime.utcnow().isoformat(),
+                'kgPlanejados': round(sum(float(i.get('kgPlanejados', 0)) for i in its), 1),
+                'pedidoNum': fd.get('pedidoNum', ''),
+            })
 
         todos_itens = [i for f in filiais for i in f['itens']]
         return jsonify({
