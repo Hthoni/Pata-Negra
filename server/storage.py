@@ -65,7 +65,8 @@ def _romaneios_bucket():
 
 
 def salvar_romaneio(romaneio_id, dados):
-    """Salva um JSON de romaneio (pin do mapa) no bucket de romaneios."""    blob = _romaneios_bucket().blob(f'{romaneio_id}.json')
+    """Salva um JSON de romaneio (pin do mapa) no bucket de romaneios."""
+    blob = _romaneios_bucket().blob(f'{romaneio_id}.json')
     blob.upload_from_string(
         json.dumps(dados, ensure_ascii=False),
         content_type='application/json'
@@ -73,7 +74,8 @@ def salvar_romaneio(romaneio_id, dados):
 
 
 def listar_romaneios():
-    """Lista todos os romaneios pendentes. Retorna lista de dicts."""    blobs = _romaneios_bucket().list_blobs()
+    """Lista todos os romaneios pendentes. Retorna lista de dicts."""
+    blobs = _romaneios_bucket().list_blobs()
     result = []
     for blob in blobs:
         if not blob.name.endswith('.json'):
@@ -87,7 +89,8 @@ def listar_romaneios():
 
 
 def deletar_romaneio(romaneio_id):
-    """Deleta um romaneio pelo ID. Retorna True se deletado, False se não encontrado."""    blob = _romaneios_bucket().blob(f'{romaneio_id}.json')
+    """Deleta um romaneio pelo ID. Retorna True se deletado, False se não encontrado."""
+    blob = _romaneios_bucket().blob(f'{romaneio_id}.json')
     if blob.exists():
         blob.delete()
         return True
