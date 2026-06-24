@@ -477,25 +477,24 @@ def processar_manual():
 
         # Salvar pin de mapa se tiver coordenadas
         if lat is not None and lng is not None:
-            try:
-                ts = datetime.datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-                filial_slug = re.sub(r'[^a-z0-9]', '_', filial_info['nome'].lower())
-                rid = f"{cliente}_{filial_slug}_{ts}"
-                salvar_romaneio(rid, {
-                    'id': rid,
-                    'cliente': cliente,
-                    'clienteNome': CLIENTES_MANUAIS[cliente]['nome'],
-                    'filial': filial_info['nome'],
-                    'cnpj': cnpj_sel,
-                    'lat': lat,
-                    'lng': lng,
-                    'dataPedido': agora.strftime('%d/%m/%Y'),
-                    'dataGeracao': datetime.datetime.utcnow().isoformat(),
-                    'kgPlanejados': round(sum(float(i.get('kgPlanejados', 0)) for i in itens), 1),
-                    'pedidoNum': pedido_num,
-                })
-            except Exception as e:
-                print(f'[WARN] romaneio manual não salvo: {e}')
+            ts = datetime.datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+            filial_slug = re.sub(r'[^a-z0-9]', '_', filial_info['nome'].lower())
+            rid = f"{cliente}_{filial_slug}_{ts}"
+            salvar_romaneio(rid, {
+                'id': rid,
+                'cliente': cliente,
+                'clienteNome': CLIENTES_MANUAIS[cliente]['nome'],
+                'filial': filial_info['nome'],
+                'cnpj': cnpj_sel,
+                'lat': lat,
+                'lng': lng,
+                'dataPedido': agora.strftime('%d/%m/%Y'),
+                'dataGeracao': datetime.datetime.utcnow().isoformat(),
+                'kgPlanejados': round(sum(float(i.get('kgPlanejados', 0)) for i in itens), 1),
+                'pedidoNum': pedido_num,
+            })
+        else:
+            print(f'[INFO] romaneio não salvo — lat={lat} lng={lng}')
 
         # Extrair logo do perfil para o PDF
         logo_bytes = None
