@@ -121,7 +121,8 @@ table.itens td.nome-produto{text-align:left}
 <header>
   <div class="logo">PN</div>
   <h1>Pata Negra — Processamento de Pedidos</h1>
-  <span id="hdate"></span>
+  <span id="hdate" style="font-size:12px;opacity:.65;margin-left:auto;margin-right:12px"></span>
+  <a href="mapa.html" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.15);color:#fff;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;">🗺️ Mapa de Entregas</a>
 </header>
 <main>
 
@@ -307,10 +308,10 @@ function selCliente(id, btn) {
   document.getElementById('btn-proc').textContent = manual ? '📝  Abrir pedido manual' : '⚙️  Processar pedido';
 
   // restaurar logos que possam ter sumido (cold start do servidor)
-  CLIENTES_ATIVOS_COM_LOGO.forEach(function(cid) {
-    var imgEl = document.querySelector('#btn-'+cid+' .cb-logo img');
-    if (imgEl && LOGOS_CACHE[cid] && imgEl.style.display === 'none') {
-      imgEl.src = LOGOS_CACHE[cid];
+  CLIENTES_LISTA.forEach(function(c) {
+    var imgEl = document.querySelector('#btn-'+c.id+' .cb-logo img');
+    if (imgEl && LOGOS_CACHE[c.id] && imgEl.style.display === 'none') {
+      imgEl.src = LOGOS_CACHE[c.id];
       imgEl.style.display = '';
       var ph = imgEl.nextElementSibling;
       if (ph) ph.style.display = 'none';
