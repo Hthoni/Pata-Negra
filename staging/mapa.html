@@ -93,8 +93,9 @@
   var map = L.map('map').setView([-22.95, -43.35], 11);
   var markers = [];
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution:'© OpenStreetMap contributors', maxZoom:19
+  L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+    attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, tiles by <a href="https://hot.openstreetmap.org/">HOT</a>',
+    maxZoom:19
   }).addTo(map);
 
   function idadeHoras(dataGeracao) {
@@ -180,3 +181,4 @@
 </script>
 </body>
 </html>
+
