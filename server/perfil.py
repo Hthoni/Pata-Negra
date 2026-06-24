@@ -99,6 +99,9 @@ def ler_filiais(perfil_bytes):
         cnpj_raw, nome, numero = r[12], r[13], r[14]  # colunas M, N, O
         endereco = r[15] if len(r) > 15 else None  # coluna P (opcional)
         cidade = r[16] if len(r) > 16 else None  # coluna Q (opcional)
+        # coluna R reservada; colunas S e T = lat/lng
+        lat = r[18] if len(r) > 18 else None  # coluna S
+        lng = r[19] if len(r) > 19 else None  # coluna T
         if not cnpj_raw:
             continue
         cnpj_norm = _normaliza_cnpj(cnpj_raw)
@@ -108,6 +111,8 @@ def ler_filiais(perfil_bytes):
                 'numero': numero,
                 'endereco': str(endereco or '').strip(),
                 'cidade': str(cidade or '').strip(),
+                'lat': float(lat) if lat is not None else None,
+                'lng': float(lng) if lng is not None else None,
             }
     return filiais
 
