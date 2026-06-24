@@ -478,7 +478,7 @@ def processar_manual():
         # Salvar pin de mapa se tiver coordenadas
         if lat is not None and lng is not None:
             ts = datetime.datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-            filial_slug = re.sub(r'[^a-z0-9]', '_', filial_info['nome'].lower())
+            filial_slug = ''.join(c if c.isalnum() else '_' for c in filial_info['nome'].lower())
             rid = f"{cliente}_{filial_slug}_{ts}"
             salvar_romaneio(rid, {
                 'id': rid,
