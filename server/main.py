@@ -454,6 +454,9 @@ def processar_manual():
         agora = datetime.datetime.now()
         pedido_num = f"MANUAL-{agora.strftime('%Y%m%d-%H%M%S')}"
 
+        lat = filial_info.get('lat')
+        lng = filial_info.get('lng')
+
         filiais = [{
             'filial': filial_info['nome'],
             'numFilial': filial_info['numero'],
@@ -466,11 +469,35 @@ def processar_manual():
             'solicitante': operador,
             'empresa': meta.get('empresa', 2),
             'itens': itens,
+            'lat': lat,
+            'lng': lng,
         }]
 
         dados = {**meta, 'filiais': filiais, 'clienteNome': CLIENTES_MANUAIS[cliente]['nome']}
 
-        arquivos, eb_simples, pb_simples, split = _gerar_arquivos_por_empresa(dados, filiais)
+        # Salvar pin de mapa se tiver coordenadas
+        if lat is not None and lng is not None:
+            try:
+                ts = datetime.datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+                filial_slug = re.sub(r'[^a-z0-9]', '_', filial_info['nome'].lower())
+                rid = f"{cliente}_{filial_slug}_{ts}"
+                salvar_romaneio(rid, {
+                    'id': rid,
+                    'cliente': cliente,
+                    'clienteNome': CLIENTES_MANUAIS[cliente]['nome'],
+                    'filial': filial_info['nome'],
+                    'cnpj': cnpj_sel,
+                    'lat': lat,
+                    'lng': lng,
+                    'dataPedido': agora.strftime('%d/%m/%Y'),
+                    'dataGeracao': datetime.datetime.utcnow().isoformat(),
+                    'kgPlanejados': round(sum(float(i.get('kgPlanejados', 0)) for i in itens), 1),
+                    'pedidoNum': pedido_num,
+                })
+            except Exception as e:
+                print(f'[WARN] romaneio manual não salvo: {e}')
+
+        arquivos, eb_simples, pb_simples, split = _gerar_arquivos_por_empresa(dados, filiais, logo_bytes=logo_bytes)
 
         return jsonify({
             'ok': True,
