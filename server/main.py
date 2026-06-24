@@ -497,6 +497,18 @@ def processar_manual():
             except Exception as e:
                 print(f'[WARN] romaneio manual não salvo: {e}')
 
+        # Extrair logo do perfil para o PDF
+        logo_bytes = None
+        try:
+            import openpyxl, io as _io
+            wb_logo = openpyxl.load_workbook(_io.BytesIO(perfil_bytes))
+            ws_logo = wb_logo[wb_logo.sheetnames[0]]
+            if ws_logo._images:
+                ws_logo._images[0].ref.seek(0)
+                logo_bytes = ws_logo._images[0].ref.read()
+        except Exception:
+            pass
+
         arquivos, eb_simples, pb_simples, split = _gerar_arquivos_por_empresa(dados, filiais, logo_bytes=logo_bytes)
 
         return jsonify({
@@ -525,3 +537,4 @@ if __name__ == '__main__':
     import os
     port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port)
+
