@@ -270,6 +270,7 @@ def processar():
                 'cliente': cliente,
                 'clienteNome': CLIENTES[cliente]['nome'],
                 'filial': fd['filial'],
+                'numero': fd.get('numFilial', ''),
                 'cnpj': fd.get('cnpj', ''),
                 'lat': lat,
                 'lng': lng,
@@ -418,7 +419,7 @@ def processar_manual():
             _central = ler_filiais(perfil_bytes).get(cnpj_sel, {})
             filial_info = {
                 'nome': meta.get('filialPerfil') or meta.get('clienteNomePerfil') or CLIENTES_MANUAIS[cliente]['nome'],
-                'numero': None,
+                'numero': _central.get('numero'),
                 'endereco': meta.get('enderecoPerfil', ''),
                 'lat': _central.get('lat'),
                 'lng': _central.get('lng'),
@@ -494,6 +495,7 @@ def processar_manual():
                 'cliente': cliente,
                 'clienteNome': CLIENTES_MANUAIS[cliente]['nome'],
                 'filial': filial_info['nome'],
+                'numero': filial_info.get('numero'),
                 'cnpj': cnpj_sel,
                 'lat': lat,
                 'lng': lng,
