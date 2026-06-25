@@ -88,8 +88,29 @@ def listar_romaneios():
     return result
 
 
+def salvar_pedido_pdf(romaneio_id, pdf_bytes):
+    """Salva o PDF da filial associado a um romaneio (mesmo id, extensão .pdf)."""
+    blob = _romaneios_bucket().blob(f'{romaneio_id}.pdf')
+    blob.upload_from_string(pdf_bytes, content_type='application/pdf')
+
+
+def carregar_pedido_pdf(romaneio_id):
+    """Retorna os bytes do PDF do romaneio, ou None se não existir."""
+    blob = _romaneios_bucket().blob(f'{romaneio_id}.pdf')
+    if blob.exists():
+        return blob.download_as_bytes()
+    return None
+
+
 def deletar_romaneio(romaneio_id):
-    """Deleta um romaneio pelo ID. Retorna True se deletado, False se não encontrado."""
+    """Deleta um romaneio pelo ID (JSON + PDF). Retorna True se o JSON existia, False se não."""
+    # apaga o PDF associado se existir (best-effort; soft-delete do bucket cobre recuperação)
+    try:
+        pdf_blob = _romaneios_bucket().blob(f'{romaneio_id}.pdf')
+        if pdf_blob.exists():
+            pdf_blob.delete()
+    except Exception:
+        pass
     blob = _romaneios_bucket().blob(f'{romaneio_id}.json')
     if blob.exists():
         blob.delete()
