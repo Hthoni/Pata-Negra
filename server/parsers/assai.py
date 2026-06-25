@@ -33,7 +33,7 @@ def parse(pdf_bytes, produtos):
             cond_m2 = re.search(r'pagamento\s+(\d+)\s*\(', txt)
             condPgto = cond_m2.group(1) + ' dias' if cond_m2 else ''
             reItem = re.compile(
-                r'^(\d{7})([A-Z][^\n]+?)\s+(KG|CX)\s+(\d+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)',
+                r'^(\d{7})\s*([A-Z][^\n]+?)\s+(KG|CX)\s+(\d+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)',
                 re.M)
             itens = []
             for m in reItem.finditer(txt):
