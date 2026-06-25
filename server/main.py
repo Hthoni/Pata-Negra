@@ -230,6 +230,11 @@ def processar():
                 fd['filial'] = nome_oficial
             if num_filial is not None:
                 fd['numFilial'] = num_filial
+            # Enriquecer com lat/lng do Perfil
+            cnpj_norm = fd.get('cnpj', '').replace('.','').replace('/','').replace('-','')
+            if cnpj_norm in filiais_map:
+                fd['lat'] = filiais_map[cnpj_norm].get('lat')
+                fd['lng'] = filiais_map[cnpj_norm].get('lng')
 
         dados = {**meta, 'filiais': filiais, 'clienteNome': CLIENTES[cliente]['nome']}
 
