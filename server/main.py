@@ -24,6 +24,7 @@ from perfil import ler_perfil, ler_filiais, buscar_filial, ler_operadores
 from excel_gen import gerar_excel
 from pdf_gen import gerar_pdf
 
+import re
 import re as _re
 def _normaliza_cnpj(cnpj):
     """Remove formatação do CNPJ, deixando só dígitos. Definida aqui
@@ -262,7 +263,7 @@ def processar():
             if not its:
                 continue
             ts = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-            filial_slug = re.sub(r'[^a-z0-9]', '_', fd['filial'].lower())
+            filial_slug = _re.sub(r'[^a-z0-9]', '_', fd['filial'].lower())
             rid = f"{cliente}_{filial_slug}_{ts}"
             salvar_romaneio(rid, {
                 'id': rid,
