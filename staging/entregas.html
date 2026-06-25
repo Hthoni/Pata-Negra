@@ -27,6 +27,19 @@
     .btn-refresh { padding:7px 14px; border-radius:var(--radius); border:1px solid var(--border); background:#fff; font-size:12px; cursor:pointer; margin-left:auto; }
     .btn-refresh:hover { background:var(--bg); }
 
+    /* Filtro por cliente */
+    .filtro-wrap { position:relative; }
+    #btn-filtro { padding:7px 14px; border-radius:var(--radius); border:1px solid var(--border); background:#fff; font-size:12px; cursor:pointer; }
+    #btn-filtro:hover { background:var(--bg); }
+    .filtro-dropdown { position:absolute; top:calc(100% + 6px); left:0; background:#fff; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 4px 16px rgba(0,0,0,.12); padding:8px; min-width:200px; max-height:320px; overflow:auto; z-index:600; display:none; }
+    .filtro-head { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:2px 8px 8px; border-bottom:1px solid var(--border); margin-bottom:4px; }
+    .filtro-head .titulo { font-size:11px; color:#888; font-weight:700; letter-spacing:.04em; }
+    .filtro-head button { background:none; border:none; color:var(--accent); font-size:11px; cursor:pointer; font-weight:600; padding:2px 4px; }
+    .filtro-head button:hover { text-decoration:underline; }
+    .filtro-dropdown label { display:flex; align-items:center; gap:8px; padding:6px 8px; font-size:13px; cursor:pointer; border-radius:6px; }
+    .filtro-dropdown label:hover { background:var(--bg); }
+    .filtro-vazio { padding:8px; font-size:12px; color:#888; }
+
     .lista { display:flex; flex-direction:column; gap:10px; }
 
     .card-entrega { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px 20px; display:flex; align-items:center; gap:16px; border-left:4px solid #ccc; transition:box-shadow .13s; }
@@ -46,6 +59,9 @@
 
     .badge-idade { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; white-space:nowrap; }
 
+    .card-acoes { display:flex; flex-direction:column; gap:6px; }
+    .btn-pdf { padding:8px 18px; border-radius:var(--radius); border:1px solid var(--accent); background:#fff; color:var(--accent); font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; transition:background .13s; }
+    .btn-pdf:hover { background:var(--accent-lt); }
     .btn-entregar { padding:8px 18px; border-radius:var(--radius); border:none; background:var(--green); color:#fff; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; transition:background .13s; }
     .btn-entregar:hover { background:#145230; }
     .btn-entregar:disabled { background:#aaa; cursor:not-allowed; }
@@ -84,6 +100,10 @@
   <div class="toolbar">
     <h2>Pedidos Pendentes</h2>
     <span class="stat-badge" id="total-badge">—</span>
+    <div class="filtro-wrap">
+      <button id="btn-filtro" onclick="toggleFiltro(event)">⛃ Clientes</button>
+      <div class="filtro-dropdown" id="filtro-dropdown"></div>
+    </div>
     <button class="btn-refresh" onclick="carregar()">↺ Atualizar</button>
   </div>
 
@@ -110,6 +130,7 @@
   var SERVER_URL = 'https://pata-negra-staging-784065203515.us-central1.run.app';
   var romaneios = [];
   var pendingId = null;
+  var clientesDesmarcados = new Set(); // clientes ocultados pelo filtro
 
   function idadeHoras(dataGeracao) {
     return (Date.now() - new Date(dataGeracao).getTime()) / 3600000;
@@ -139,38 +160,9 @@
       .then(function(r) { return r.json(); })
       .then(function(data) {
         document.getElementById('loading').style.display = 'none';
-        romaneios = data;
-
-        // Ordenar por idade (mais antigo primeiro)
-        data.sort(function(a,b) { return new Date(a.dataGeracao) - new Date(b.dataGeracao); });
-
-        document.getElementById('total-badge').textContent = data.length + ' pedido' + (data.length !== 1 ? 's' : '');
-
-        if (data.length === 0) {
-          document.getElementById('lista').innerHTML = '<div class="sem-dados"><h3>🎉 Tudo entregue!</h3><p>Nenhum pedido pendente no momento.</p></div>';
-          return;
-        }
-
-        var html = '';
-        data.forEach(function(rom) {
-          var horas = idadeHoras(rom.dataGeracao);
-          var c = classePorIdade(horas);
-          html += '<div class="card-entrega ' + c.cls + '" id="card-' + rom.id + '">' +
-            '<div class="entrega-info">' +
-              '<div class="entrega-titulo">' + (rom.clienteNome || rom.cliente) + '</div>' +
-              '<div class="entrega-sub">' + (rom.filial || '—') + '</div>' +
-              '<div class="entrega-meta">' +
-                '<div class="meta-item"><span class="meta-label">Pedido: </span><span class="meta-valor">' + (rom.pedidoNum || '—') + '</span></div>' +
-                '<div class="meta-item"><span class="meta-label">Data: </span><span class="meta-valor">' + (rom.dataPedido || '—') + '</span></div>' +
-                '<div class="meta-item"><span class="meta-label">Kg: </span><span class="meta-valor">' + (rom.kgPlanejados || '—') + ' kg</span></div>' +
-                '<div class="meta-item"><span class="meta-label">Gerado: </span><span class="meta-valor">' + formatarData(rom.dataGeracao) + '</span></div>' +
-              '</div>' +
-            '</div>' +
-            '<span class="badge-idade" style="background:' + c.bg + ';color:' + c.txt + '">' + c.label + '<br>' + Math.round(horas) + 'h</span>' +
-            '<button class="btn-entregar" onclick="confirmarEntrega(\'' + rom.id + '\',\'' + (rom.clienteNome||rom.cliente) + '\',\'' + (rom.filial||'') + '\')">✓ Entregue</button>' +
-          '</div>';
-        });
-        document.getElementById('lista').innerHTML = html;
+        romaneios = data || [];
+        montarFiltro(romaneios);
+        renderLista();
       })
       .catch(function(e) {
         document.getElementById('loading').style.display = 'none';
@@ -178,6 +170,104 @@
       });
   }
 
+  function renderLista() {
+    var data = romaneios.filter(function(rom) { return !clientesDesmarcados.has(rom.cliente); });
+
+    // Ordenar por idade (mais antigo primeiro)
+    data.sort(function(a, b) { return new Date(a.dataGeracao) - new Date(b.dataGeracao); });
+
+    document.getElementById('total-badge').textContent = data.length + ' pedido' + (data.length !== 1 ? 's' : '');
+
+    if (romaneios.length === 0) {
+      document.getElementById('lista').innerHTML = '<div class="sem-dados"><h3>🎉 Tudo entregue!</h3><p>Nenhum pedido pendente no momento.</p></div>';
+      return;
+    }
+    if (data.length === 0) {
+      document.getElementById('lista').innerHTML = '<div class="sem-dados"><p>Nenhum pedido para os clientes selecionados.</p></div>';
+      return;
+    }
+
+    var html = '';
+    data.forEach(function(rom) {
+      var horas = idadeHoras(rom.dataGeracao);
+      var c = classePorIdade(horas);
+      html += '<div class="card-entrega ' + c.cls + '" id="card-' + rom.id + '">' +
+        '<div class="entrega-info">' +
+          '<div class="entrega-titulo">' + (rom.clienteNome || rom.cliente) + '</div>' +
+          '<div class="entrega-sub">' + (rom.filial || '—') + '</div>' +
+          '<div class="entrega-meta">' +
+            '<div class="meta-item"><span class="meta-label">Pedido: </span><span class="meta-valor">' + (rom.pedidoNum || '—') + '</span></div>' +
+            '<div class="meta-item"><span class="meta-label">Data: </span><span class="meta-valor">' + (rom.dataPedido || '—') + '</span></div>' +
+            '<div class="meta-item"><span class="meta-label">Kg: </span><span class="meta-valor">' + (rom.kgPlanejados || '—') + ' kg</span></div>' +
+            '<div class="meta-item"><span class="meta-label">Gerado: </span><span class="meta-valor">' + formatarData(rom.dataGeracao) + '</span></div>' +
+          '</div>' +
+        '</div>' +
+        '<span class="badge-idade" style="background:' + c.bg + ';color:' + c.txt + '">' + c.label + '<br>' + Math.round(horas) + 'h</span>' +
+        '<div class="card-acoes">' +
+          '<button class="btn-pdf" onclick="verPdf(\'' + rom.id + '\')">📄 PDF</button>' +
+          '<button class="btn-entregar" onclick="confirmarEntrega(\'' + rom.id + '\',\'' + (rom.clienteNome||rom.cliente) + '\',\'' + (rom.filial||'') + '\')">✓ Entregue</button>' +
+        '</div>' +
+      '</div>';
+    });
+    document.getElementById('lista').innerHTML = html;
+  }
+
+  function verPdf(id) {
+    window.open(SERVER_URL + '/romaneio-pdf/' + id, '_blank');
+  }
+
+  // ── Filtro por cliente ──────────────────────────────────────────────
+  function montarFiltro(data) {
+    var nomes = {};
+    data.forEach(function(r) { if (r.cliente) nomes[r.cliente] = r.clienteNome || r.cliente; });
+    var ids = Object.keys(nomes).sort(function(a, b) { return nomes[a].localeCompare(nomes[b]); });
+    var dd = document.getElementById('filtro-dropdown');
+
+    clientesDesmarcados.forEach(function(cid) { if (!nomes[cid]) clientesDesmarcados.delete(cid); });
+
+    if (ids.length === 0) {
+      dd.innerHTML = '<div class="filtro-vazio">Nenhum cliente com pedido</div>';
+      return;
+    }
+    var html = '<div class="filtro-head"><span class="titulo">CLIENTES</span>' +
+      '<span><button onclick="filtroTodos(true)">Todos</button><button onclick="filtroTodos(false)">Nenhum</button></span></div>';
+    ids.forEach(function(cid) {
+      var checked = clientesDesmarcados.has(cid) ? '' : 'checked';
+      html += '<label><input type="checkbox" value="' + cid + '" ' + checked + ' onchange="toggleCliente(this)"> ' + nomes[cid] + '</label>';
+    });
+    dd.innerHTML = html;
+  }
+
+  function toggleCliente(cb) {
+    if (cb.checked) clientesDesmarcados.delete(cb.value);
+    else clientesDesmarcados.add(cb.value);
+    renderLista();
+  }
+
+  function filtroTodos(marcar) {
+    var cbs = document.getElementById('filtro-dropdown').querySelectorAll('input[type=checkbox]');
+    cbs.forEach(function(cb) {
+      cb.checked = marcar;
+      if (marcar) clientesDesmarcados.delete(cb.value);
+      else clientesDesmarcados.add(cb.value);
+    });
+    renderLista();
+  }
+
+  function toggleFiltro(e) {
+    if (e) e.stopPropagation();
+    var dd = document.getElementById('filtro-dropdown');
+    dd.style.display = dd.style.display === 'block' ? 'none' : 'block';
+  }
+
+  document.addEventListener('click', function(e) {
+    var wrap = document.querySelector('.filtro-wrap');
+    if (wrap && !wrap.contains(e.target)) {
+      document.getElementById('filtro-dropdown').style.display = 'none';
+    }
+  });
+
+  // ── Confirmar entrega (DELETE) ──────────────────────────────────────
   function confirmarEntrega(id, cliente, filial) {
     pendingId = id;
     document.getElementById('modal-texto').textContent = 'Marcar entrega de ' + cliente + ' — ' + filial + ' como concluída?';
@@ -201,11 +291,14 @@
       .then(function(r) { return r.json(); })
       .then(function(data) {
         if (data.ok) {
+          romaneios = romaneios.filter(function(r) { return r.id !== id; });
           var card = document.getElementById('card-' + id);
           if (card) {
             card.style.opacity = '0';
             card.style.transition = 'opacity .3s';
-            setTimeout(function() { card.remove(); atualizarTotal(); }, 300);
+            setTimeout(function() { montarFiltro(romaneios); renderLista(); }, 300);
+          } else {
+            montarFiltro(romaneios); renderLista();
           }
         } else {
           alert('Erro: ' + (data.erro || 'Falha ao remover'));
@@ -217,15 +310,6 @@
         if (btn) { btn.disabled = false; btn.textContent = '✓ Entregue'; }
       });
   };
-
-  function atualizarTotal() {
-    var cards = document.querySelectorAll('.card-entrega');
-    var n = cards.length;
-    document.getElementById('total-badge').textContent = n + ' pedido' + (n !== 1 ? 's' : '');
-    if (n === 0) {
-      document.getElementById('lista').innerHTML = '<div class="sem-dados"><h3>🎉 Tudo entregue!</h3><p>Nenhum pedido pendente no momento.</p></div>';
-    }
-  }
 
   carregar();
 </script>
