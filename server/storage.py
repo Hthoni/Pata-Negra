@@ -116,3 +116,50 @@ def deletar_romaneio(romaneio_id):
         blob.delete()
         return True
     return False
+
+
+# ── Geofences / zonas (bucket próprio) ────────────────────────────────────────
+# Dado DURÁVEL (desenhado uma vez, reutilizado por muito tempo) — fica num bucket
+# separado dos romaneios efêmeros, pra poder esvaziar romaneios no console sem
+# perder as zonas. Cada zona é {id, nome, cor, geojson}.
+GCS_GEOFENCES_BUCKET = os.environ.get('GCS_GEOFENCES_BUCKET', 'pata-negra-geofences')
+_gcs_geofences_client = None
+
+
+def _geofences_bucket():
+    global _gcs_geofences_client
+    if _gcs_geofences_client is None:
+        _gcs_geofences_client = gcs.Client()
+    return _gcs_geofences_client.bucket(GCS_GEOFENCES_BUCKET)
+
+
+def salvar_geofence(geofence_id, dados):
+    """Salva (ou sobrescreve) uma zona como JSON no bucket de geofences."""
+    blob = _geofences_bucket().blob(f'{geofence_id}.json')
+    blob.upload_from_string(
+        json.dumps(dados, ensure_ascii=False),
+        content_type='application/json'
+    )
+
+
+def listar_geofences():
+    """Lista todas as zonas salvas. Retorna lista de dicts."""
+    blobs = _geofences_bucket().list_blobs()
+    result = []
+    for blob in blobs:
+        if not blob.name.endswith('.json'):
+            continue
+        try:
+            result.append(json.loads(blob.download_as_bytes()))
+        except Exception:
+            pass
+    return result
+
+
+def deletar_geofence(geofence_id):
+    """Deleta uma zona pelo ID. Retorna True se existia, False se não."""
+    blob = _geofences_bucket().blob(f'{geofence_id}.json')
+    if blob.exists():
+        blob.delete()
+        return True
+    return False
