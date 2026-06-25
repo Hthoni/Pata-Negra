@@ -415,10 +415,13 @@ def processar_manual():
         else:
             # cliente 'Central': CNPJ/Filial/Endereço únicos, vêm do cabeçalho do Perfil
             cnpj_sel = _normaliza_cnpj(meta.get('cnpjPerfil', ''))
+            _central = ler_filiais(perfil_bytes).get(cnpj_sel, {})
             filial_info = {
                 'nome': meta.get('filialPerfil') or meta.get('clienteNomePerfil') or CLIENTES_MANUAIS[cliente]['nome'],
                 'numero': None,
                 'endereco': meta.get('enderecoPerfil', ''),
+                'lat': _central.get('lat'),
+                'lng': _central.get('lng'),
             }
 
         itens = []
