@@ -30,6 +30,19 @@
     #btn-refresh { padding:6px 12px; border-radius:var(--radius); border:1px solid var(--border); background:#fff; font-size:12px; cursor:pointer; }
     #btn-refresh:hover { background:var(--bg); }
 
+    /* Filtro por cliente */
+    .filtro-wrap { position:relative; }
+    #btn-filtro { padding:6px 12px; border-radius:var(--radius); border:1px solid var(--border); background:#fff; font-size:12px; cursor:pointer; }
+    #btn-filtro:hover { background:var(--bg); }
+    .filtro-dropdown { position:absolute; top:calc(100% + 6px); left:0; background:#fff; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 4px 16px rgba(0,0,0,.12); padding:8px; min-width:200px; max-height:320px; overflow:auto; z-index:600; display:none; }
+    .filtro-head { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:2px 8px 8px; border-bottom:1px solid var(--border); margin-bottom:4px; }
+    .filtro-head .titulo { font-size:11px; color:#888; font-weight:700; letter-spacing:.04em; }
+    .filtro-head button { background:none; border:none; color:var(--accent); font-size:11px; cursor:pointer; font-weight:600; padding:2px 4px; }
+    .filtro-head button:hover { text-decoration:underline; }
+    .filtro-dropdown label { display:flex; align-items:center; gap:8px; padding:6px 8px; font-size:13px; cursor:pointer; border-radius:6px; }
+    .filtro-dropdown label:hover { background:var(--bg); }
+    .filtro-vazio { padding:8px; font-size:12px; color:#888; }
+
     #map { flex:1; }
 
     /* Popup customizado */
@@ -40,6 +53,12 @@
     .popup-label { color:#888; }
     .popup-valor { font-weight:600; }
     .popup-idade { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; margin-top:6px; }
+    .popup-acoes { display:flex; gap:6px; margin-top:10px; }
+    .popup-btn { flex:1; padding:6px 8px; border-radius:6px; border:1px solid var(--border); background:#fff; font-size:11px; font-weight:600; cursor:pointer; }
+    .popup-btn-pdf { color:var(--accent); border-color:var(--accent); }
+    .popup-btn-pdf:hover { background:var(--accent-lt); }
+    .popup-btn-del { color:#c0392b; border-color:#e6b0aa; }
+    .popup-btn-del:hover { background:#fdedec; }
 
     /* Loading */
     #loading { position:fixed; inset:0; background:rgba(255,255,255,.85); display:flex; align-items:center; justify-content:center; flex-direction:column; gap:12px; z-index:9999; }
@@ -73,6 +92,10 @@
   <h2>Pedidos Pendentes</h2>
   <span class="stat-badge" id="total-badge">0 pedidos</span>
   <button id="btn-refresh" onclick="carregarRomaneios()">↺ Atualizar</button>
+  <div class="filtro-wrap">
+    <button id="btn-filtro" onclick="toggleFiltro(event)">⛃ Clientes</button>
+    <div class="filtro-dropdown" id="filtro-dropdown"></div>
+  </div>
   <div class="legenda">
     <div class="leg-item"><div class="leg-dot" style="background:#27ae60"></div> &lt; 48h</div>
     <div class="leg-item"><div class="leg-dot" style="background:#f1c40f"></div> 48–96h</div>
@@ -92,6 +115,8 @@
   var SERVER_URL = 'https://pata-negra-staging-784065203515.us-central1.run.app';
   var map = L.map('map').setView([-22.95, -43.35], 11);
   var markers = [];
+  var romaneios = [];                 // todos os romaneios carregados
+  var clientesDesmarcados = new Set(); // clientes ocultados pelo filtro
 
   L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
     attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, tiles by <a href="https://hot.openstreetmap.org/">HOT</a>',
@@ -139,44 +164,139 @@
     return str;
   }
 
-  function carregarRomaneios() {
-    document.getElementById('loading').style.display = 'flex';
+  function montarPopup(rom, c, horas) {
+    return '<div class="popup-content">' +
+      '<div class="popup-cliente">' + (rom.clienteNome || rom.cliente) + '</div>' +
+      '<div class="popup-filial">' + (rom.filial || '—') + '</div>' +
+      '<div class="popup-row"><span class="popup-label">Pedido</span><span class="popup-valor">' + (rom.pedidoNum || '—') + '</span></div>' +
+      '<div class="popup-row"><span class="popup-label">Data pedido</span><span class="popup-valor">' + (rom.dataPedido || '—') + '</span></div>' +
+      '<div class="popup-row"><span class="popup-label">Gerado em</span><span class="popup-valor">' + formatarData(rom.dataGeracao) + '</span></div>' +
+      '<div class="popup-row"><span class="popup-label">Kg planejados</span><span class="popup-valor">' + (rom.kgPlanejados || '—') + ' kg</span></div>' +
+      '<span class="popup-idade" style="background:' + c.bg + ';color:' + c.txt + '">' + c.label + ' — ' + Math.round(horas) + 'h</span>' +
+      '<div class="popup-acoes">' +
+        '<button class="popup-btn popup-btn-pdf" onclick="verPdf(\'' + rom.id + '\')">📄 Ver PDF</button>' +
+        '<button class="popup-btn popup-btn-del" onclick="excluirPino(\'' + rom.id + '\')">🗑 Excluir</button>' +
+      '</div>' +
+      '</div>';
+  }
+
+  // Desenha os marcadores respeitando o filtro de clientes.
+  // ajustarZoom só no carregamento — evita o mapa "pular" a cada toggle.
+  function renderMarkers(ajustarZoom) {
     markers.forEach(function(m) { map.removeLayer(m); });
     markers = [];
 
+    var visiveis = romaneios.filter(function(rom) {
+      return rom.lat && rom.lng && !clientesDesmarcados.has(rom.cliente);
+    });
+
+    visiveis.forEach(function(rom) {
+      var horas = idadeHoras(rom.dataGeracao);
+      var c = corPorIdade(horas);
+      var corBolinha = ehCentral(rom) ? '#000' : '#fff';
+      var marker = L.marker([rom.lat, rom.lng], { icon: criarIcone(c.cor, corBolinha) });
+      marker.bindPopup(montarPopup(rom, c, horas));
+      marker.addTo(map);
+      markers.push(marker);
+    });
+
+    document.getElementById('total-badge').textContent = visiveis.length + ' pedido' + (visiveis.length !== 1 ? 's' : '');
+    document.getElementById('sem-dados').style.display = romaneios.length === 0 ? 'block' : 'none';
+
+    if (ajustarZoom && markers.length > 0) {
+      var group = L.featureGroup(markers);
+      map.fitBounds(group.getBounds().pad(0.1));
+    }
+  }
+
+  // ── Filtro por cliente ──────────────────────────────────────────────
+  function montarFiltro(data) {
+    var nomes = {};
+    data.forEach(function(r) { if (r.cliente) nomes[r.cliente] = r.clienteNome || r.cliente; });
+    var ids = Object.keys(nomes).sort(function(a, b) { return nomes[a].localeCompare(nomes[b]); });
+    var dd = document.getElementById('filtro-dropdown');
+
+    // descarta do "desmarcados" clientes que já não têm pedido
+    clientesDesmarcados.forEach(function(cid) { if (!nomes[cid]) clientesDesmarcados.delete(cid); });
+
+    if (ids.length === 0) {
+      dd.innerHTML = '<div class="filtro-vazio">Nenhum cliente com pedido</div>';
+      return;
+    }
+    var html = '<div class="filtro-head"><span class="titulo">CLIENTES</span>' +
+      '<span><button onclick="filtroTodos(true)">Todos</button><button onclick="filtroTodos(false)">Nenhum</button></span></div>';
+    ids.forEach(function(cid) {
+      var checked = clientesDesmarcados.has(cid) ? '' : 'checked';
+      html += '<label><input type="checkbox" value="' + cid + '" ' + checked + ' onchange="toggleCliente(this)"> ' + nomes[cid] + '</label>';
+    });
+    dd.innerHTML = html;
+  }
+
+  function toggleCliente(cb) {
+    if (cb.checked) clientesDesmarcados.delete(cb.value);
+    else clientesDesmarcados.add(cb.value);
+    renderMarkers(false);
+  }
+
+  function filtroTodos(marcar) {
+    var cbs = document.getElementById('filtro-dropdown').querySelectorAll('input[type=checkbox]');
+    cbs.forEach(function(cb) {
+      cb.checked = marcar;
+      if (marcar) clientesDesmarcados.delete(cb.value);
+      else clientesDesmarcados.add(cb.value);
+    });
+    renderMarkers(false);
+  }
+
+  function toggleFiltro(e) {
+    if (e) e.stopPropagation();
+    var dd = document.getElementById('filtro-dropdown');
+    dd.style.display = dd.style.display === 'block' ? 'none' : 'block';
+  }
+
+  document.addEventListener('click', function(e) {
+    var wrap = document.querySelector('.filtro-wrap');
+    if (wrap && !wrap.contains(e.target)) {
+      document.getElementById('filtro-dropdown').style.display = 'none';
+    }
+  });
+
+  // ── Ações do popup ──────────────────────────────────────────────────
+  function verPdf(id) {
+    window.open(SERVER_URL + '/romaneio-pdf/' + id, '_blank');
+  }
+
+  function excluirPino(id) {
+    var rom = null;
+    for (var i = 0; i < romaneios.length; i++) { if (romaneios[i].id === id) { rom = romaneios[i]; break; } }
+    var nome = rom ? (rom.filial || rom.clienteNome || rom.cliente) : id;
+    if (!confirm('Excluir o pedido da filial ' + nome + '?')) return;
+
+    fetch(SERVER_URL + '/romaneio/' + id, { method:'DELETE' })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.ok) {
+          romaneios = romaneios.filter(function(r) { return r.id !== id; });
+          map.closePopup();
+          montarFiltro(romaneios);
+          renderMarkers(false);
+        } else {
+          alert('Erro: ' + (data.erro || 'Falha ao excluir'));
+        }
+      })
+      .catch(function(e) { alert('Erro: ' + e.message); });
+  }
+
+  // ── Carregamento ────────────────────────────────────────────────────
+  function carregarRomaneios() {
+    document.getElementById('loading').style.display = 'flex';
     fetch(SERVER_URL + '/romaneios')
       .then(function(r) { return r.json(); })
       .then(function(data) {
         document.getElementById('loading').style.display = 'none';
-        document.getElementById('sem-dados').style.display = data.length === 0 ? 'block' : 'none';
-        document.getElementById('total-badge').textContent = data.length + ' pedido' + (data.length !== 1 ? 's' : '');
-
-        data.forEach(function(rom) {
-          if (!rom.lat || !rom.lng) return;
-          var horas = idadeHoras(rom.dataGeracao);
-          var c = corPorIdade(horas);
-          var corBolinha = ehCentral(rom) ? '#000' : '#fff';
-          var marker = L.marker([rom.lat, rom.lng], { icon: criarIcone(c.cor, corBolinha) });
-
-          var popup = '<div class="popup-content">' +
-            '<div class="popup-cliente">' + (rom.clienteNome || rom.cliente) + '</div>' +
-            '<div class="popup-filial">' + (rom.filial || '—') + '</div>' +
-            '<div class="popup-row"><span class="popup-label">Pedido</span><span class="popup-valor">' + (rom.pedidoNum || '—') + '</span></div>' +
-            '<div class="popup-row"><span class="popup-label">Data pedido</span><span class="popup-valor">' + (rom.dataPedido || '—') + '</span></div>' +
-            '<div class="popup-row"><span class="popup-label">Gerado em</span><span class="popup-valor">' + formatarData(rom.dataGeracao) + '</span></div>' +
-            '<div class="popup-row"><span class="popup-label">Kg planejados</span><span class="popup-valor">' + (rom.kgPlanejados || '—') + ' kg</span></div>' +
-            '<span class="popup-idade" style="background:' + c.bg + ';color:' + c.txt + '">' + c.label + ' — ' + Math.round(horas) + 'h</span>' +
-            '</div>';
-
-          marker.bindPopup(popup);
-          marker.addTo(map);
-          markers.push(marker);
-        });
-
-        if (markers.length > 0) {
-          var group = L.featureGroup(markers);
-          map.fitBounds(group.getBounds().pad(0.1));
-        }
+        romaneios = data || [];
+        montarFiltro(romaneios);
+        renderMarkers(true);
       })
       .catch(function(e) {
         document.getElementById('loading').style.display = 'none';
@@ -188,4 +308,3 @@
 </script>
 </body>
 </html>
-
