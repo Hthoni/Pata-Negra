@@ -19,7 +19,7 @@ import datetime
 import traceback
 from flask_cors import CORS
 
-from storage import perfil_existe, salvar_perfil, carregar_perfil_bytes, perfil_filename, salvar_romaneio, listar_romaneios, deletar_romaneio, salvar_pedido_pdf, carregar_pedido_pdf
+from storage import perfil_existe, salvar_perfil, carregar_perfil_bytes, perfil_filename, salvar_romaneio, listar_romaneios, deletar_romaneio, salvar_pedido_pdf, carregar_pedido_pdf, salvar_geofence, listar_geofences, deletar_geofence
 from perfil import ler_perfil, ler_filiais, buscar_filial, ler_operadores
 from excel_gen import gerar_excel
 from pdf_gen import gerar_pdf
@@ -130,6 +130,48 @@ def romaneio_pdf(rid):
         if b is None:
             return jsonify({'erro': 'PDF não encontrado'}), 404
         return send_file(io.BytesIO(b), mimetype='application/pdf')
+    except Exception as e:
+        return jsonify({'erro': str(e)}), 500
+
+
+@app.route('/geofences')
+def get_geofences():
+    """Lista as zonas (geofences) salvas para o mapa."""
+    try:
+        return jsonify(listar_geofences())
+    except Exception as e:
+        return jsonify({'erro': str(e)}), 500
+
+
+@app.route('/geofence', methods=['POST'])
+def post_geofence():
+    """Cria ou atualiza uma zona. Se vier 'id', sobrescreve (edição de geometria/nome/cor)."""
+    try:
+        body = request.get_json(force=True) or {}
+        geojson = body.get('geojson')
+        if not geojson:
+            return jsonify({'erro': 'geojson ausente'}), 400
+        gid = body.get('id') or f"zona_{datetime.datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+        dados = {
+            'id': gid,
+            'nome': body.get('nome', gid),
+            'cor': body.get('cor', '#8B1C1C'),
+            'geojson': geojson,
+        }
+        salvar_geofence(gid, dados)
+        return jsonify({'ok': True, 'geofence': dados})
+    except Exception as e:
+        return jsonify({'erro': str(e)}), 500
+
+
+@app.route('/geofence/<geofence_id>', methods=['DELETE'])
+def del_geofence(geofence_id):
+    """Remove uma zona pelo id."""
+    try:
+        ok = deletar_geofence(geofence_id)
+        if ok:
+            return jsonify({'ok': True})
+        return jsonify({'erro': 'Geofence não encontrada'}), 404
     except Exception as e:
         return jsonify({'erro': str(e)}), 500
 
