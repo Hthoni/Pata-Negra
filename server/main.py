@@ -19,7 +19,7 @@ import datetime
 import traceback
 from flask_cors import CORS
 
-from storage import perfil_existe, salvar_perfil, carregar_perfil_bytes, perfil_filename, salvar_romaneio, listar_romaneios, deletar_romaneio
+from storage import perfil_existe, salvar_perfil, carregar_perfil_bytes, perfil_filename, salvar_romaneio, listar_romaneios, deletar_romaneio, salvar_pedido_pdf, carregar_pedido_pdf
 from perfil import ler_perfil, ler_filiais, buscar_filial, ler_operadores
 from excel_gen import gerar_excel
 from pdf_gen import gerar_pdf
@@ -118,6 +118,18 @@ def delete_romaneio(romaneio_id):
         if ok:
             return jsonify({'ok': True})
         return jsonify({'erro': 'Romaneio não encontrado'}), 404
+    except Exception as e:
+        return jsonify({'erro': str(e)}), 500
+
+
+@app.route('/romaneio-pdf/<rid>')
+def romaneio_pdf(rid):
+    """Serve inline o PDF da filial associado a um romaneio (abre no navegador)."""
+    try:
+        b = carregar_pedido_pdf(rid)
+        if b is None:
+            return jsonify({'erro': 'PDF não encontrado'}), 404
+        return send_file(io.BytesIO(b), mimetype='application/pdf')
     except Exception as e:
         return jsonify({'erro': str(e)}), 500
 
@@ -279,6 +291,12 @@ def processar():
                 'kgPlanejados': round(sum(float(i.get('kgPlanejados', 0)) for i in its), 1),
                 'pedidoNum': fd.get('pedidoNum', ''),
             })
+            # Persistir o PDF da filial junto ao romaneio (best-effort)
+            try:
+                pdf_fd = gerar_pdf({**dados, 'filiais': [fd]}, logo_bytes=logo_bytes)
+                salvar_pedido_pdf(rid, pdf_fd)
+            except Exception as _e:
+                print(f'[WARN] falha ao salvar PDF do romaneio {rid}: {_e}')
 
         todos_itens = [i for f in filiais for i in f['itens']]
         return jsonify({
@@ -485,6 +503,19 @@ def processar_manual():
 
         dados = {**meta, 'filiais': filiais, 'clienteNome': CLIENTES_MANUAIS[cliente]['nome']}
 
+        # Extrair logo do perfil para o PDF (antes de salvar o romaneio, pois o
+        # PDF do romaneio também precisa da logo)
+        logo_bytes = None
+        try:
+            import openpyxl, io as _io
+            wb_logo = openpyxl.load_workbook(_io.BytesIO(perfil_bytes))
+            ws_logo = wb_logo[wb_logo.sheetnames[0]]
+            if ws_logo._images:
+                ws_logo._images[0].ref.seek(0)
+                logo_bytes = ws_logo._images[0].ref.read()
+        except Exception:
+            pass
+
         # Salvar pin de mapa se tiver coordenadas
         if lat is not None and lng is not None:
             ts = datetime.datetime.utcnow().strftime('%Y%m%d_%H%M%S')
@@ -504,20 +535,14 @@ def processar_manual():
                 'kgPlanejados': round(sum(float(i.get('kgPlanejados', 0)) for i in itens), 1),
                 'pedidoNum': pedido_num,
             })
+            # Persistir o PDF da filial única junto ao romaneio (best-effort)
+            try:
+                pdf_fd = gerar_pdf({**dados, 'filiais': [filiais[0]]}, logo_bytes=logo_bytes)
+                salvar_pedido_pdf(rid, pdf_fd)
+            except Exception as _e:
+                print(f'[WARN] falha ao salvar PDF do romaneio {rid}: {_e}')
         else:
             print(f'[INFO] romaneio não salvo — lat={lat} lng={lng}')
-
-        # Extrair logo do perfil para o PDF
-        logo_bytes = None
-        try:
-            import openpyxl, io as _io
-            wb_logo = openpyxl.load_workbook(_io.BytesIO(perfil_bytes))
-            ws_logo = wb_logo[wb_logo.sheetnames[0]]
-            if ws_logo._images:
-                ws_logo._images[0].ref.seek(0)
-                logo_bytes = ws_logo._images[0].ref.read()
-        except Exception:
-            pass
 
         arquivos, eb_simples, pb_simples, split = _gerar_arquivos_por_empresa(dados, filiais, logo_bytes=logo_bytes)
 
