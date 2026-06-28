@@ -181,6 +181,9 @@
   var EDIT_KEY = 'editor_PN';
   var EDIT_MODE_ALLOWED = (new URLSearchParams(window.location.search).get('edit') === EDIT_KEY);
 
+  // Cor única de TODAS as zonas (equalizadas com a cor da "Zona sul"). Troca o hex aqui.
+  var COR_ZONA = '#e9d8d8';
+
   var map = L.map('map').setView([-22.95, -43.35], 11);
   var markers = [];
   var romaneios = [];                 // todos os romaneios carregados
@@ -369,7 +372,7 @@
 
   // ── Zonas (geofences) ───────────────────────────────────────────────
   function estiloZona(cor) {
-    return { color: cor, weight: 2, fillColor: cor, fillOpacity: 0.12 };
+    return { color: COR_ZONA, weight: 2, fillColor: COR_ZONA, fillOpacity: 0.12 };
   }
 
   // (re)desenha todas as zonas salvas em zonasLayer
@@ -427,7 +430,7 @@
       var s = somas[z.id];
       totP += s.pedidos; totK += s.kg;
       html += '<div class="pz-row">' +
-        '<span class="pz-swatch" style="background:' + (z.cor || '#8B1C1C') + '"></span>' +
+        '<span class="pz-swatch" style="background:' + COR_ZONA + '"></span>' +
         '<span class="pz-nome" title="' + (z.nome || '') + '">' + (z.nome || z.id) + '</span>' +
         '<span class="pz-nums"><b>' + s.pedidos + '</b> ped · <b>' + Math.round(s.kg) + '</b> kg</span>' +
         '</div>';
