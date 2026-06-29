@@ -19,11 +19,12 @@ import datetime
 import traceback
 from flask_cors import CORS
 
-from storage import perfil_existe, salvar_perfil, carregar_perfil_bytes, perfil_filename
+from storage import perfil_existe, salvar_perfil, carregar_perfil_bytes, perfil_filename, salvar_romaneio, listar_romaneios, deletar_romaneio, salvar_pedido_pdf, carregar_pedido_pdf, salvar_geofence, listar_geofences, deletar_geofence
 from perfil import ler_perfil, ler_filiais, buscar_filial, ler_operadores
 from excel_gen import gerar_excel
 from pdf_gen import gerar_pdf
 
+import re
 import re as _re
 def _normaliza_cnpj(cnpj):
     """Remove formatação do CNPJ, deixando só dígitos. Definida aqui
@@ -98,6 +99,81 @@ def _gerar_arquivos_por_empresa(dados, filiais, logo_bytes=None):
             'pdf': base64.b64encode(pb).decode(),
         })
     return arquivos, eb_simples, pb_simples, len(empresas_nos_itens) > 1
+
+
+@app.route('/romaneios')
+def get_romaneios():
+    """Lista todos os romaneios pendentes para o mapa."""
+    try:
+        return jsonify(listar_romaneios())
+    except Exception as e:
+        return jsonify({'erro': str(e)}), 500
+
+
+@app.route('/romaneio/<romaneio_id>', methods=['DELETE'])
+def delete_romaneio(romaneio_id):
+    """Marca pedido como entregue deletando o pin do mapa."""
+    try:
+        ok = deletar_romaneio(romaneio_id)
+        if ok:
+            return jsonify({'ok': True})
+        return jsonify({'erro': 'Romaneio não encontrado'}), 404
+    except Exception as e:
+        return jsonify({'erro': str(e)}), 500
+
+
+@app.route('/romaneio-pdf/<rid>')
+def romaneio_pdf(rid):
+    """Serve inline o PDF da filial associado a um romaneio (abre no navegador)."""
+    try:
+        b = carregar_pedido_pdf(rid)
+        if b is None:
+            return jsonify({'erro': 'PDF não encontrado'}), 404
+        return send_file(io.BytesIO(b), mimetype='application/pdf')
+    except Exception as e:
+        return jsonify({'erro': str(e)}), 500
+
+
+@app.route('/geofences')
+def get_geofences():
+    """Lista as zonas (geofences) salvas para o mapa."""
+    try:
+        return jsonify(listar_geofences())
+    except Exception as e:
+        return jsonify({'erro': str(e)}), 500
+
+
+@app.route('/geofence', methods=['POST'])
+def post_geofence():
+    """Cria ou atualiza uma zona. Se vier 'id', sobrescreve (edição de geometria/nome/cor)."""
+    try:
+        body = request.get_json(force=True) or {}
+        geojson = body.get('geojson')
+        if not geojson:
+            return jsonify({'erro': 'geojson ausente'}), 400
+        gid = body.get('id') or f"zona_{datetime.datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+        dados = {
+            'id': gid,
+            'nome': body.get('nome', gid),
+            'cor': body.get('cor', '#8B1C1C'),
+            'geojson': geojson,
+        }
+        salvar_geofence(gid, dados)
+        return jsonify({'ok': True, 'geofence': dados})
+    except Exception as e:
+        return jsonify({'erro': str(e)}), 500
+
+
+@app.route('/geofence/<geofence_id>', methods=['DELETE'])
+def del_geofence(geofence_id):
+    """Remove uma zona pelo id."""
+    try:
+        ok = deletar_geofence(geofence_id)
+        if ok:
+            return jsonify({'ok': True})
+        return jsonify({'erro': 'Geofence não encontrada'}), 404
+    except Exception as e:
+        return jsonify({'erro': str(e)}), 500
 
 
 @app.route('/health')
@@ -209,6 +285,12 @@ def processar():
                 fd['filial'] = nome_oficial
             if num_filial is not None:
                 fd['numFilial'] = num_filial
+            # Enriquecer com lat/lng do Perfil
+            cnpj_norm = fd.get('cnpj', '').replace('.','').replace('/','').replace('-','')
+            if cnpj_norm in filiais_map:
+                fd['lat'] = filiais_map[cnpj_norm].get('lat')
+                fd['lng'] = filiais_map[cnpj_norm].get('lng')
+                fd['regiao'] = filiais_map[cnpj_norm].get('regiao')
 
         dados = {**meta, 'filiais': filiais, 'clienteNome': CLIENTES[cliente]['nome']}
 
@@ -224,6 +306,40 @@ def processar():
             pass
 
         arquivos, eb_simples, pb_simples, split = _gerar_arquivos_por_empresa(dados, filiais, logo_bytes=logo_bytes)
+
+        # Salvar pin de mapa para cada filial com coordenadas
+        from datetime import datetime
+        for fd in filiais:
+            lat = fd.get('lat')
+            lng = fd.get('lng')
+            if lat is None or lng is None:
+                continue
+            its = fd.get('itens', [])
+            if not its:
+                continue
+            ts = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+            filial_slug = _re.sub(r'[^a-z0-9]', '_', fd['filial'].lower())
+            rid = f"{cliente}_{filial_slug}_{ts}"
+            salvar_romaneio(rid, {
+                'id': rid,
+                'cliente': cliente,
+                'clienteNome': CLIENTES[cliente]['nome'],
+                'filial': fd['filial'],
+                'numero': fd.get('numFilial', ''),
+                'cnpj': fd.get('cnpj', ''),
+                'lat': lat,
+                'lng': lng,
+                'dataPedido': fd.get('dataPedido', fd.get('dataEmissao', '')),
+                'dataGeracao': datetime.utcnow().isoformat(),
+                'kgPlanejados': round(sum(float(i.get('kgPlanejados', 0)) for i in its), 1),
+                'pedidoNum': fd.get('pedidoNum', ''),
+            })
+            # Persistir o PDF da filial junto ao romaneio (best-effort)
+            try:
+                pdf_fd = gerar_pdf({**dados, 'filiais': [fd]}, logo_bytes=logo_bytes)
+                salvar_pedido_pdf(rid, pdf_fd)
+            except Exception as _e:
+                print(f'[WARN] falha ao salvar PDF do romaneio {rid}: {_e}')
 
         todos_itens = [i for f in filiais for i in f['itens']]
         return jsonify({
@@ -361,10 +477,14 @@ def processar_manual():
         else:
             # cliente 'Central': CNPJ/Filial/Endereço únicos, vêm do cabeçalho do Perfil
             cnpj_sel = _normaliza_cnpj(meta.get('cnpjPerfil', ''))
+            _central = ler_filiais(perfil_bytes).get(cnpj_sel, {})
             filial_info = {
                 'nome': meta.get('filialPerfil') or meta.get('clienteNomePerfil') or CLIENTES_MANUAIS[cliente]['nome'],
-                'numero': None,
+                'numero': _central.get('numero'),
                 'endereco': meta.get('enderecoPerfil', ''),
+                'lat': _central.get('lat'),
+                'lng': _central.get('lng'),
+                'regiao': _central.get('regiao'),
             }
 
         itens = []
@@ -406,6 +526,9 @@ def processar_manual():
         agora = datetime.datetime.now()
         pedido_num = f"MANUAL-{agora.strftime('%Y%m%d-%H%M%S')}"
 
+        lat = filial_info.get('lat')
+        lng = filial_info.get('lng')
+
         filiais = [{
             'filial': filial_info['nome'],
             'numFilial': filial_info['numero'],
@@ -417,21 +540,54 @@ def processar_manual():
             'condPgto': '',
             'solicitante': operador,
             'empresa': meta.get('empresa', 2),
+            'regiao': filial_info.get('regiao'),
             'itens': itens,
+            'lat': lat,
+            'lng': lng,
         }]
 
         dados = {**meta, 'filiais': filiais, 'clienteNome': CLIENTES_MANUAIS[cliente]['nome']}
 
-        # Extrair logo do perfil para o PDF
+        # Extrair logo do perfil para o PDF (antes de salvar o romaneio, pois o
+        # PDF do romaneio também precisa da logo)
         logo_bytes = None
         try:
-            wb_logo = openpyxl.load_workbook(io.BytesIO(perfil_bytes))
+            import openpyxl, io as _io
+            wb_logo = openpyxl.load_workbook(_io.BytesIO(perfil_bytes))
             ws_logo = wb_logo[wb_logo.sheetnames[0]]
             if ws_logo._images:
                 ws_logo._images[0].ref.seek(0)
                 logo_bytes = ws_logo._images[0].ref.read()
         except Exception:
             pass
+
+        # Salvar pin de mapa se tiver coordenadas
+        if lat is not None and lng is not None:
+            ts = datetime.datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+            filial_slug = ''.join(c if c.isalnum() else '_' for c in filial_info['nome'].lower())
+            rid = f"{cliente}_{filial_slug}_{ts}"
+            salvar_romaneio(rid, {
+                'id': rid,
+                'cliente': cliente,
+                'clienteNome': CLIENTES_MANUAIS[cliente]['nome'],
+                'filial': filial_info['nome'],
+                'numero': filial_info.get('numero'),
+                'cnpj': cnpj_sel,
+                'lat': lat,
+                'lng': lng,
+                'dataPedido': agora.strftime('%d/%m/%Y'),
+                'dataGeracao': datetime.datetime.utcnow().isoformat(),
+                'kgPlanejados': round(sum(float(i.get('kgPlanejados', 0)) for i in itens), 1),
+                'pedidoNum': pedido_num,
+            })
+            # Persistir o PDF da filial única junto ao romaneio (best-effort)
+            try:
+                pdf_fd = gerar_pdf({**dados, 'filiais': [filiais[0]]}, logo_bytes=logo_bytes)
+                salvar_pedido_pdf(rid, pdf_fd)
+            except Exception as _e:
+                print(f'[WARN] falha ao salvar PDF do romaneio {rid}: {_e}')
+        else:
+            print(f'[INFO] romaneio não salvo — lat={lat} lng={lng}')
 
         arquivos, eb_simples, pb_simples, split = _gerar_arquivos_por_empresa(dados, filiais, logo_bytes=logo_bytes)
 
