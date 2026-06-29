@@ -251,4 +251,3 @@ def gerar_excel(dados, empresa_override=None):
     wb.save(buf)
     buf.seek(0)
     return buf.read()
-        
