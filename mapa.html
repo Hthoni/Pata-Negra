@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pata Negra — Mapa de Entregas</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@geoman-io/leaflet-geoman-free@2.18.0/dist/leaflet-geoman.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/@geoman-io/leaflet-geoman-free@2.18.0/dist/leaflet-geoman.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@7/turf.min.js"></script>
+  <style>
+    :root {
+      --accent:#8B1C1C; --accent-lt:#FDF0F0; --bg:#F7F5F2;
+      --surface:#fff; --border:#E2DDD8; --text:#1A1714;
+      --radius:8px;
+    }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family: system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text); height:100vh; display:flex; flex-direction:column; }
+    header { background:var(--accent); color:#fff; padding:0 24px; height:56px; display:flex; align-items:center; gap:12px; box-shadow:0 2px 8px rgba(139,28,28,.25); flex-shrink:0; }
+    .logo { width:30px; height:30px; background:rgba(255,255,255,.18); border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:11px; }
+    header h1 { font-size:15px; font-weight:600; }
+    .header-actions { margin-left:auto; display:flex; gap:8px; align-items:center; }
+    .btn-header { padding:6px 14px; border-radius:var(--radius); border:1px solid rgba(255,255,255,.4); background:rgba(255,255,255,.15); color:#fff; font-size:12px; font-weight:600; cursor:pointer; text-decoration:none; transition:background .13s; }
+    .btn-header:hover { background:rgba(255,255,255,.28); }
+
+    .toolbar { background:var(--surface); border-bottom:1px solid var(--border); padding:10px 20px; display:flex; align-items:center; gap:16px; flex-shrink:0; flex-wrap:wrap; }
+    .toolbar h2 { font-size:14px; font-weight:600; }
+    .legenda { display:flex; gap:12px; margin-left:auto; flex-wrap:wrap; }
+    .leg-item { display:flex; align-items:center; gap:5px; font-size:12px; color:#555; }
+    .leg-dot { width:12px; height:12px; border-radius:50%; border:2px solid rgba(0,0,0,.2); }
+    .stat-badge { background:var(--accent-lt); color:var(--accent); padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600; }
+    #btn-refresh { padding:6px 12px; border-radius:var(--radius); border:1px solid var(--border); background:#fff; font-size:12px; cursor:pointer; }
+    #btn-refresh:hover { background:var(--bg); }
+
+    /* Filtro por cliente */
+    .filtro-wrap { position:relative; }
+    #btn-filtro { padding:6px 12px; border-radius:var(--radius); border:1px solid var(--border); background:#fff; font-size:12px; cursor:pointer; }
+    #btn-filtro:hover { background:var(--bg); }
+    .filtro-dropdown { position:absolute; top:calc(100% + 6px); left:0; background:#fff; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 4px 16px rgba(0,0,0,.12); padding:8px; min-width:200px; max-height:320px; overflow:auto; z-index:600; display:none; }
+    .filtro-head { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:2px 8px 8px; border-bottom:1px solid var(--border); margin-bottom:4px; }
+    .filtro-head .titulo { font-size:11px; color:#888; font-weight:700; letter-spacing:.04em; }
+    .filtro-head button { background:none; border:none; color:var(--accent); font-size:11px; cursor:pointer; font-weight:600; padding:2px 4px; }
+    .filtro-head button:hover { text-decoration:underline; }
+    .filtro-dropdown label { display:flex; align-items:center; gap:8px; padding:6px 8px; font-size:13px; cursor:pointer; border-radius:6px; }
+    .filtro-dropdown label:hover { background:var(--bg); }
+    .filtro-vazio { padding:8px; font-size:12px; color:#888; }
+
+    /* Botão editar zonas (só aparece com a flag de edição) */
+    #btn-editar { padding:6px 12px; border-radius:var(--radius); border:1px solid var(--accent); background:#fff; color:var(--accent); font-size:12px; font-weight:600; cursor:pointer; display:none; }
+    #btn-editar:hover { background:var(--accent-lt); }
+    #btn-editar.ativo { background:var(--accent); color:#fff; }
+
+    #map { flex:1; }
+
+    /* Popup customizado */
+    .popup-content { min-width:200px; }
+    .popup-cliente { font-weight:700; font-size:14px; margin-bottom:2px; }
+    .popup-filial { font-size:12px; color:#666; margin-bottom:8px; }
+    .popup-row { display:flex; justify-content:space-between; font-size:12px; padding:3px 0; border-top:1px solid #eee; }
+    .popup-label { color:#888; }
+    .popup-valor { font-weight:600; }
+    .popup-idade { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; margin-top:6px; }
+    .popup-acoes { display:flex; gap:6px; margin-top:10px; }
+    .popup-btn { flex:1; padding:6px 8px; border-radius:6px; border:1px solid var(--border); background:#fff; font-size:11px; font-weight:600; cursor:pointer; }
+    .popup-btn-pdf { color:var(--accent); border-color:var(--accent); }
+    .popup-btn-pdf:hover { background:var(--accent-lt); }
+    .popup-btn-del { color:#c0392b; border-color:#e6b0aa; }
+    .popup-btn-del:hover { background:#fdedec; }
+
+    /* Painel de somas por zona */
+    #painel-zonas { position:absolute; bottom:18px; right:12px; width:230px; background:#fff; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 4px 18px rgba(0,0,0,.14); z-index:500; overflow:hidden; }
+    .pz-head { background:var(--accent); color:#fff; padding:8px 12px; font-size:12px; font-weight:700; display:flex; justify-content:space-between; align-items:center; cursor:pointer; }
+    .pz-head .toggle { font-size:11px; opacity:.85; }
+    #pz-body { max-height:46vh; overflow:auto; }
+    .pz-row { display:flex; align-items:center; gap:8px; padding:8px 12px; border-top:1px solid #f0ece8; font-size:12px; }
+    .pz-row:first-child { border-top:none; }
+    .pz-swatch { width:11px; height:11px; border-radius:3px; flex-shrink:0; border:1px solid rgba(0,0,0,.15); }
+    .pz-nome { flex:1; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .pz-nums { text-align:right; color:#555; white-space:nowrap; }
+    .pz-nums b { color:var(--text); }
+    .pz-fora .pz-nome { color:#999; font-style:italic; font-weight:600; }
+    .pz-total { background:var(--bg); font-weight:700; }
+    .pz-vazio { padding:12px; font-size:12px; color:#999; text-align:center; }
+
+    /* Mini-modal nome+cor da zona */
+    .zmodal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; align-items:center; justify-content:center; z-index:1200; }
+    .zmodal { background:#fff; border-radius:var(--radius); padding:22px; width:300px; max-width:90%; }
+    .zmodal h3 { font-size:15px; margin-bottom:14px; }
+    .zmodal label { display:block; font-size:12px; color:#666; margin-bottom:4px; }
+    .zmodal input[type=text] { width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; margin-bottom:14px; }
+    .zmodal .cor-row { display:flex; align-items:center; gap:10px; margin-bottom:18px; }
+    .zmodal input[type=color] { width:42px; height:32px; border:1px solid var(--border); border-radius:6px; background:#fff; cursor:pointer; }
+    .zmodal-actions { display:flex; gap:10px; justify-content:flex-end; }
+    .zmodal-actions button { padding:8px 16px; border-radius:6px; font-size:13px; cursor:pointer; }
+    .zbtn-cancel { border:1px solid var(--border); background:#fff; }
+    .zbtn-ok { border:none; background:var(--accent); color:#fff; font-weight:600; }
+
+    /* Loading */
+    #loading { position:fixed; inset:0; background:rgba(255,255,255,.85); display:flex; align-items:center; justify-content:center; flex-direction:column; gap:12px; z-index:9999; }
+    .spinner { width:40px; height:40px; border:4px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    #loading p { font-size:14px; color:#666; }
+
+    /* Sem dados */
+    #sem-dados { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; padding:32px; border-radius:var(--radius); box-shadow:0 4px 24px rgba(0,0,0,.1); text-align:center; z-index:500; display:none; }
+    #sem-dados h3 { font-size:16px; margin-bottom:8px; }
+    #sem-dados p { font-size:13px; color:#888; }
+  </style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <p>Carregando romaneios...</p>
+</div>
+
+<header>
+  <div class="logo">PN</div>
+  <h1>Pata Negra — Mapa de Entregas</h1>
+  <div class="header-actions">
+    <a href="index.html" class="btn-header">← Voltar</a>
+    <a href="entregas.html" class="btn-header">📋 Gerenciar Entregas</a>
+  </div>
+</header>
+
+<div class="toolbar">
+  <h2>Pedidos Pendentes</h2>
+  <span class="stat-badge" id="total-badge">0 pedidos</span>
+  <button id="btn-refresh" onclick="carregarRomaneios()">↺ Atualizar</button>
+  <div class="filtro-wrap">
+    <button id="btn-filtro" onclick="toggleFiltro(event)">⛃ Clientes</button>
+    <div class="filtro-dropdown" id="filtro-dropdown"></div>
+  </div>
+  <button id="btn-editar" onclick="toggleEdicao()">✏️ Editar zonas</button>
+  <div class="legenda">
+    <div class="leg-item"><div class="leg-dot" style="background:#27ae60"></div> &lt; 48h</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#f1c40f"></div> 48–96h</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#e67e22"></div> 96–120h</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#e74c3c"></div> &gt; 120h</div>
+  </div>
+</div>
+
+<div id="map" style="position:relative;">
+  <div id="sem-dados">
+    <h3>Nenhum pedido pendente</h3>
+    <p>Todos os romaneios foram entregues!</p>
+  </div>
+
+  <div id="painel-zonas">
+    <div class="pz-head" onclick="togglePainel()">
+      <span>Resumo por zona</span>
+      <span class="toggle" id="pz-toggle">▾</span>
+    </div>
+    <div id="pz-body"></div>
+  </div>
+</div>
+
+<!-- Mini-modal nome + cor da zona -->
+<div class="zmodal-overlay" id="zmodal">
+  <div class="zmodal">
+    <h3 id="zmodal-titulo">Nova zona</h3>
+    <label for="zmodal-nome">Nome da zona</label>
+    <input type="text" id="zmodal-nome" placeholder="Ex: Zona Sul, Niterói, Centro..." autocomplete="off">
+    <div class="cor-row">
+      <input type="color" id="zmodal-cor" value="#8B1C1C">
+      <label style="margin:0;">Cor no mapa</label>
+    </div>
+    <div class="zmodal-actions">
+      <button class="zbtn-cancel" onclick="zmodalCancelar()">Cancelar</button>
+      <button class="zbtn-ok" onclick="zmodalConfirmar()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  var SERVER_URL = 'https://pata-negra-784065203515.us-central1.run.app';
+
+  // Modo de edição: só liga quando a URL traz ?edit=editor_PN (obscuridade — protege
+  // contra uso acidental, NÃO é segurança; os endpoints de escrita seguem abertos).
+  var EDIT_KEY = 'editor_PN';
+  var EDIT_MODE_ALLOWED = (new URLSearchParams(window.location.search).get('edit') === EDIT_KEY);
+
+  // Cor única de TODAS as zonas (equalizadas com a cor da "Zona sul"). Troca o hex aqui.
+  var COR_ZONA = '#e9d8d8';
+
+  var map = L.map('map').setView([-22.95, -43.35], 11);
+  var markers = [];
+  var romaneios = [];                 // todos os romaneios carregados
+  var clientesDesmarcados = new Set(); // clientes ocultados pelo filtro
+  var zonas = [];                     // [{id, nome, cor, geojson}]
+  var zonasLayer = L.layerGroup().addTo(map); // polígonos das zonas (sob os pinos)
+  var zonaLayerById = {};             // id -> layer leaflet, p/ editar/remover
+  var edicaoAtiva = false;
+
+  L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+    attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, tiles by <a href="https://hot.openstreetmap.org/">HOT</a>',
+    maxZoom:19
+  }).addTo(map);
+
+  function idadeHoras(dataGeracao) {
+    var d = new Date(dataGeracao);
+    return (Date.now() - d.getTime()) / 3600000;
+  }
+
+  function corPorIdade(horas) {
+    if (horas < 48)  return { cor:'#27ae60', label:'Recente', bg:'#d5f5e3', txt:'#1e8449' };
+    if (horas < 96)  return { cor:'#f1c40f', label:'Atenção', bg:'#fef9e7', txt:'#b7950b' };
+    if (horas < 120) return { cor:'#e67e22', label:'Atrasado', bg:'#fdebd0', txt:'#a04000' };
+    return              { cor:'#e74c3c', label:'Crítico',  bg:'#fdedec', txt:'#922b21' };
+  }
+
+  // Tipo do pedido vem da coluna O do Perfil: filiais têm número; central traz o texto "Central".
+  function ehCentral(rom) {
+    return String((rom && rom.numero) || '').trim().toLowerCase() === 'central';
+  }
+
+  function criarIcone(cor, corBolinha) {
+    corBolinha = corBolinha || '#fff';
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="38" viewBox="0 0 28 38">' +
+      '<path d="M14 0C6.27 0 0 6.27 0 14c0 9.25 14 24 14 24S28 23.25 28 14C28 6.27 21.73 0 14 0z" fill="' + cor + '" stroke="#fff" stroke-width="2"/>' +
+      '<circle cx="14" cy="14" r="6" fill="' + corBolinha + '" fill-opacity="0.9"/>' +
+      '</svg>';
+    return L.divIcon({
+      className: '',
+      html: svg,
+      iconSize: [28, 38],
+      iconAnchor: [14, 38],
+      popupAnchor: [0, -40]
+    });
+  }
+
+  function formatarData(str) {
+    if (!str) return '—';
+    if (str.includes('T')) {
+      var d = new Date(str);
+      return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+    }
+    return str;
+  }
+
+  // Predicado ÚNICO de visibilidade — todo filtro presente e futuro passa por aqui.
+  // Pinos e somas por zona derivam ambos deste mesmo conjunto.
+  function pinoVisivel(rom) {
+    if (!rom.lat || !rom.lng) return false;
+    if (clientesDesmarcados.has(rom.cliente)) return false;
+    // futuros filtros (ex: central/filial) entram aqui e refletem em pinos + somas
+    return true;
+  }
+
+  function montarPopup(rom, c, horas) {
+    return '<div class="popup-content">' +
+      '<div class="popup-cliente">' + (rom.clienteNome || rom.cliente) + '</div>' +
+      '<div class="popup-filial">' + (rom.filial || '—') + '</div>' +
+      '<div class="popup-row"><span class="popup-label">Pedido</span><span class="popup-valor">' + (rom.pedidoNum || '—') + '</span></div>' +
+      '<div class="popup-row"><span class="popup-label">Data pedido</span><span class="popup-valor">' + (rom.dataPedido || '—') + '</span></div>' +
+      '<div class="popup-row"><span class="popup-label">Gerado em</span><span class="popup-valor">' + formatarData(rom.dataGeracao) + '</span></div>' +
+      '<div class="popup-row"><span class="popup-label">Kg planejados</span><span class="popup-valor">' + (rom.kgPlanejados || '—') + ' kg</span></div>' +
+      '<span class="popup-idade" style="background:' + c.bg + ';color:' + c.txt + '">' + c.label + ' — ' + Math.round(horas) + 'h</span>' +
+      '<div class="popup-acoes">' +
+        '<button class="popup-btn popup-btn-pdf" onclick="verPdf(\'' + rom.id + '\')">📄 Ver PDF</button>' +
+        '<button class="popup-btn popup-btn-del" onclick="excluirPino(\'' + rom.id + '\')">🗑 Excluir</button>' +
+      '</div>' +
+      '</div>';
+  }
+
+  // Desenha os marcadores respeitando o filtro. ajustarZoom só no carregamento.
+  function renderMarkers(ajustarZoom) {
+    markers.forEach(function(m) { map.removeLayer(m); });
+    markers = [];
+
+    var visiveis = romaneios.filter(pinoVisivel);
+
+    visiveis.forEach(function(rom) {
+      var horas = idadeHoras(rom.dataGeracao);
+      var c = corPorIdade(horas);
+      var corBolinha = ehCentral(rom) ? '#000' : '#fff';
+      // pmIgnore: pinos nunca são editáveis pelo Geoman (só as zonas)
+      var marker = L.marker([rom.lat, rom.lng], { icon: criarIcone(c.cor, corBolinha), pmIgnore: true });
+      marker.bindPopup(montarPopup(rom, c, horas));
+      marker.addTo(map);
+      markers.push(marker);
+    });
+
+    document.getElementById('total-badge').textContent = visiveis.length + ' pedido' + (visiveis.length !== 1 ? 's' : '');
+    document.getElementById('sem-dados').style.display = romaneios.length === 0 ? 'block' : 'none';
+
+    if (ajustarZoom && markers.length > 0) {
+      var group = L.featureGroup(markers);
+      map.fitBounds(group.getBounds().pad(0.1));
+    }
+
+    atualizarPainelZonas();
+  }
+
+  // ── Filtro por cliente ──────────────────────────────────────────────
+  function montarFiltro(data) {
+    var nomes = {};
+    data.forEach(function(r) { if (r.cliente) nomes[r.cliente] = r.clienteNome || r.cliente; });
+    var ids = Object.keys(nomes).sort(function(a, b) { return nomes[a].localeCompare(nomes[b]); });
+    var dd = document.getElementById('filtro-dropdown');
+
+    clientesDesmarcados.forEach(function(cid) { if (!nomes[cid]) clientesDesmarcados.delete(cid); });
+
+    if (ids.length === 0) {
+      dd.innerHTML = '<div class="filtro-vazio">Nenhum cliente com pedido</div>';
+      return;
+    }
+    var html = '<div class="filtro-head"><span class="titulo">CLIENTES</span>' +
+      '<span><button onclick="filtroTodos(true)">Todos</button><button onclick="filtroTodos(false)">Nenhum</button></span></div>';
+    ids.forEach(function(cid) {
+      var checked = clientesDesmarcados.has(cid) ? '' : 'checked';
+      html += '<label><input type="checkbox" value="' + cid + '" ' + checked + ' onchange="toggleCliente(this)"> ' + nomes[cid] + '</label>';
+    });
+    dd.innerHTML = html;
+  }
+
+  function toggleCliente(cb) {
+    if (cb.checked) clientesDesmarcados.delete(cb.value);
+    else clientesDesmarcados.add(cb.value);
+    renderMarkers(false);
+  }
+
+  function filtroTodos(marcar) {
+    var cbs = document.getElementById('filtro-dropdown').querySelectorAll('input[type=checkbox]');
+    cbs.forEach(function(cb) {
+      cb.checked = marcar;
+      if (marcar) clientesDesmarcados.delete(cb.value);
+      else clientesDesmarcados.add(cb.value);
+    });
+    renderMarkers(false);
+  }
+
+  function toggleFiltro(e) {
+    if (e) e.stopPropagation();
+    var dd = document.getElementById('filtro-dropdown');
+    dd.style.display = dd.style.display === 'block' ? 'none' : 'block';
+  }
+
+  document.addEventListener('click', function(e) {
+    var wrap = document.querySelector('.filtro-wrap');
+    if (wrap && !wrap.contains(e.target)) {
+      document.getElementById('filtro-dropdown').style.display = 'none';
+    }
+  });
+
+  // ── Ações do popup ──────────────────────────────────────────────────
+  function verPdf(id) {
+    window.open(SERVER_URL + '/romaneio-pdf/' + id, '_blank');
+  }
+
+  function excluirPino(id) {
+    var rom = null;
+    for (var i = 0; i < romaneios.length; i++) { if (romaneios[i].id === id) { rom = romaneios[i]; break; } }
+    var nome = rom ? (rom.filial || rom.clienteNome || rom.cliente) : id;
+    if (!confirm('Excluir o pedido da filial ' + nome + '?')) return;
+
+    fetch(SERVER_URL + '/romaneio/' + id, { method:'DELETE' })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.ok) {
+          romaneios = romaneios.filter(function(r) { return r.id !== id; });
+          map.closePopup();
+          montarFiltro(romaneios);
+          renderMarkers(false);
+        } else {
+          alert('Erro: ' + (data.erro || 'Falha ao excluir'));
+        }
+      })
+      .catch(function(e) { alert('Erro: ' + e.message); });
+  }
+
+  // ── Zonas (geofences) ───────────────────────────────────────────────
+  function estiloZona(cor) {
+    return { color: COR_ZONA, weight: 2, fillColor: COR_ZONA, fillOpacity: 0.12 };
+  }
+
+  // (re)desenha todas as zonas salvas em zonasLayer
+  function desenharZonas() {
+    zonasLayer.clearLayers();
+    zonaLayerById = {};
+    zonas.forEach(function(z) {
+      try {
+        var gj = L.geoJSON(z.geojson, { style: estiloZona(z.cor || '#8B1C1C'), pmIgnore: false });
+        gj.eachLayer(function(layer) {
+          layer._zonaId = z.id;
+          layer.bindTooltip(z.nome || z.id, { sticky: true });
+          // ao terminar de editar a geometria, re-salva (mesmo id)
+          layer.on('pm:update', function(e) { salvarEdicaoZona(e.layer); });
+          // ao remover pela ferramenta de remoção do Geoman
+          layer.on('pm:remove', function(e) { removerZonaServidor(e.layer._zonaId); });
+          zonasLayer.addLayer(layer);
+          zonaLayerById[z.id] = layer;
+        });
+      } catch (err) { console.warn('zona inválida', z.id, err); }
+    });
+  }
+
+  function atualizarPainelZonas() {
+    var body = document.getElementById('pz-body');
+    var visiveis = romaneios.filter(pinoVisivel);
+
+    var somas = {}; // id -> {pedidos, kg}
+    zonas.forEach(function(z) { somas[z.id] = { pedidos: 0, kg: 0 }; });
+    var fora = { pedidos: 0, kg: 0 };
+
+    visiveis.forEach(function(rom) {
+      var alvo = fora;
+      if (zonas.length && window.turf) {
+        var pt = turf.point([Number(rom.lng), Number(rom.lat)]);
+        for (var i = 0; i < zonas.length; i++) {
+          try {
+            if (turf.booleanPointInPolygon(pt, zonas[i].geojson)) { alvo = somas[zonas[i].id]; break; }
+          } catch (e) { /* zona malformada: ignora */ }
+        }
+      }
+      alvo.pedidos += 1;
+      alvo.kg += Number(rom.kgPlanejados) || 0;
+    });
+
+    if (zonas.length === 0) {
+      body.innerHTML = '<div class="pz-vazio">Nenhuma zona desenhada' +
+        (EDIT_MODE_ALLOWED ? '.<br>Use “Editar zonas” para criar.' : '.') + '</div>';
+      return;
+    }
+
+    var html = '';
+    var totP = 0, totK = 0;
+    zonas.slice().sort(function(a, b) { return (a.nome || '').localeCompare(b.nome || ''); }).forEach(function(z) {
+      var s = somas[z.id];
+      totP += s.pedidos; totK += s.kg;
+      html += '<div class="pz-row">' +
+        '<span class="pz-swatch" style="background:' + COR_ZONA + '"></span>' +
+        '<span class="pz-nome" title="' + (z.nome || '') + '">' + (z.nome || z.id) + '</span>' +
+        '<span class="pz-nums"><b>' + s.pedidos + '</b> ped · <b>' + Math.round(s.kg) + '</b> kg</span>' +
+        '</div>';
+    });
+    if (fora.pedidos > 0) {
+      totP += fora.pedidos; totK += fora.kg;
+      html += '<div class="pz-row pz-fora">' +
+        '<span class="pz-swatch" style="background:#ccc"></span>' +
+        '<span class="pz-nome">Fora de zona</span>' +
+        '<span class="pz-nums"><b>' + fora.pedidos + '</b> ped · <b>' + Math.round(fora.kg) + '</b> kg</span>' +
+        '</div>';
+    }
+    html += '<div class="pz-row pz-total">' +
+      '<span class="pz-swatch" style="background:transparent;border:none"></span>' +
+      '<span class="pz-nome">Total</span>' +
+      '<span class="pz-nums"><b>' + totP + '</b> ped · <b>' + Math.round(totK) + '</b> kg</span>' +
+      '</div>';
+    body.innerHTML = html;
+  }
+
+  function carregarZonas() {
+    return fetch(SERVER_URL + '/geofences')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        zonas = Array.isArray(data) ? data : [];
+        desenharZonas();
+        atualizarPainelZonas();
+      })
+      .catch(function(e) { console.warn('falha ao carregar zonas', e); });
+  }
+
+  // ── Edição de zonas (atrás da flag) ─────────────────────────────────
+  var zonaPendente = null; // layer recém-criada aguardando nome+cor
+
+  function toggleEdicao() {
+    edicaoAtiva = !edicaoAtiva;
+    var btn = document.getElementById('btn-editar');
+    if (edicaoAtiva) {
+      btn.classList.add('ativo');
+      btn.textContent = '✓ Concluir edição';
+      map.pm.addControls({
+        position: 'topleft',
+        drawPolygon: true, editMode: true, dragMode: true, removalMode: true,
+        drawMarker: false, drawCircleMarker: false, drawCircle: false,
+        drawPolyline: false, drawRectangle: false, drawText: false, cutPolygon: false, rotateMode: false
+      });
+    } else {
+      btn.classList.remove('ativo');
+      btn.textContent = '✏️ Editar zonas';
+      map.pm.disableDraw();
+      map.pm.disableGlobalEditMode();
+      map.pm.disableGlobalRemovalMode();
+      map.pm.disableGlobalDragMode();
+      map.pm.removeControls();
+    }
+  }
+
+  // polígono novo desenhado → pede nome+cor, depois salva no servidor
+  map.on('pm:create', function(e) {
+    if (e.shape !== 'Polygon') return;
+    zonaPendente = e.layer;
+    abrirZmodal('Nova zona', '', '#8B1C1C');
+  });
+
+  function abrirZmodal(titulo, nome, cor) {
+    document.getElementById('zmodal-titulo').textContent = titulo;
+    document.getElementById('zmodal-nome').value = nome || '';
+    document.getElementById('zmodal-cor').value = cor || '#8B1C1C';
+    document.getElementById('zmodal').style.display = 'flex';
+    setTimeout(function(){ document.getElementById('zmodal-nome').focus(); }, 50);
+  }
+
+  function zmodalCancelar() {
+    document.getElementById('zmodal').style.display = 'none';
+    if (zonaPendente) { map.removeLayer(zonaPendente); zonaPendente = null; }
+  }
+
+  function zmodalConfirmar() {
+    var nome = document.getElementById('zmodal-nome').value.trim();
+    var cor = document.getElementById('zmodal-cor').value || '#8B1C1C';
+    if (!nome) { alert('Dê um nome à zona.'); return; }
+    if (!zonaPendente) { document.getElementById('zmodal').style.display = 'none'; return; }
+
+    var geojson = zonaPendente.toGeoJSON();
+    // remove a layer "crua" do Geoman; ela volta pelo desenharZonas após salvar
+    map.removeLayer(zonaPendente);
+    zonaPendente = null;
+    document.getElementById('zmodal').style.display = 'none';
+
+    fetch(SERVER_URL + '/geofence', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nome: nome, cor: cor, geojson: geojson })
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.ok && data.geofence) {
+          zonas.push(data.geofence);
+          desenharZonas();
+          atualizarPainelZonas();
+        } else {
+          alert('Erro ao salvar zona: ' + (data.erro || 'desconhecido'));
+        }
+      })
+      .catch(function(e) { alert('Erro ao salvar zona: ' + e.message); });
+  }
+
+  // geometria editada → re-salva com o mesmo id (POST sobrescreve)
+  function salvarEdicaoZona(layer) {
+    var id = layer._zonaId;
+    if (!id) return;
+    var z = null;
+    for (var i = 0; i < zonas.length; i++) { if (zonas[i].id === id) { z = zonas[i]; break; } }
+    if (!z) return;
+    var geojson = layer.toGeoJSON();
+    fetch(SERVER_URL + '/geofence', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: id, nome: z.nome, cor: z.cor, geojson: geojson })
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.ok && data.geofence) {
+          z.geojson = data.geofence.geojson;
+          atualizarPainelZonas();
+        }
+      })
+      .catch(function(e) { console.warn('falha ao salvar edição da zona', e); });
+  }
+
+  function removerZonaServidor(id) {
+    if (!id) return;
+    fetch(SERVER_URL + '/geofence/' + id, { method: 'DELETE' })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.ok) {
+          zonas = zonas.filter(function(z) { return z.id !== id; });
+          delete zonaLayerById[id];
+          atualizarPainelZonas();
+        } else {
+          alert('Erro ao excluir zona: ' + (data.erro || 'desconhecido'));
+          carregarZonas(); // re-sincroniza, repõe o polígono que sumiu da tela
+        }
+      })
+      .catch(function(e) { alert('Erro ao excluir zona: ' + e.message); carregarZonas(); });
+  }
+
+  // ── Painel recolhível ───────────────────────────────────────────────
+  function togglePainel() {
+    var body = document.getElementById('pz-body');
+    var tg = document.getElementById('pz-toggle');
+    var hidden = body.style.display === 'none';
+    body.style.display = hidden ? 'block' : 'none';
+    tg.textContent = hidden ? '▾' : '▸';
+  }
+
+  // ── Carregamento ────────────────────────────────────────────────────
+  function carregarRomaneios() {
+    document.getElementById('loading').style.display = 'flex';
+    fetch(SERVER_URL + '/romaneios')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        document.getElementById('loading').style.display = 'none';
+        romaneios = data || [];
+        montarFiltro(romaneios);
+        renderMarkers(true);
+      })
+      .catch(function(e) {
+        document.getElementById('loading').style.display = 'none';
+        alert('Erro ao carregar romaneios: ' + e.message);
+      });
+  }
+
+  // habilita o botão de edição só com a flag correta na URL
+  if (EDIT_MODE_ALLOWED) {
+    document.getElementById('btn-editar').style.display = 'inline-block';
+  }
+
+  carregarZonas();
+  carregarRomaneios();
+</script>
+</body>
+</html>
