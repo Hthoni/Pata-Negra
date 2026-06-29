@@ -29,12 +29,17 @@ def gerar_pdf(dados, empresa_override=None, logo_bytes=None):
     COR_HDR = colors.HexColor('#D0D0D0')
     COR_PAR = colors.HexColor('#F5F5F5')
     COR_CZ = colors.HexColor('#E8E8E8')
+    COR_RG = colors.HexColor('#8B1C1C')
 
     col_w = [8 * mm, 18 * mm, 95 * mm, 24 * mm, 18 * mm, 22 * mm, 26 * mm, 20 * mm, 46 * mm]
     W = sum(col_w)
 
-    ST_TIT = ParagraphStyle('t', fontSize=13, fontName='Helvetica-Bold', alignment=TA_CENTER, leading=16)
-    ST_SUB = ParagraphStyle('s', fontSize=11, fontName='Helvetica-Bold', alignment=TA_CENTER, leading=14)
+    # --- Linhas 1 e 2: cliente em destaque (maior) e tipo de doc. secundário ---
+    ST_TIT = ParagraphStyle('t', fontSize=10, fontName='Helvetica-Bold', alignment=TA_CENTER, leading=12, textColor=colors.HexColor('#555555'))
+    ST_SUB = ParagraphStyle('s', fontSize=16, fontName='Helvetica-Bold', alignment=TA_CENTER, leading=19)
+    # --- Campo Região (canto direito, alinhado à coluna Obs.) ---
+    ST_RGL = ParagraphStyle('rgl', fontSize=8, fontName='Helvetica-Bold', alignment=TA_LEFT, leading=10, textColor=colors.HexColor('#7A746E'))
+    ST_RGV = ParagraphStyle('rgv', fontSize=14, fontName='Helvetica-Bold', alignment=TA_LEFT, leading=16, textColor=COR_RG)
     ST_MB = ParagraphStyle('mb', fontSize=10, fontName='Helvetica-Bold', alignment=TA_LEFT, leading=12)
     ST_MV = ParagraphStyle('mv', fontSize=10, fontName='Helvetica', alignment=TA_LEFT, leading=12)
     ST_HDR = ParagraphStyle('h', fontSize=10, fontName='Helvetica-Bold', alignment=TA_CENTER, leading=11)
@@ -62,15 +67,29 @@ def gerar_pdf(dados, empresa_override=None, logo_bytes=None):
         tkg = sum(float(it.get('kgPlanejados', 0)) for it in its)
         subtitulo = (cli + ' — ' + fd['filial']) if cli else fd['filial']
 
-        tbl_tit = Table([[Paragraph(tit_fd, ST_TIT)]], colWidths=[W])
-        tbl_tit.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), COR_TIT),
-            ('TOPPADDING', (0, 0), (-1, -1), 5), ('BOTTOMPADDING', (0, 0), (-1, -1), 5)]))
-
-        tbl_sub = Table([[Paragraph(subtitulo, ST_SUB)]], colWidths=[W])
-        tbl_sub.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), COR_SUB),
-            ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4)]))
+        # --- Cabeçalho: linhas 1 e 2 DESMESCLADAS + campo Região alinhado à coluna Obs. ---
+        REGIAO_W = col_w[8]  # largura da coluna Obs. -> alinha o campo Região por ela
+        regiao_val = fd.get('regiao', '') or '—'
+        regiao_cell = [Paragraph('REGIÃO', ST_RGL), Paragraph(regiao_val, ST_RGV)]
+        cab = [
+            [Paragraph(tit_fd, ST_TIT), regiao_cell],
+            [Paragraph(subtitulo, ST_SUB), ''],
+        ]
+        tbl_cab = Table(cab, colWidths=[W - REGIAO_W, REGIAO_W])
+        tbl_cab.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (0, 0), COR_TIT),
+            ('BACKGROUND', (0, 1), (0, 1), COR_SUB),
+            ('SPAN', (1, 0), (1, 1)),
+            ('BACKGROUND', (1, 0), (1, 1), colors.white),
+            ('BOX', (1, 0), (1, 1), 1, COR_RG),
+            ('ALIGN', (0, 0), (0, 1), 'CENTER'),
+            ('VALIGN', (0, 0), (0, 1), 'MIDDLE'),
+            ('VALIGN', (1, 0), (1, 1), 'MIDDLE'),
+            ('LEFTPADDING', (1, 0), (1, 1), 8),
+            ('TOPPADDING', (0, 0), (0, 0), 5), ('BOTTOMPADDING', (0, 0), (0, 0), 2),
+            ('TOPPADDING', (0, 1), (0, 1), 2), ('BOTTOMPADDING', (0, 1), (0, 1), 5),
+            ('TOPPADDING', (1, 0), (1, 1), 4), ('BOTTOMPADDING', (1, 0), (1, 1), 4),
+        ]))
 
         def ml(t):
             return Paragraph(t, ST_MB)
@@ -186,7 +205,7 @@ def gerar_pdf(dados, empresa_override=None, logo_bytes=None):
             f'Col. G — Kg Embarcados: preenchida pelo encarregado de embarque.   |   {nota_empresa}',
             ST_NOTA)
 
-        story.append(KeepTogether([tbl_tit, tbl_sub, tbl_meta, tbl_itens, nota]))
+        story.append(KeepTogether([tbl_cab, tbl_meta, tbl_itens, nota]))
         story.append(PageBreak())
 
     # Remover o último PageBreak (não precisa após a última filial)
