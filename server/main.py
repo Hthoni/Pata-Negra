@@ -290,6 +290,7 @@ def processar():
             if cnpj_norm in filiais_map:
                 fd['lat'] = filiais_map[cnpj_norm].get('lat')
                 fd['lng'] = filiais_map[cnpj_norm].get('lng')
+                fd['regiao'] = filiais_map[cnpj_norm].get('regiao')
 
         dados = {**meta, 'filiais': filiais, 'clienteNome': CLIENTES[cliente]['nome']}
 
@@ -483,6 +484,7 @@ def processar_manual():
                 'endereco': meta.get('enderecoPerfil', ''),
                 'lat': _central.get('lat'),
                 'lng': _central.get('lng'),
+                'regiao': _central.get('regiao'),
             }
 
         itens = []
@@ -538,6 +540,7 @@ def processar_manual():
             'condPgto': '',
             'solicitante': operador,
             'empresa': meta.get('empresa', 2),
+            'regiao': filial_info.get('regiao'),
             'itens': itens,
             'lat': lat,
             'lng': lng,
