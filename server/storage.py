@@ -50,3 +50,116 @@ def perfil_filename(cliente):
     if mb.exists():
         return json.loads(mb.download_as_bytes()).get('filename', '')
     return ''
+
+
+# ── Romaneios (bucket separado) ───────────────────────────────────────────────
+GCS_ROMANEIOS_BUCKET = os.environ.get('GCS_ROMANEIOS_BUCKET', 'pata-negra-romaneios')
+_gcs_romaneios_client = None
+
+
+def _romaneios_bucket():
+    global _gcs_romaneios_client
+    if _gcs_romaneios_client is None:
+        _gcs_romaneios_client = gcs.Client()
+    return _gcs_romaneios_client.bucket(GCS_ROMANEIOS_BUCKET)
+
+
+def salvar_romaneio(romaneio_id, dados):
+    """Salva um JSON de romaneio (pin do mapa) no bucket de romaneios."""
+    blob = _romaneios_bucket().blob(f'{romaneio_id}.json')
+    blob.upload_from_string(
+        json.dumps(dados, ensure_ascii=False),
+        content_type='application/json'
+    )
+
+
+def listar_romaneios():
+    """Lista todos os romaneios pendentes. Retorna lista de dicts."""
+    blobs = _romaneios_bucket().list_blobs()
+    result = []
+    for blob in blobs:
+        if not blob.name.endswith('.json'):
+            continue
+        try:
+            data = json.loads(blob.download_as_bytes())
+            result.append(data)
+        except Exception:
+            pass
+    return result
+
+
+def salvar_pedido_pdf(romaneio_id, pdf_bytes):
+    """Salva o PDF da filial associado a um romaneio (mesmo id, extensão .pdf)."""
+    blob = _romaneios_bucket().blob(f'{romaneio_id}.pdf')
+    blob.upload_from_string(pdf_bytes, content_type='application/pdf')
+
+
+def carregar_pedido_pdf(romaneio_id):
+    """Retorna os bytes do PDF do romaneio, ou None se não existir."""
+    blob = _romaneios_bucket().blob(f'{romaneio_id}.pdf')
+    if blob.exists():
+        return blob.download_as_bytes()
+    return None
+
+
+def deletar_romaneio(romaneio_id):
+    """Deleta um romaneio pelo ID (JSON + PDF). Retorna True se o JSON existia, False se não."""
+    # apaga o PDF associado se existir (best-effort; soft-delete do bucket cobre recuperação)
+    try:
+        pdf_blob = _romaneios_bucket().blob(f'{romaneio_id}.pdf')
+        if pdf_blob.exists():
+            pdf_blob.delete()
+    except Exception:
+        pass
+    blob = _romaneios_bucket().blob(f'{romaneio_id}.json')
+    if blob.exists():
+        blob.delete()
+        return True
+    return False
+
+
+# ── Geofences / zonas (bucket próprio) ────────────────────────────────────────
+# Dado DURÁVEL (desenhado uma vez, reutilizado por muito tempo) — fica num bucket
+# separado dos romaneios efêmeros, pra poder esvaziar romaneios no console sem
+# perder as zonas. Cada zona é {id, nome, cor, geojson}.
+GCS_GEOFENCES_BUCKET = os.environ.get('GCS_GEOFENCES_BUCKET', 'pata-negra-geofences')
+_gcs_geofences_client = None
+
+
+def _geofences_bucket():
+    global _gcs_geofences_client
+    if _gcs_geofences_client is None:
+        _gcs_geofences_client = gcs.Client()
+    return _gcs_geofences_client.bucket(GCS_GEOFENCES_BUCKET)
+
+
+def salvar_geofence(geofence_id, dados):
+    """Salva (ou sobrescreve) uma zona como JSON no bucket de geofences."""
+    blob = _geofences_bucket().blob(f'{geofence_id}.json')
+    blob.upload_from_string(
+        json.dumps(dados, ensure_ascii=False),
+        content_type='application/json'
+    )
+
+
+def listar_geofences():
+    """Lista todas as zonas salvas. Retorna lista de dicts."""
+    blobs = _geofences_bucket().list_blobs()
+    result = []
+    for blob in blobs:
+        if not blob.name.endswith('.json'):
+            continue
+        try:
+            result.append(json.loads(blob.download_as_bytes()))
+        except Exception:
+            pass
+    return result
+
+
+def deletar_geofence(geofence_id):
+    """Deleta uma zona pelo ID. Retorna True se existia, False se não."""
+    blob = _geofences_bucket().blob(f'{geofence_id}.json')
+    if blob.exists():
+        blob.delete()
+        return True
+    return False
