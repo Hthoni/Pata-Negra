@@ -82,10 +82,10 @@ def _normaliza_cnpj(cnpj):
 def ler_filiais(perfil_bytes):
     """Lê a tabela de filiais do Perfil Excel (colunas M:N:O, a partir da
     linha 9): CNPJ | Nome Filial | Número Filial. Opcionalmente também lê
-    Endereço (col P) e Cidade (col Q), usadas pelo fluxo de pedido manual
-    (clientes sem PDF, ex: grupos com múltiplas lojas como Guanabara Lojas) —
-    para clientes que não têm essas colunas, ficam como string vazia.
-    Retorna dict {cnpj_normalizado: {'nome', 'numero', 'endereco', 'cidade'}}.
+    Endereço (col P), Cidade (col Q) e Região (col R), usadas pelo fluxo de
+    pedido manual e pelo card de Região no PDF de expedição — para clientes
+    que não têm essas colunas, ficam como string vazia.
+    Retorna dict {cnpj_normalizado: {'nome', 'numero', 'endereco', 'cidade', 'regiao', 'lat', 'lng'}}.
     Usado para enriquecer pedidos que só trazem CNPJ (Atacadão) ou
     CNPJ+nome (DOM) com o número de filial cadastrado uma única vez no perfil,
     e para alimentar o dropdown de filiais no fluxo manual."""
@@ -99,7 +99,7 @@ def ler_filiais(perfil_bytes):
         cnpj_raw, nome, numero = r[12], r[13], r[14]  # colunas M, N, O
         endereco = r[15] if len(r) > 15 else None  # coluna P (opcional)
         cidade = r[16] if len(r) > 16 else None  # coluna Q (opcional)
-        # coluna R reservada; colunas S e T = lat/lng
+        regiao = r[17] if len(r) > 17 else None  # coluna R = região (opcional)
         lat = r[18] if len(r) > 18 else None  # coluna S
         lng = r[19] if len(r) > 19 else None  # coluna T
         if not cnpj_raw:
@@ -111,6 +111,7 @@ def ler_filiais(perfil_bytes):
                 'numero': numero,
                 'endereco': str(endereco or '').strip(),
                 'cidade': str(cidade or '').strip(),
+                'regiao': str(regiao or '').strip(),
                 'lat': float(lat) if lat is not None else None,
                 'lng': float(lng) if lng is not None else None,
             }
