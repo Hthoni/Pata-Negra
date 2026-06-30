@@ -58,6 +58,10 @@ main{max-width:800px;margin:28px auto;padding:0 16px;display:flex;flex-direction
 .btn-proc{width:100%;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius);font-size:14px;font-weight:600;cursor:pointer;margin-top:12px;font-family:inherit;transition:background .13s}
 .btn-proc:hover:not(:disabled){background:#6F1515}
 .btn-proc:disabled{opacity:.4;cursor:not-allowed}
+.btn-proc.as-zone{min-height:100px;margin-top:0}
+.btn-sec{width:100%;padding:12px;background:#fff;color:var(--accent);border:1px solid var(--accent);border-radius:var(--radius);font-size:14px;font-weight:600;cursor:pointer;margin-top:12px;font-family:inherit;transition:background .13s}
+.btn-sec:hover:not(:disabled){background:#FDF0F0}
+.btn-sec:disabled{opacity:.4;cursor:not-allowed}
 #log{display:none;background:#1A1714;color:#E8E4DF;border-radius:var(--radius);padding:14px 18px;font-family:monospace;font-size:12px;line-height:1.7;max-height:260px;overflow-y:auto}
 #log .ok{color:#5CB85C}#log .wn{color:#F0AD4E}#log .er{color:#D9534F}#log .in{color:#5BC0DE}
 #results{display:none}
@@ -160,21 +164,24 @@ table.itens td.nome-produto{text-align:left}
           <div class="zh" id="zone-p-hint">.xlsx — necessário para primeiro uso</div>
           <div class="zf" id="fn-p"></div>
         </div>
+        <button class="btn-sec" id="btn-upd-perfil" disabled onclick="atualizarPerfil()">📋 &nbsp;Atualizar perfil</button>
       </div>
-      <div id="bloco-pedido">
-        <div class="ulabel">Pedido do cliente <span style="color:var(--accent)">*</span></div>
-        <div class="zone" id="zone-o"
-             ondragover="event.preventDefault();this.classList.add('drag')"
-             ondragleave="this.classList.remove('drag')"
-             ondrop="dropFile(event,'pedido')">
-          <input type="file" id="inp-o" accept=".pdf,.xlsx,.xls,.jpg,.jpeg,.png,.webp" onchange="pickFile(this,'pedido')">
-          <div class="zi">📦</div><div class="zl">Pedido</div>
-          <div class="zh">PDF · Excel · Imagem</div>
-          <div class="zf" id="fn-o"></div>
+      <div>
+        <div class="ulabel" id="pedido-label">Pedido do cliente <span style="color:var(--accent)">*</span></div>
+        <div id="bloco-pedido">
+          <div class="zone" id="zone-o"
+               ondragover="event.preventDefault();this.classList.add('drag')"
+               ondragleave="this.classList.remove('drag')"
+               ondrop="dropFile(event,'pedido')">
+            <input type="file" id="inp-o" accept=".pdf,.xlsx,.xls,.jpg,.jpeg,.png,.webp" onchange="pickFile(this,'pedido')">
+            <div class="zi">📦</div><div class="zl">Pedido</div>
+            <div class="zh">PDF · Excel · Imagem</div>
+            <div class="zf" id="fn-o"></div>
+          </div>
         </div>
+        <button class="btn-proc" id="btn-proc" disabled onclick="acaoPrincipal()">⚙️ &nbsp;Processar pedido</button>
       </div>
     </div>
-    <button class="btn-proc" id="btn-proc" disabled onclick="acaoPrincipal()">⚙️ &nbsp;Processar pedido</button>
   </div>
 </div>
 
@@ -305,6 +312,8 @@ function selCliente(id, btn) {
   // alterna Step 2 conforme o cliente ser de fluxo manual (sem Pedido, vai direto pro popup) ou PDF
   var manual = CLIENTES[id].manual;
   document.getElementById('bloco-pedido').style.display = manual ? 'none' : '';
+  document.getElementById('pedido-label').style.visibility = 'visible';
+  document.getElementById('btn-proc').classList.toggle('as-zone', manual);
   document.getElementById('btn-proc').textContent = manual ? '📝  Abrir pedido manual' : '⚙️  Processar pedido';
 
   // restaurar logos que possam ter sumido (cold start do servidor)
@@ -372,6 +381,8 @@ function atualizarBotao() {
   document.getElementById('btn-proc').disabled = manual
     ? !(S.cliente && temPerfil())
     : !(S.cliente && S.pedidoFile && temPerfil());
+  var bp = document.getElementById('btn-upd-perfil');
+  if (bp) bp.disabled = !(S.cliente && S.perfilFile);
 }
 
 function addLog(msg,cls){var el=document.getElementById('log');el.style.display='block';var d=document.createElement('div');if(cls)d.className=cls;d.textContent='['+new Date().toLocaleTimeString('pt-BR')+'] '+msg;el.appendChild(d);el.scrollTop=el.scrollHeight;}
@@ -388,6 +399,40 @@ function acaoPrincipal() {
     iniciarPedidoManual();
   } else {
     processar();
+  }
+}
+
+async function atualizarPerfil() {
+  if (!S.cliente) { logWarn('Selecione um cliente primeiro.'); return; }
+  if (!S.perfilFile) { logWarn('Selecione um arquivo de perfil (.xlsx).'); return; }
+  var btn = document.getElementById('btn-upd-perfil');
+  btn.disabled = true; btn.textContent = '⏳  Enviando perfil…';
+  clearLog();
+  try {
+    logInfo('Atualizando perfil de ' + CLIENTES[S.cliente].nome + '…');
+    var form = new FormData();
+    form.append('perfil', S.perfilFile);
+    var resp = await fetch(SERVER_URL+'/perfil/'+S.cliente, {method:'POST', body:form});
+    var data = await resp.json();
+    if (!resp.ok || data.erro) { logErr('Erro ao salvar perfil: '+(data.erro||resp.status)); return; }
+    var nomeArq = S.perfilFile.name;
+    S.perfilServidor[S.cliente] = nomeArq;
+    S.perfilFile = null;
+    // zona volta ao estado "salvo no servidor"
+    document.getElementById('inp-p').value = '';
+    document.getElementById('fn-p').textContent = '';
+    document.getElementById('zone-p').className = 'zone server';
+    document.getElementById('zone-p-label').textContent = 'Perfil salvo no servidor';
+    document.getElementById('zone-p-hint').textContent  = 'Clique para substituir';
+    var badge = document.getElementById('perfil-salvo-badge');
+    badge.textContent = '📋 ' + nomeArq;
+    badge.style.display = 'inline-block';
+    logOk('Perfil de ' + CLIENTES[S.cliente].nome + ' atualizado no servidor.');
+  } catch(e) {
+    logErr('Erro de conexão: '+e.message);
+  } finally {
+    btn.textContent = '📋  Atualizar perfil (sem gerar pedido)';
+    atualizarBotao();
   }
 }
 
@@ -581,8 +626,8 @@ function renderizarPopup() {
     <div class="subtitulo-pedido" id="subtituloFilial">${subtituloInicial}</div>
 
     <div class="meta-grid">
-      <div class="meta-label">Pedido Nº:</div>
-      <div class="meta-valor-auto">(gerado ao confirmar)</div>
+      <div class="meta-label">Pedido Nº: <span style="color:var(--accent)">*</span></div>
+      <div><input type="text" id="inpPedidoNum" placeholder="digite o nº do pedido" autocomplete="off" oninput="validarFormulario()" style="width:100%;box-sizing:border-box"></div>
       <div class="meta-label">Data Pedido:</div>
       <div class="meta-valor-auto">${dataHojeBR()}</div>
 
@@ -674,15 +719,30 @@ function onFilialSelecionada() {
   validarFormulario();
 }
 
+function pesoPacote(p) {
+  // peso de 1 pacote em kg = kg/cx ÷ nº de pacotes por caixa (CX-N).
+  // Ex.: CX-25 com 10 kg/cx -> 0,4; CX-40 com 20 kg/cx -> 0,5. Fallback 0,5.
+  const emb = String(p.embalagem || '').toUpperCase();
+  const mCx = emb.match(/CX[-\s]?(\d+)/);
+  const n = mCx ? parseInt(mCx[1], 10) : 0;
+  if (n && p.kgCx) return p.kgCx / n;
+  const mG = emb.match(/(\d+)\s*G\b/);
+  if (mG) return parseInt(mG[1], 10) / 1000;
+  return 0.5;
+}
+
 function recalcularLinha(i) {
   const input = document.querySelector(`input[data-index="${i}"]`);
   const qtde = parseFloat(input.value) || 0;
   const p = _estado.produtos[i];
   p.quantidade = qtde;
 
-  const kg = p.unidFat === 'cx' ? qtde * p.kgCx : qtde;
+  // base = multiplicador do valor (kg p/ kg|cx, nº de pacotes p/ pct);
+  // kg = peso pra exibir (pct converte pacotes -> kg).
+  const base = p.unidFat === 'cx' ? qtde * p.kgCx : qtde;
+  const kg = p.unidFat === 'pct' ? qtde * pesoPacote(p) : base;
   document.getElementById(`kgCalc${i}`).textContent = qtde > 0 ? kg.toFixed(1) : '—';
-  document.getElementById(`valorCalc${i}`).textContent = qtde > 0 ? formatarReal(kg * p.precoUnit) : '—';
+  document.getElementById(`valorCalc${i}`).textContent = qtde > 0 ? formatarReal(base * p.precoUnit) : '—';
 
   atualizarTotais();
   validarFormulario();
@@ -694,9 +754,10 @@ function atualizarTotais() {
     const qtde = parseFloat(p.quantidade) || 0;
     if (qtde > 0) {
       totalItens++;
-      const kg = p.unidFat === 'cx' ? qtde * p.kgCx : qtde;
+      const base = p.unidFat === 'cx' ? qtde * p.kgCx : qtde;
+      const kg = p.unidFat === 'pct' ? qtde * pesoPacote(p) : base;
       totalKg += kg;
-      totalValor += kg * p.precoUnit;
+      totalValor += base * p.precoUnit;
     }
   });
   document.getElementById('totalItens').textContent = totalItens;
@@ -708,12 +769,14 @@ function validarFormulario() {
   const operador = document.getElementById('selOperador')?.value;
   const filialOk = _estado.multiFilial ? !!document.getElementById('selFilial')?.value : true;
   const temItem = _estado.produtos.some(p => (parseFloat(p.quantidade) || 0) > 0);
-  document.getElementById('btnGerar').disabled = !(operador && filialOk && temItem);
+  const pedidoOk = !!(document.getElementById('inpPedidoNum')?.value || '').trim();
+  document.getElementById('btnGerar').disabled = !(operador && filialOk && temItem && pedidoOk);
 }
 
 async function gerarPedido() {
   const operador = document.getElementById('selOperador').value;
   const filialNome = _estado.multiFilial ? document.getElementById('selFilial').value : '';
+  const pedidoNum = (document.getElementById('inpPedidoNum')?.value || '').trim();
   const erroMsg = document.getElementById('erroMsg');
   erroMsg.style.display = 'none';
 
@@ -729,7 +792,7 @@ async function gerarPedido() {
     const resp = await fetch(`${SERVER_URL}/processar-manual`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cliente: _estado.cliente, operador, filialNome, itens }),
+      body: JSON.stringify({ cliente: _estado.cliente, operador, filialNome, pedidoNum, itens }),
     });
     const result = await resp.json();
 
