@@ -674,15 +674,30 @@ function onFilialSelecionada() {
   validarFormulario();
 }
 
+function pesoPacote(p) {
+  // peso de 1 pacote em kg = kg/cx ÷ nº de pacotes por caixa (CX-N).
+  // Ex.: CX-25 com 10 kg/cx -> 0,4; CX-40 com 20 kg/cx -> 0,5. Fallback 0,5.
+  const emb = String(p.embalagem || '').toUpperCase();
+  const mCx = emb.match(/CX[-\s]?(\d+)/);
+  const n = mCx ? parseInt(mCx[1], 10) : 0;
+  if (n && p.kgCx) return p.kgCx / n;
+  const mG = emb.match(/(\d+)\s*G\b/);
+  if (mG) return parseInt(mG[1], 10) / 1000;
+  return 0.5;
+}
+
 function recalcularLinha(i) {
   const input = document.querySelector(`input[data-index="${i}"]`);
   const qtde = parseFloat(input.value) || 0;
   const p = _estado.produtos[i];
   p.quantidade = qtde;
 
-  const kg = p.unidFat === 'cx' ? qtde * p.kgCx : qtde;
+  // base = multiplicador do valor (kg p/ kg|cx, nº de pacotes p/ pct);
+  // kg = peso pra exibir (pct converte pacotes -> kg).
+  const base = p.unidFat === 'cx' ? qtde * p.kgCx : qtde;
+  const kg = p.unidFat === 'pct' ? qtde * pesoPacote(p) : base;
   document.getElementById(`kgCalc${i}`).textContent = qtde > 0 ? kg.toFixed(1) : '—';
-  document.getElementById(`valorCalc${i}`).textContent = qtde > 0 ? formatarReal(kg * p.precoUnit) : '—';
+  document.getElementById(`valorCalc${i}`).textContent = qtde > 0 ? formatarReal(base * p.precoUnit) : '—';
 
   atualizarTotais();
   validarFormulario();
@@ -694,9 +709,10 @@ function atualizarTotais() {
     const qtde = parseFloat(p.quantidade) || 0;
     if (qtde > 0) {
       totalItens++;
-      const kg = p.unidFat === 'cx' ? qtde * p.kgCx : qtde;
+      const base = p.unidFat === 'cx' ? qtde * p.kgCx : qtde;
+      const kg = p.unidFat === 'pct' ? qtde * pesoPacote(p) : base;
       totalKg += kg;
-      totalValor += kg * p.precoUnit;
+      totalValor += base * p.precoUnit;
     }
   });
   document.getElementById('totalItens').textContent = totalItens;
