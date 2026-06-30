@@ -12,11 +12,19 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
 
 def _kg_por_pacote(it):
-    """Peso de 1 pacote em kg, lido das gramas na embalagem do item.
-    Ex.: '500G' -> 0.5. Fallback 0.5 (pacote padrão de 500 g)."""
+    """Peso de 1 pacote em kg = kg por caixa ÷ pacotes por caixa.
+    Os pacotes por caixa vêm da embalagem no formato 'CX-N' (ex.: CX-40 -> 40);
+    kg por caixa vem de kgCx. Ex.: CX-40 com kgCx=20 -> 0,5; CX-50 -> 0,4.
+    Fallback: gramas explícitas na embalagem ('400G'), senão 0,5."""
     import re
-    emb = str(it.get('embalagem', '')).upper().replace(' ', '')
-    m = re.search(r'(\d+)G', emb)
+    emb = str(it.get('embalagem', '')).upper()
+    kgcx = float(it.get('kgCx', 0) or 0)
+    m = re.search(r'CX[-\s]?(\d+)', emb)
+    if m and kgcx:
+        n = int(m.group(1))
+        if n:
+            return kgcx / n
+    m = re.search(r'(\d+)\s*G\b', emb)
     if m:
         return int(m.group(1)) / 1000.0
     return 0.5
