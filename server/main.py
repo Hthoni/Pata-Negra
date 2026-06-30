@@ -524,7 +524,7 @@ def processar_manual():
             return jsonify({'erro': 'Nenhum item com quantidade preenchida'}), 400
 
         agora = datetime.datetime.now()
-        pedido_num = f"MANUAL-{agora.strftime('%Y%m%d-%H%M%S')}"
+        pedido_num = body.get('pedidoNum', '').strip() or f"MANUAL-{agora.strftime('%Y%m%d-%H%M%S')}"
 
         lat = filial_info.get('lat')
         lng = filial_info.get('lng')
