@@ -11,6 +11,35 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
 
+def _kg_por_pacote(it):
+    """Peso de 1 pacote em kg = kg por caixa ÷ pacotes por caixa.
+    Os pacotes por caixa vêm da embalagem no formato 'CX-N' (ex.: CX-40 -> 40);
+    kg por caixa vem de kgCx. Ex.: CX-40 com kgCx=20 -> 0,5; CX-50 -> 0,4.
+    Fallback: gramas explícitas na embalagem ('400G'), senão 0,5."""
+    import re
+    emb = str(it.get('embalagem', '')).upper()
+    kgcx = float(it.get('kgCx', 0) or 0)
+    m = re.search(r'CX[-\s]?(\d+)', emb)
+    if m and kgcx:
+        n = int(m.group(1))
+        if n:
+            return kgcx / n
+    m = re.search(r'(\d+)\s*G\b', emb)
+    if m:
+        return int(m.group(1)) / 1000.0
+    return 0.5
+
+
+def _kg_pdf(it):
+    """Kg a exibir no PDF de expedição. Itens vendidos em pacote
+    (unidFat='pct') são convertidos de nº de pacotes para kg; os demais
+    já estão em kg. O Excel e o pedido seguem em pacotes — só o PDF converte."""
+    base = float(it.get('kgPlanejados', 0) or 0)
+    if str(it.get('unidFat', '')).lower() == 'pct':
+        return base * _kg_por_pacote(it)
+    return base
+
+
 def gerar_pdf(dados, empresa_override=None, logo_bytes=None):
     """Gera o PDF completo. Se empresa_override for passado, filtra
     apenas os itens daquela empresa (usado no modo split)."""
@@ -64,7 +93,7 @@ def gerar_pdf(dados, empresa_override=None, logo_bytes=None):
         emp_fd = empresa_override if empresa_override else fd.get('empresa', dados.get('empresa', 2))
         tit_fd = 'PEDIDO PATA NEGRA DISTRIBUIDORA' if emp_fd == 2 else 'PEDIDO INDÚSTRIA PATA NEGRA'
         nota_empresa = 'Pata Negra Distribuidora' if emp_fd == 2 else 'Indústria Pata Negra'
-        tkg = sum(float(it.get('kgPlanejados', 0)) for it in its)
+        tkg = sum(_kg_pdf(it) for it in its)
         subtitulo = (cli + ' — ' + fd['filial']) if cli else fd['filial']
 
         # --- Cabeçalho: linhas 1 e 2 DESMESCLADAS + campo Região alinhado à coluna Obs. ---
@@ -163,7 +192,7 @@ def gerar_pdf(dados, empresa_override=None, logo_bytes=None):
         rows = [header]
         for idx, it in enumerate(its):
             kgcx = it.get('kgCx', 20)
-            kgPlan = it.get('kgPlanejados', 0) or 0
+            kgPlan = _kg_pdf(it)
             nrCx = int(round(kgPlan / kgcx, 0)) if kgcx else ""
             rows.append([
                 Paragraph(str(idx + 1), ST_ITC),
