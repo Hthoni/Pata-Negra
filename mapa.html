@@ -215,6 +215,11 @@
     return String((rom && rom.numero) || '').trim().toLowerCase() === 'central';
   }
 
+  // Miolo preto também para pedidos da região KANEJO (regiao = coluna R do perfil).
+  function ehKanejo(rom) {
+    return String((rom && rom.regiao) || '').trim().toUpperCase() === 'KANEJO';
+  }
+
   function criarIcone(cor, corBolinha) {
     corBolinha = corBolinha || '#fff';
     var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="38" viewBox="0 0 28 38">' +
@@ -274,7 +279,7 @@
     visiveis.forEach(function(rom) {
       var horas = idadeHoras(rom.dataGeracao);
       var c = corPorIdade(horas);
-      var corBolinha = ehCentral(rom) ? '#000' : '#fff';
+      var corBolinha = (ehCentral(rom) || ehKanejo(rom)) ? '#000' : '#fff';
       // pmIgnore: pinos nunca são editáveis pelo Geoman (só as zonas)
       var marker = L.marker([rom.lat, rom.lng], { icon: criarIcone(c.cor, corBolinha), pmIgnore: true });
       marker.bindPopup(montarPopup(rom, c, horas));
