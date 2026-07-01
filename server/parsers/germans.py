@@ -64,9 +64,15 @@ def parse(pdf_bytes, produtos):
                         emb_tipo = p
                         try:
                             qtde_emb = int(parts[j + 1])
-                            qtde_ped = float(parts[j + 2].replace('.', '').replace(',', '.'))
                             preco = float(parts[j + 4].replace('.', '').replace(',', '.'))
                             total = float(parts[j + 6].replace('.', '').replace(',', '.'))
+                            # Quantidade derivada de total ÷ preço: robusto ao TOTVS,
+                            # que às vezes insere colunas extras entre embalagem e
+                            # quantidade (deslocando a posição). Fallback posicional.
+                            if preco:
+                                qtde_ped = round(total / preco, 3)
+                            else:
+                                qtde_ped = float(parts[j + 2].replace('.', '').replace(',', '.'))
                         except (IndexError, ValueError):
                             break
                         if i + 1 < len(lines):
