@@ -37,6 +37,8 @@
     .filtro-wrap { position:relative; }
     #btn-filtro, #btn-filtro-cor, #btn-filtro-peso { padding:6px 12px; border-radius:var(--radius); border:1px solid var(--border); background:#fff; font-size:12px; cursor:pointer; }
     #btn-filtro:hover, #btn-filtro-cor:hover, #btn-filtro-peso:hover { background:var(--bg); }
+    #btn-filtro.filtro-ativo, #btn-filtro-cor.filtro-ativo, #btn-filtro-peso.filtro-ativo { background:var(--accent); color:#fff; border-color:var(--accent); }
+    #btn-filtro.filtro-ativo:hover, #btn-filtro-cor.filtro-ativo:hover, #btn-filtro-peso.filtro-ativo:hover { background:#6F1515; }
     .filtro-dropdown { position:absolute; top:calc(100% + 6px); left:0; background:#fff; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 4px 16px rgba(0,0,0,.12); padding:8px; min-width:200px; max-height:320px; overflow:auto; z-index:600; display:none; }
     .filtro-head { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:2px 8px 8px; border-bottom:1px solid var(--border); margin-bottom:4px; }
     .filtro-head .titulo { font-size:11px; color:#888; font-weight:700; letter-spacing:.04em; }
@@ -348,24 +350,28 @@
       var corBolinha = (ehCentral(rom) || ehKanejo(rom)) ? '#000' : '#fff';
       // pmIgnore: pinos nunca são editáveis pelo Geoman (só as zonas)
       var marker = L.marker([rom.lat, rom.lng], { icon: criarIcone(c.cor, corBolinha), pmIgnore: true });
-      marker.bindPopup(montarPopup(rom, c, horas));
       marker._rom = rom;
+      marker._html = montarPopup(rom, c, horas);
       marker._latlngBase = L.latLng(rom.lat, rom.lng);
       if (simIds.has(rom.id)) marker.setOpacity(0.35);  // esmaecido: já no simulador
       marker.addTo(map);
       markers.push(marker);
       var chave = Number(rom.lat).toFixed(5) + ',' + Number(rom.lng).toFixed(5);
+      marker._chave = chave;
       (grupos[chave] = grupos[chave] || []).push(marker);
     });
 
-    // Pinos sobrepostos: ao passar o mouse, abrem em leque com linhas ao destino.
+    // Pino isolado: clique abre o popup. Pinos sobrepostos: 1º clique abre o
+    // leque (fixo); clique em cada pino do leque abre o popup dele.
     Object.keys(grupos).forEach(function(chave) {
       var g = grupos[chave];
-      if (g.length < 2) return;
+      if (g.length === 1) { g[0].bindPopup(g[0]._html); return; }
       g.forEach(function(mk) {
-        mk._chave = chave;
-        mk.on('mouseover', function() { abrirLeque(chave, g); });
-        mk.on('mouseout', function() { agendarFecharLeque(); });
+        mk.on('click', function(e) {
+          L.DomEvent.stopPropagation(e);   // não chega ao mapa (que fecharia o leque)
+          if (grupoAberto === chave) abrirPopupSolto(mk);
+          else abrirLeque(chave, g);
+        });
       });
     });
 
@@ -379,25 +385,29 @@
 
     atualizarPainelZonas();
     atualizarPainelSim();
+    atualizarBotoesFiltro();
   }
 
-  // ── Leque de pinos sobrepostos (spiderfy simples) ───────────────────
+  // ── Leque de pinos sobrepostos (clique abre; fixo até clicar no mapa) ─
   function abrirLeque(chave, g) {
-    if (spiderTimer) { clearTimeout(spiderTimer); spiderTimer = null; }
-    if (grupoAberto === chave) return;
     fecharLeque();
+    map.closePopup();
     grupoAberto = chave;
     var centro = g[0]._latlngBase;
     var cp = map.latLngToLayerPoint(centro);
     var n = g.length;
-    var raio = 24 + n * 6;
+    var raio = 26 + n * 8;
     g.forEach(function(mk, i) {
       var ang = (2 * Math.PI * i / n) - Math.PI / 2;
       var ll = map.layerPointToLatLng(L.point(cp.x + raio * Math.cos(ang), cp.y + raio * Math.sin(ang)));
       mk.setLatLng(ll);
       mk.setZIndexOffset(1000);
-      spiderLegs.addLayer(L.polyline([centro, ll], { color:'#8B1C1C', weight:1.5, opacity:0.55 }));
+      spiderLegs.addLayer(L.polyline([centro, ll], { color:'#8B1C1C', weight:1.5, opacity:0.55, interactive:false }));
     });
+  }
+  // popup avulso (autoPan desligado p/ o leque não colapsar ao abrir)
+  function abrirPopupSolto(mk) {
+    L.popup({ autoPan:false, offset:[0,-34] }).setLatLng(mk.getLatLng()).setContent(mk._html).openOn(map);
   }
   function fecharLeque() {
     if (!grupoAberto) return;
@@ -407,11 +417,15 @@
     spiderLegs.clearLayers();
     grupoAberto = null;
   }
-  function agendarFecharLeque() {
-    if (spiderTimer) clearTimeout(spiderTimer);
-    spiderTimer = setTimeout(fecharLeque, 300);
+  map.on('click', fecharLeque);
+  map.on('zoomstart', fecharLeque);
+
+  // Realce nos botões de filtro quando há algo filtrado (sem precisar abrir).
+  function atualizarBotoesFiltro() {
+    document.getElementById('btn-filtro').classList.toggle('filtro-ativo', clientesDesmarcados.size > 0);
+    document.getElementById('btn-filtro-cor').classList.toggle('filtro-ativo', coresDesmarcadas.size > 0);
+    document.getElementById('btn-filtro-peso').classList.toggle('filtro-ativo', faixasDesmarcadas.size > 0);
   }
-  map.on('click zoomstart movestart', fecharLeque);
 
   // ── Filtro por cliente ──────────────────────────────────────────────
   function montarFiltro(data) {
