@@ -251,3 +251,63 @@ def gerar_pdf(dados, empresa_override=None, logo_bytes=None):
     doc.build(story)
     buf.seek(0)
     return buf.read()
+
+
+def gerar_pdf_totais(produtos, pedidos, meta):
+    """PDF de simulacao de entregas: soma por produto (nome MASTER, A->Z) +
+    a lista dos pedidos incluidos. produtos = [{nome, kg, alerta}], ja ordenado.
+    pedidos = [{cliente, filial}]. meta = {data, nPedidos, totalKg, semItens}."""
+    def _fmt(v):
+        return (f"{float(v):.1f}".replace(".", ",")) if v else "0"
+
+    ACCENT = colors.HexColor('#8B1C1C')
+    GREYBG = colors.HexColor('#F1EFEA')
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=16 * mm, bottomMargin=16 * mm,
+                            leftMargin=16 * mm, rightMargin=16 * mm,
+                            title='Simulacao de Entregas')
+    S_TIT = ParagraphStyle('tit', fontName='Helvetica-Bold', fontSize=15, textColor=ACCENT, spaceAfter=2)
+    S_SUB = ParagraphStyle('sub', fontName='Helvetica', fontSize=10, textColor=colors.HexColor('#555555'), spaceAfter=2)
+    S_WARN = ParagraphStyle('warn', fontName='Helvetica-Bold', fontSize=9, textColor=ACCENT, spaceBefore=4, spaceAfter=2)
+    S_SEC = ParagraphStyle('sec', fontName='Helvetica-Bold', fontSize=11, textColor=colors.black, spaceBefore=14, spaceAfter=6)
+    S_HDR = ParagraphStyle('hdr', fontName='Helvetica-Bold', fontSize=9.5, textColor=colors.white)
+    S_HDRR = ParagraphStyle('hdrr', parent=S_HDR, alignment=TA_RIGHT)
+    S_IT = ParagraphStyle('it', fontName='Helvetica', fontSize=10, textColor=colors.black)
+    S_ITR = ParagraphStyle('itr', parent=S_IT, alignment=TA_RIGHT)
+    S_AL = ParagraphStyle('al', fontName='Helvetica-Bold', fontSize=10, textColor=ACCENT)
+    S_PED = ParagraphStyle('ped', fontName='Helvetica', fontSize=9.5, textColor=colors.HexColor('#333333'), leading=14)
+
+    story = []
+    story.append(Paragraph('Simulacao de Entregas &mdash; Totais por Produto', S_TIT))
+    story.append(Paragraph(f"{meta.get('data','')} &nbsp;&bull;&nbsp; {meta.get('nPedidos',0)} pedido(s) &nbsp;&bull;&nbsp; Total: <b>{_fmt(meta.get('totalKg',0))} kg</b>", S_SUB))
+    if meta.get('semItens'):
+        story.append(Paragraph(f"&#9888; {meta['semItens']} pedido(s) sem detalhamento (gerados antes desta atualizacao) &mdash; nao somados.", S_WARN))
+
+    data = [[Paragraph('Produto', S_HDR), Paragraph('Kg total', S_HDRR)]]
+    for p in produtos:
+        st = S_AL if p.get('alerta') else S_IT
+        data.append([Paragraph(str(p.get('nome', '')), st), Paragraph(_fmt(p.get('kg', 0)), S_ITR)])
+    tbl = Table(data, colWidths=[132 * mm, 46 * mm], repeatRows=1)
+    style = [
+        ('BACKGROUND', (0, 0), (-1, 0), ACCENT),
+        ('TOPPADDING', (0, 0), (-1, -1), 5), ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ('LEFTPADDING', (0, 0), (-1, -1), 8), ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        ('LINEBELOW', (0, 0), (-1, -1), 0.4, colors.HexColor('#DDDDDD')),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ]
+    for i in range(1, len(data) + 1):
+        if i % 2 == 0:
+            style.append(('BACKGROUND', (0, i), (-1, i), GREYBG))
+    tbl.setStyle(TableStyle(style))
+    story.append(tbl)
+
+    if pedidos:
+        story.append(Paragraph(f"Pedidos incluidos ({len(pedidos)})", S_SEC))
+        for pd in sorted(pedidos, key=lambda x: (x.get('cliente', '') or '').lower()):
+            cli = pd.get('cliente', '') or ''
+            fil = pd.get('filial', '') or ''
+            story.append(Paragraph(f"&bull; {cli} &mdash; {fil}" if fil else f"&bull; {cli}", S_PED))
+
+    doc.build(story)
+    buf.seek(0)
+    return buf.read()
