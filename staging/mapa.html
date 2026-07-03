@@ -35,10 +35,10 @@
 
     /* Filtro por cliente */
     .filtro-wrap { position:relative; }
-    #btn-filtro, #btn-filtro-cor, #btn-filtro-peso { padding:6px 12px; border-radius:var(--radius); border:1px solid var(--border); background:#fff; font-size:12px; cursor:pointer; }
-    #btn-filtro:hover, #btn-filtro-cor:hover, #btn-filtro-peso:hover { background:var(--bg); }
-    #btn-filtro.filtro-ativo, #btn-filtro-cor.filtro-ativo, #btn-filtro-peso.filtro-ativo { background:var(--accent); color:#fff; border-color:var(--accent); }
-    #btn-filtro.filtro-ativo:hover, #btn-filtro-cor.filtro-ativo:hover, #btn-filtro-peso.filtro-ativo:hover { background:#6F1515; }
+    #btn-filtro, #btn-filtro-cor, #btn-filtro-peso, #btn-filtro-regiao { height:38px; min-width:120px; box-sizing:border-box; -webkit-appearance:none; appearance:none; margin:0; font-family:inherit; display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:0 16px; border-radius:var(--radius); border:1px solid var(--border); background:#fff; font-size:14px; cursor:pointer; line-height:1; }
+    #btn-filtro:hover, #btn-filtro-cor:hover, #btn-filtro-peso:hover, #btn-filtro-regiao:hover { background:var(--bg); }
+    #btn-filtro.filtro-ativo, #btn-filtro-cor.filtro-ativo, #btn-filtro-peso.filtro-ativo, #btn-filtro-regiao.filtro-ativo { background:var(--accent); color:#fff; border:1px solid var(--accent); }
+    #btn-filtro.filtro-ativo:hover, #btn-filtro-cor.filtro-ativo:hover, #btn-filtro-peso.filtro-ativo:hover, #btn-filtro-regiao.filtro-ativo:hover { background:#6F1515; }
     .filtro-dropdown { position:absolute; top:calc(100% + 6px); left:0; background:#fff; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 4px 16px rgba(0,0,0,.12); padding:8px; min-width:200px; max-height:320px; overflow:auto; z-index:600; display:none; }
     .filtro-head { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:2px 8px 8px; border-bottom:1px solid var(--border); margin-bottom:4px; }
     .filtro-head .titulo { font-size:11px; color:#888; font-weight:700; letter-spacing:.04em; }
@@ -150,12 +150,16 @@
     <div class="filtro-dropdown" id="filtro-dropdown"></div>
   </div>
   <div class="filtro-wrap">
-    <button id="btn-filtro-cor" onclick="toggleFiltroCor(event)">🎨 Cor</button>
+    <button id="btn-filtro-cor" onclick="toggleFiltroCor(event)">⛃ Cor</button>
     <div class="filtro-dropdown" id="filtro-cor-dropdown"></div>
   </div>
   <div class="filtro-wrap">
-    <button id="btn-filtro-peso" onclick="toggleFiltroPeso(event)">⚖️ Peso</button>
+    <button id="btn-filtro-peso" onclick="toggleFiltroPeso(event)">⛃ Peso</button>
     <div class="filtro-dropdown" id="filtro-peso-dropdown"></div>
+  </div>
+  <div class="filtro-wrap">
+    <button id="btn-filtro-regiao" onclick="toggleFiltroRegiao(event)">⛃ Região</button>
+    <div class="filtro-dropdown" id="filtro-regiao-dropdown"></div>
   </div>
   <button id="btn-editar" onclick="toggleEdicao()">✏️ Editar zonas</button>
   <div class="legenda">
@@ -228,6 +232,8 @@
   var edicaoAtiva = false;
   var coresDesmarcadas = new Set();   // labels de idade ocultados pelo filtro
   var faixasDesmarcadas = new Set();  // faixas de peso ocultadas pelo filtro
+  var regioesDesmarcadas = new Set(); // regiões ocultadas pelo filtro
+  function regiaoKey(rom) { return (rom.regiao && String(rom.regiao).trim()) || '__sem__'; }
   // Simulador de plano de entregas: ids de romaneio selecionados (persiste no navegador).
   var simIds = new Set(JSON.parse(localStorage.getItem('pn_sim_ids') || '[]'));
   var spiderLegs = L.layerGroup().addTo(map);  // linhas do "leque" de pinos sobrepostos
@@ -312,6 +318,7 @@
     if (clientesDesmarcados.has(rom.cliente)) return false;
     if (coresDesmarcadas.has(corPorIdade(idadeHoras(rom.dataGeracao)).label)) return false;
     if (faixasDesmarcadas.has(faixaDe(rom.kgPlanejados))) return false;
+    if (regioesDesmarcadas.has(regiaoKey(rom))) return false;
     return true;
   }
 
@@ -425,6 +432,7 @@
     document.getElementById('btn-filtro').classList.toggle('filtro-ativo', clientesDesmarcados.size > 0);
     document.getElementById('btn-filtro-cor').classList.toggle('filtro-ativo', coresDesmarcadas.size > 0);
     document.getElementById('btn-filtro-peso').classList.toggle('filtro-ativo', faixasDesmarcadas.size > 0);
+    document.getElementById('btn-filtro-regiao').classList.toggle('filtro-ativo', regioesDesmarcadas.size > 0);
   }
 
   // ── Filtro por cliente ──────────────────────────────────────────────
@@ -466,7 +474,7 @@
   }
 
   function fecharDropdowns(exceto) {
-    ['filtro-dropdown','filtro-cor-dropdown','filtro-peso-dropdown'].forEach(function(id) {
+    ['filtro-dropdown','filtro-cor-dropdown','filtro-peso-dropdown','filtro-regiao-dropdown'].forEach(function(id) {
       if (id !== exceto) { var el = document.getElementById(id); if (el) el.style.display = 'none'; }
     });
   }
@@ -486,6 +494,12 @@
     if (e) e.stopPropagation();
     fecharDropdowns('filtro-peso-dropdown');
     var dd = document.getElementById('filtro-peso-dropdown');
+    dd.style.display = dd.style.display === 'block' ? 'none' : 'block';
+  }
+  function toggleFiltroRegiao(e) {
+    if (e) e.stopPropagation();
+    fecharDropdowns('filtro-regiao-dropdown');
+    var dd = document.getElementById('filtro-regiao-dropdown');
     dd.style.display = dd.style.display === 'block' ? 'none' : 'block';
   }
 
@@ -517,6 +531,29 @@
   }
   function togglePeso(cb) { if (cb.checked) faixasDesmarcadas.delete(cb.value); else faixasDesmarcadas.add(cb.value); renderMarkers(false); }
   function filtroPesoTodos(m) { FAIXAS.forEach(function(f) { if (m) faixasDesmarcadas.delete(f.key); else faixasDesmarcadas.add(f.key); }); montarFiltroPeso(); renderMarkers(false); }
+
+  function montarFiltroRegiao(data) {
+    var vistos = {};
+    (data || []).forEach(function(r) { var k = regiaoKey(r); vistos[k] = (k === '__sem__') ? 'Sem região' : k; });
+    var keys = Object.keys(vistos).sort(function(a, b) { if (a === '__sem__') return 1; if (b === '__sem__') return -1; return vistos[a].localeCompare(vistos[b]); });
+    regioesDesmarcadas.forEach(function(k) { if (!vistos[k]) regioesDesmarcadas.delete(k); });
+    var dd = document.getElementById('filtro-regiao-dropdown');
+    if (keys.length === 0) { dd.innerHTML = '<div class="filtro-vazio">Nenhuma região</div>'; return; }
+    var html = '<div class="filtro-head"><span class="titulo">REGIÃO</span>' +
+      '<span><button onclick="filtroRegiaoTodos(true)">Todos</button><button onclick="filtroRegiaoTodos(false)">Nenhum</button></span></div>';
+    keys.forEach(function(k) {
+      var checked = regioesDesmarcadas.has(k) ? '' : 'checked';
+      html += '<label><input type="checkbox" value="' + k + '" ' + checked + ' onchange="toggleRegiao(this)"> ' + vistos[k] + '</label>';
+    });
+    dd.innerHTML = html;
+  }
+  function toggleRegiao(cb) { if (cb.checked) regioesDesmarcadas.delete(cb.value); else regioesDesmarcadas.add(cb.value); renderMarkers(false); }
+  function filtroRegiaoTodos(m) {
+    document.getElementById('filtro-regiao-dropdown').querySelectorAll('input[type=checkbox]').forEach(function(cb) {
+      cb.checked = m; if (m) regioesDesmarcadas.delete(cb.value); else regioesDesmarcadas.add(cb.value);
+    });
+    renderMarkers(false);
+  }
 
   // ── Simulador de plano de entregas ──────────────────────────────────
   function persistSim() { try { localStorage.setItem('pn_sim_ids', JSON.stringify(Array.from(simIds))); } catch (e) {} }
@@ -830,6 +867,7 @@
         montarFiltro(romaneios);
         montarFiltroCor();
         montarFiltroPeso();
+        montarFiltroRegiao(romaneios);
         renderMarkers(true);
       })
       .catch(function(e) {
