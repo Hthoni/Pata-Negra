@@ -19,7 +19,7 @@ import datetime
 import traceback
 from flask_cors import CORS
 
-from storage import perfil_existe, salvar_perfil, carregar_perfil_bytes, perfil_filename, salvar_romaneio, listar_romaneios, deletar_romaneio, salvar_pedido_pdf, carregar_pedido_pdf, salvar_geofence, listar_geofences, deletar_geofence, salvar_master, master_existe, carregar_master_bytes
+from storage import perfil_existe, salvar_perfil, carregar_perfil_bytes, perfil_filename, salvar_romaneio, listar_romaneios, deletar_romaneio, salvar_pedido_pdf, carregar_pedido_pdf, salvar_geofence, listar_geofences, deletar_geofence, salvar_master, master_existe, carregar_master_bytes, atualizar_status_romaneio
 from perfil import ler_perfil, ler_filiais, buscar_filial, ler_operadores
 from excel_gen import gerar_excel
 from pdf_gen import gerar_pdf, _kg_pdf, gerar_pdf_totais
@@ -104,12 +104,20 @@ def _gerar_arquivos_por_empresa(dados, filiais, logo_bytes=None):
 
 @app.route('/romaneios')
 def get_romaneios():
-    """Lista todos os romaneios pendentes para o mapa (sem os itens, p/ payload leve)."""
+    """Lista romaneios para o mapa/pedidos (sem os itens, p/ payload leve).
+    Por padrao devolve os ATIVOS (pendente + em_rota). ?status=entregue,falhou
+    devolve o historico."""
     try:
+        filtro = request.args.get('status')
+        alvos = set(s.strip() for s in filtro.split(',')) if filtro else {'pendente', 'em_rota'}
         roms = listar_romaneios()
+        out = []
         for r in roms:
-            r.pop('itens', None)
-        return jsonify(roms)
+            r.setdefault('status', 'pendente')
+            if r.get('status') in alvos:
+                r.pop('itens', None)
+                out.append(r)
+        return jsonify(out)
     except Exception as e:
         return jsonify({'erro': str(e)}), 500
 
@@ -173,6 +181,23 @@ def delete_romaneio(romaneio_id):
         ok = deletar_romaneio(romaneio_id)
         if ok:
             return jsonify({'ok': True})
+        return jsonify({'erro': 'Romaneio não encontrado'}), 404
+    except Exception as e:
+        return jsonify({'erro': str(e)}), 500
+
+
+@app.route('/romaneio/<romaneio_id>/status', methods=['POST'])
+def set_status_romaneio(romaneio_id):
+    """Atualiza o status do pedido sem apagar: pendente/em_rota/entregue/falhou.
+    Substitui o antigo DELETE do botao 'Entregue' (agora arquiva em vez de destruir)."""
+    body = request.get_json(silent=True) or {}
+    novo = (body.get('status') or '').strip()
+    if novo not in ('pendente', 'em_rota', 'entregue', 'falhou'):
+        return jsonify({'erro': 'status invalido'}), 400
+    try:
+        ok = atualizar_status_romaneio(romaneio_id, novo)
+        if ok:
+            return jsonify({'ok': True, 'status': novo})
         return jsonify({'erro': 'Romaneio não encontrado'}), 404
     except Exception as e:
         return jsonify({'erro': str(e)}), 500
