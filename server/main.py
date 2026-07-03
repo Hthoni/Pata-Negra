@@ -22,7 +22,7 @@ from flask_cors import CORS
 from storage import perfil_existe, salvar_perfil, carregar_perfil_bytes, perfil_filename, salvar_romaneio, listar_romaneios, deletar_romaneio, salvar_pedido_pdf, carregar_pedido_pdf, salvar_geofence, listar_geofences, deletar_geofence, salvar_master, master_existe, carregar_master_bytes
 from perfil import ler_perfil, ler_filiais, buscar_filial, ler_operadores
 from excel_gen import gerar_excel
-from pdf_gen import gerar_pdf
+from pdf_gen import gerar_pdf, _kg_pdf, gerar_pdf_totais
 import master
 
 import re
@@ -104,11 +104,66 @@ def _gerar_arquivos_por_empresa(dados, filiais, logo_bytes=None):
 
 @app.route('/romaneios')
 def get_romaneios():
-    """Lista todos os romaneios pendentes para o mapa."""
+    """Lista todos os romaneios pendentes para o mapa (sem os itens, p/ payload leve)."""
     try:
-        return jsonify(listar_romaneios())
+        roms = listar_romaneios()
+        for r in roms:
+            r.pop('itens', None)
+        return jsonify(roms)
     except Exception as e:
         return jsonify({'erro': str(e)}), 500
+
+
+@app.route('/simular-totais', methods=['POST'])
+def simular_totais():
+    """Recebe IDs de romaneios do simulador, soma kg fisico por nome MASTER
+    e devolve um PDF (lista de producao consolidada + pedidos incluidos)."""
+    body = request.get_json(silent=True) or {}
+    ids = body.get('ids', [])
+    if not ids:
+        return jsonify({'erro': 'Nenhum pedido selecionado'}), 400
+    try:
+        idx = {r['id']: r for r in listar_romaneios()}
+        agregado = {}     # nome_master -> kg
+        sem_codigo = {}   # nome_cliente -> kg (itens sem codigo ou nao mapeados)
+        pedidos_incl = []
+        sem_itens = 0
+        for rid in ids:
+            r = idx.get(rid)
+            if not r:
+                continue
+            pedidos_incl.append({'cliente': r.get('clienteNome') or r.get('cliente') or '',
+                                 'filial': r.get('filial', '')})
+            its = r.get('itens')
+            if not its:
+                sem_itens += 1
+                continue
+            for it in its:
+                cod = str(it.get('cod') or '').strip()
+                kg = float(it.get('kg') or 0)
+                nome_cli = str(it.get('nome') or '').strip()
+                nome = master.nome_master(cod, '') if cod else ''
+                if nome:
+                    agregado[nome] = agregado.get(nome, 0) + kg
+                else:
+                    chave = nome_cli or ('cod ' + cod if cod else '(sem nome)')
+                    sem_codigo[chave] = sem_codigo.get(chave, 0) + kg
+        produtos = [{'nome': n, 'kg': round(k, 1), 'alerta': False} for n, k in agregado.items()]
+        produtos += [{'nome': n + '  (SEM CODIGO)', 'kg': round(k, 1), 'alerta': True} for n, k in sem_codigo.items()]
+        produtos.sort(key=lambda p: p['nome'].lower())
+        meta = {
+            'data': datetime.datetime.utcnow().strftime('%d/%m/%Y %H:%M') + ' UTC',
+            'nPedidos': len(pedidos_incl),
+            'totalKg': round(sum(p['kg'] for p in produtos), 1),
+            'semItens': sem_itens,
+        }
+        pdf = gerar_pdf_totais(produtos, pedidos_incl, meta)
+        return send_file(io.BytesIO(pdf), mimetype='application/pdf',
+                         as_attachment=False, download_name='simulacao_totais.pdf')
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'erro': str(e)}), 500
+
 
 
 @app.route('/romaneio/<romaneio_id>', methods=['DELETE'])
@@ -358,6 +413,7 @@ def processar():
                 'dataPedido': fd.get('dataPedido', fd.get('dataEmissao', '')),
                 'dataGeracao': datetime.utcnow().isoformat(),
                 'kgPlanejados': round(sum(float(i.get('kgPlanejados', 0)) for i in its), 1),
+                'itens': [{'cod': str(i.get('codInterno') or '').strip(), 'nome': str(i.get('nomeProduto') or ''), 'kg': round(_kg_pdf(i), 3)} for i in its],
                 'pedidoNum': fd.get('pedidoNum', ''),
             })
             # Persistir o PDF da filial junto ao romaneio (best-effort)
@@ -605,6 +661,7 @@ def processar_manual():
                 'dataPedido': agora.strftime('%d/%m/%Y'),
                 'dataGeracao': datetime.datetime.utcnow().isoformat(),
                 'kgPlanejados': round(sum(float(i.get('kgPlanejados', 0)) for i in itens), 1),
+                'itens': [{'cod': str(i.get('codInterno') or '').strip(), 'nome': str(i.get('nomeProduto') or ''), 'kg': round(_kg_pdf(i), 3)} for i in itens],
                 'pedidoNum': pedido_num,
             })
             # Persistir o PDF da filial única junto ao romaneio (best-effort)
