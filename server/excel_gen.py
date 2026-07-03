@@ -8,6 +8,7 @@ import openpyxl
 from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
 from openpyxl.utils import get_column_letter
 from openpyxl.formatting.rule import FormulaRule
+import master
 
 
 def _thin():
@@ -74,6 +75,12 @@ def _ap(cell, val=None, fn=None, bg=None, bo=None, al=None, fmt=None):
         cell.alignment = al
     if fmt:
         cell.number_format = fmt
+
+
+def _nome_prod(it):
+    """Nome MASTER do produto (coluna unica). Fallback: nome do cliente + aviso."""
+    nm = master.nome_master(it.get('codInterno'), '')
+    return nm if nm else (str(it.get('nomeProduto', '')).strip() + '  (SEM MASTER)')
 
 
 def gerar_excel(dados, empresa_override=None):
@@ -157,7 +164,7 @@ def gerar_excel(dados, empresa_override=None):
         _ap(ws['G7'], 'Tel. Vendedor:', F_MB, BG_META, al=_aln('left'))
         _ap(ws['H7'], tel, F_M, BG_META, al=_aln('left'))
 
-        for col, h, az in [('A', '#', 0), ('B', 'Cód.\nInterno', 0), ('C', 'Nome Produto\nno Cliente', 0),
+        for col, h, az in [('A', '#', 0), ('B', 'Cód.\nInterno', 0), ('C', 'Produtos', 0),
                             ('D', 'Formato', 0), ('E', 'Caixa', 0), ('F', 'Kg\nPlanejados', 0),
                             ('G', 'Kg\nEmbarcados', 0), ('H', 'Nº\nCaixas', 0), ('I', 'Obs.', 0),
                             ('K', 'Qtde\nMultipl.', 1), ('L', 'Preço Unit.\n(R$)', 1),
@@ -178,7 +185,7 @@ def gerar_excel(dados, empresa_override=None):
 
             _ap(c('A'), idx + 1, F_IT, bg, BALL, _aln('center'))
             _ap(c('B'), it.get('codInterno'), F_IT, bg, BALL, _aln('center'))
-            _ap(c('C'), it.get('nomeProduto', ''), F_IT, bg, BALL, _aln('left'))
+            _ap(c('C'), _nome_prod(it), F_IT, bg, BALL, _aln('left'))
             _ap(c('D'), it.get('formato') or None, F_IT, bg, BALL, _aln('center'))
             _ap(c('E'), it.get('embalagem', ''), F_IT, bg, BALL, _aln('center'))
             _ap(c('F'), it.get('kgPlanejados'), F_IT, bg, BALL, _aln('center'), FMT_NUM)
