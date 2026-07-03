@@ -364,20 +364,21 @@
     var f = inp.files[0];
     if (!f) return;
     inp.value = '';
-    var btn = document.querySelector('.btn-master');
-    var txt = btn.textContent;
-    btn.textContent = '⏳ Enviando…';
+    var btn = inp.previousElementSibling || document.querySelector('.btn-header[onclick*="inp-master"]');
+    var txt = btn ? btn.textContent : '';
+    if (btn) btn.textContent = 'Enviando…';
     try {
       var form = new FormData();
       form.append('master', f);
       var resp = await fetch(SERVER_URL + '/master', { method: 'POST', body: form });
+      if (resp.status === 404) { alert('A rota /master ainda não está no ar (deploy do backend do staging pendente). Aguarde o deploy terminar e tente de novo.'); return; }
       var d = await resp.json();
       if (!resp.ok || d.erro) { alert('Erro ao subir a tabela mestra: ' + (d.erro || resp.status)); return; }
       alert('Tabela mestra atualizada: ' + (d.codigos || 0) + ' códigos mapeados.');
     } catch (e) {
-      alert('Erro de conexão: ' + e.message);
+      alert('Erro de conexão ao subir a tabela mestra: ' + e.message);
     } finally {
-      btn.textContent = txt;
+      if (btn) btn.textContent = txt;
     }
   }
 
