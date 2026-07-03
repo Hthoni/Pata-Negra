@@ -27,10 +27,10 @@
 
     /* Filtros (cliente, cor, peso, região) */
     .filtro-wrap { position:relative; }
-    #btn-filtro, #btn-filtro-cor, #btn-filtro-peso, #btn-filtro-regiao { height:38px; min-width:120px; box-sizing:border-box; -webkit-appearance:none; appearance:none; margin:0; font-family:inherit; display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:0 16px; border-radius:var(--radius); border:1px solid var(--border); background:#fff; font-size:14px; cursor:pointer; line-height:1; }
-    #btn-filtro:hover, #btn-filtro-cor:hover, #btn-filtro-peso:hover, #btn-filtro-regiao:hover { background:var(--bg); }
-    #btn-filtro.filtro-ativo, #btn-filtro-cor.filtro-ativo, #btn-filtro-peso.filtro-ativo, #btn-filtro-regiao.filtro-ativo { background:var(--accent); color:#fff; border:1px solid var(--accent); }
-    #btn-filtro.filtro-ativo:hover, #btn-filtro-cor.filtro-ativo:hover, #btn-filtro-peso.filtro-ativo:hover, #btn-filtro-regiao.filtro-ativo:hover { background:#6F1515; }
+    #btn-filtro, #btn-filtro-cor, #btn-filtro-peso, #btn-filtro-regiao, #btn-filtro-situacao { height:38px; min-width:120px; box-sizing:border-box; -webkit-appearance:none; appearance:none; margin:0; font-family:inherit; display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:0 16px; border-radius:var(--radius); border:1px solid var(--border); background:#fff; font-size:14px; cursor:pointer; line-height:1; }
+    #btn-filtro:hover, #btn-filtro-cor:hover, #btn-filtro-peso:hover, #btn-filtro-regiao:hover, #btn-filtro-situacao:hover { background:var(--bg); }
+    #btn-filtro.filtro-ativo, #btn-filtro-cor.filtro-ativo, #btn-filtro-peso.filtro-ativo, #btn-filtro-regiao.filtro-ativo, #btn-filtro-situacao.filtro-ativo { background:var(--accent); color:#fff; border:1px solid var(--accent); }
+    #btn-filtro.filtro-ativo:hover, #btn-filtro-cor.filtro-ativo:hover, #btn-filtro-peso.filtro-ativo:hover, #btn-filtro-regiao.filtro-ativo:hover, #btn-filtro-situacao.filtro-ativo:hover { background:#6F1515; }
     .btn-master { height:38px; box-sizing:border-box; -webkit-appearance:none; appearance:none; margin-left:auto; padding:0 16px; border-radius:var(--radius); border:1px solid var(--accent); background:#fff; color:var(--accent); font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; }
     .btn-master:hover { background:var(--accent-lt); }
     .btn-refresh { height:38px; box-sizing:border-box; -webkit-appearance:none; appearance:none; padding:0 14px; border-radius:var(--radius); border:1px solid var(--border); background:#fff; font-size:13px; cursor:pointer; font-family:inherit; }
@@ -162,6 +162,10 @@
       <button id="btn-filtro-regiao" onclick="toggleFiltroRegiao(event)">⛃ Região</button>
       <div class="filtro-dropdown" id="filtro-regiao-dropdown"></div>
     </div>
+    <div class="filtro-wrap">
+      <button id="btn-filtro-situacao" onclick="toggleFiltroSituacao(event)">⛃ Situação</button>
+      <div class="filtro-dropdown" id="filtro-situacao-dropdown"></div>
+    </div>
   </div>
 
   <div id="loading">
@@ -200,6 +204,9 @@
   var coresDesmarcadas = new Set();    // idades ocultadas
   var faixasDesmarcadas = new Set();   // faixas de peso ocultadas
   var regioesDesmarcadas = new Set();  // regiões ocultadas
+  var statusDesmarcados = new Set();   // situações ocultadas (pendente/em_rota)
+  var SITUACOES = [{ key:'pendente', label:'Pendente' }, { key:'em_rota', label:'Em rota' }];
+  function statusKey(rom) { return (rom.status === 'em_rota') ? 'em_rota' : 'pendente'; }
   // Simulador: mesma chave do mapa -> seleção compartilhada entre as páginas.
   var simIds = new Set(JSON.parse(localStorage.getItem('pn_sim_ids') || '[]'));
 
@@ -257,6 +264,7 @@
     if (coresDesmarcadas.has(classePorIdade(idadeHoras(rom.dataGeracao)).label)) return false;
     if (faixasDesmarcadas.has(faixaDe(rom.kgPlanejados))) return false;
     if (regioesDesmarcadas.has(regiaoKey(rom))) return false;
+    if (statusDesmarcados.has(statusKey(rom))) return false;
     return true;
   }
 
@@ -293,6 +301,7 @@
         montarFiltroCor();
         montarFiltroPeso();
         montarFiltroRegiao(romaneios);
+        montarFiltroSituacao();
         renderLista();
       })
       .catch(function(e) {
@@ -422,7 +431,7 @@
   }
 
   function fecharDropdowns(exceto) {
-    ['filtro-dropdown','filtro-cor-dropdown','filtro-peso-dropdown','filtro-regiao-dropdown'].forEach(function(id) {
+    ['filtro-dropdown','filtro-cor-dropdown','filtro-peso-dropdown','filtro-regiao-dropdown','filtro-situacao-dropdown'].forEach(function(id) {
       if (id !== exceto) { var el = document.getElementById(id); if (el) el.style.display = 'none'; }
     });
   }
@@ -431,6 +440,18 @@
   function toggleFiltroCor(e) { if (e) e.stopPropagation(); abreDropdown('filtro-cor-dropdown', 'filtro-cor-dropdown'); }
   function toggleFiltroPeso(e) { if (e) e.stopPropagation(); abreDropdown('filtro-peso-dropdown', 'filtro-peso-dropdown'); }
   function toggleFiltroRegiao(e) { if (e) e.stopPropagation(); abreDropdown('filtro-regiao-dropdown', 'filtro-regiao-dropdown'); }
+  function toggleFiltroSituacao(e) { if (e) e.stopPropagation(); abreDropdown('filtro-situacao-dropdown', 'filtro-situacao-dropdown'); }
+  function montarFiltroSituacao() {
+    var html = '<div class="filtro-head"><span class="titulo">SITUAÇÃO</span>' +
+      '<span><button onclick="filtroSituacaoTodos(true)">Todos</button><button onclick="filtroSituacaoTodos(false)">Nenhum</button></span></div>';
+    SITUACOES.forEach(function(s) {
+      var checked = statusDesmarcados.has(s.key) ? '' : 'checked';
+      html += '<label><input type="checkbox" value="' + s.key + '" ' + checked + ' onchange="toggleSituacao(this)"> ' + s.label + '</label>';
+    });
+    document.getElementById('filtro-situacao-dropdown').innerHTML = html;
+  }
+  function toggleSituacao(cb) { if (cb.checked) statusDesmarcados.delete(cb.value); else statusDesmarcados.add(cb.value); renderLista(); }
+  function filtroSituacaoTodos(m) { SITUACOES.forEach(function(s) { if (m) statusDesmarcados.delete(s.key); else statusDesmarcados.add(s.key); }); montarFiltroSituacao(); renderLista(); }
 
   // ── Filtro por cor (idade) ──────────────────────────────────────────
   function montarFiltroCor() {
@@ -491,6 +512,7 @@
     document.getElementById('btn-filtro-cor').classList.toggle('filtro-ativo', coresDesmarcadas.size > 0);
     document.getElementById('btn-filtro-peso').classList.toggle('filtro-ativo', faixasDesmarcadas.size > 0);
     document.getElementById('btn-filtro-regiao').classList.toggle('filtro-ativo', regioesDesmarcadas.size > 0);
+    document.getElementById('btn-filtro-situacao').classList.toggle('filtro-ativo', statusDesmarcados.size > 0);
   }
 
   // ── Simulador de entregas (seleção compartilhada com o mapa) ─────────
@@ -570,7 +592,7 @@
     var btn = document.querySelector('#card-' + id + ' .btn-entregar');
     if (btn) { btn.disabled = true; btn.textContent = 'Processando...'; }
 
-    fetch(SERVER_URL + '/romaneio/' + id, { method:'DELETE' })
+    fetch(SERVER_URL + '/romaneio/' + id + '/status', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({status:'entregue'}) })
       .then(function(r) { return r.json(); })
       .then(function(data) {
         if (data.ok) {
