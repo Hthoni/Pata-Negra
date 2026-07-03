@@ -518,6 +518,29 @@
     }
   }
 
+  function atualizarPainelSim() {
+    var body = document.getElementById('ps-body');
+    simIds.forEach(function(id) { if (!romaneios.some(function(r) { return r.id === id; })) simIds.delete(id); });
+    persistSim();
+    var sel = romaneios.filter(function(r) { return simIds.has(r.id); });
+    if (sel.length === 0) {
+      body.innerHTML = '<div class="ps-vazio">Nenhum pedido selecionado.<br>Use \u201c\uFF0B Simula\u00e7\u00e3o\u201d no pedido (aqui ou no mapa).</div>';
+      return;
+    }
+    var html = '', tot = 0;
+    sel.sort(function(a, b) { return (a.clienteNome || '').localeCompare(b.clienteNome || ''); }).forEach(function(r) {
+      var kg = Number(r.kgPlanejados) || 0; tot += kg;
+      html += '<div class="ps-row">' +
+        '<span class="ps-nome" title="' + (r.clienteNome || '') + ' \u00b7 ' + (r.filial || '') + '">' + (r.clienteNome || r.cliente) + ' <em>' + (r.filial || '') + '</em></span>' +
+        '<span class="ps-kg">' + Math.round(kg) + ' kg</span>' +
+        '<button class="ps-x" title="remover" onclick="toggleSim(\'' + r.id + '\')">\u00d7</button>' +
+        '</div>';
+    });
+    html += '<div class="ps-total"><span>Total (' + sel.length + ' ped.)</span><b>' + Math.round(tot) + ' kg</b></div>';
+    html += '<div class="ps-acoes"><button class="ps-btn ps-det" onclick="detalharTotais()">\ud83d\udcc4 Detalhar totais</button><button class="ps-btn ps-limpar" onclick="limparSim()">Limpar</button></div>';
+    body.innerHTML = html;
+  }
+
   // sincroniza ao vivo quando a seleção muda em outra aba (ex: o mapa)
   window.addEventListener('storage', function(e) {
     if (e.key === 'pn_sim_ids') { simIds = new Set(JSON.parse(e.newValue || '[]')); renderLista(); }
