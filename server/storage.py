@@ -3,6 +3,7 @@ Armazenamento de perfis de clientes no Google Cloud Storage.
 """
 import os
 import json
+import datetime
 from google.cloud import storage as gcs
 
 GCS_BUCKET_NAME = os.environ.get('GCS_BUCKET', 'pata-negra-perfis')
@@ -85,6 +86,21 @@ def salvar_romaneio(romaneio_id, dados):
         json.dumps(dados, ensure_ascii=False),
         content_type='application/json'
     )
+
+
+def atualizar_status_romaneio(romaneio_id, status, data=None):
+    """Atualiza o status do romaneio SEM apagar (pendente/em_rota/entregue/falhou).
+    Preserva todos os dados originais (inclusive a data de inclusao). Registra
+    a data da mudanca de status. Retorna True se o romaneio existia."""
+    blob = _romaneios_bucket().blob(f'{romaneio_id}.json')
+    if not blob.exists():
+        return False
+    dados = json.loads(blob.download_as_bytes())
+    dados['status'] = status
+    dados['statusData'] = data or datetime.datetime.utcnow().isoformat()
+    blob.upload_from_string(json.dumps(dados, ensure_ascii=False),
+                            content_type='application/json')
+    return True
 
 
 def listar_romaneios():
