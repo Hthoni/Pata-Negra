@@ -108,7 +108,8 @@ def gerar_excel(dados, empresa_override=None):
         emp_fd = empresa_override if empresa_override else fd.get('empresa', emp)
         tit_fd = 'PEDIDO PATA NEGRA DISTRIBUIDORA' if emp_fd == 2 else 'PEDIDO INDÚSTRIA PATA NEGRA'
         numPed = re.sub(r'[/\\*?\[\]:]', '-', fd.get('pedidoNum', '')).strip().strip('-')
-        nomeAba = ((numPed + ' - ' + fd['filial']) if numPed else fd['filial'])[:31]
+        filialAba = re.sub(r'[/\\*?\[\]:]', '-', str(fd.get('filial', ''))).strip()
+        nomeAba = ((numPed + ' - ' + filialAba) if numPed else filialAba)[:31]
         ws = wb.create_sheet(nomeAba)
 
         for i, w in enumerate([4, 10, 38, 12, 7, 12, 12, 9, 14, 2, 11, 12, 14, 12, 10, 8], 1):
