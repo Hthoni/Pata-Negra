@@ -9,6 +9,7 @@ from reportlab.lib.units import mm
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, KeepTogether, Image, PageBreak
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+import master
 
 
 def _kg_por_pacote(it):
@@ -38,6 +39,12 @@ def _kg_pdf(it):
     if str(it.get('unidFat', '')).lower() == 'pct':
         return base * _kg_por_pacote(it)
     return base
+
+
+def _nome_prod(it):
+    """Nome MASTER do produto (coluna unica). Fallback: nome do cliente + aviso."""
+    nm = master.nome_master(it.get('codInterno'), '')
+    return nm if nm else (str(it.get('nomeProduto', '')).strip() + '  (SEM MASTER)')
 
 
 def gerar_pdf(dados, empresa_override=None, logo_bytes=None):
@@ -184,7 +191,7 @@ def gerar_pdf(dados, empresa_override=None, logo_bytes=None):
 
         header = [
             Paragraph('#', ST_HDR), Paragraph('Cód.\nInterno', ST_HDR),
-            Paragraph('Nome Produto no Cliente', ST_HDR), Paragraph('Formato', ST_HDR),
+            Paragraph('Produtos', ST_HDR), Paragraph('Formato', ST_HDR),
             Paragraph('Caixa', ST_HDR), Paragraph('Kg\nPlanejados', ST_HDR),
             Paragraph('Kgs\nEmbarcados', ST_HDR), Paragraph('Nº\nCaixas', ST_HDR),
             Paragraph('Obs.', ST_HDR),
@@ -197,7 +204,7 @@ def gerar_pdf(dados, empresa_override=None, logo_bytes=None):
             rows.append([
                 Paragraph(str(idx + 1), ST_ITC),
                 Paragraph(str(it.get('codInterno', '')), ST_ITC),
-                Paragraph(str(it.get('nomeProduto', '')), ST_IT),
+                Paragraph(_nome_prod(it), ST_IT),
                 Paragraph(str(it.get('formato', '') or ''), ST_ITC),
                 Paragraph(str(it.get('embalagem', '')), ST_ITC),
                 Paragraph(f"{kgPlan:.1f}".replace(".",",") if kgPlan else "", ST_ITR),
