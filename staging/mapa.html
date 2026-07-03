@@ -137,31 +137,31 @@
   <div class="logo">PN</div>
   <h1>Pata Negra — Mapa de Entregas</h1>
   <div class="header-actions">
-    <a href="index.html" class="btn-header">← Voltar</a>
-    <a href="pedidos.html" class="btn-header">📋 Gerenciar Pedidos</a>
+    <a href="index.html" class="btn-header">Criar Pedido</a>
+    <a href="pedidos.html" class="btn-header">Pedidos</a>
+    <a href="entregas.html" class="btn-header">Entregas</a>
   </div>
 </header>
 
 <div class="toolbar">
   <span class="stat-badge" id="total-badge">0 pedidos</span>
-  <button id="btn-refresh" onclick="carregarRomaneios()">↺ Atualizar</button>
   <div class="filtro-wrap">
-    <button id="btn-filtro" onclick="toggleFiltro(event)">⛃ Clientes</button>
+    <button id="btn-filtro" onclick="toggleFiltro(event)">Clientes</button>
     <div class="filtro-dropdown" id="filtro-dropdown"></div>
   </div>
   <div class="filtro-wrap">
-    <button id="btn-filtro-cor" onclick="toggleFiltroCor(event)">⛃ Cor</button>
+    <button id="btn-filtro-cor" onclick="toggleFiltroCor(event)">Cor</button>
     <div class="filtro-dropdown" id="filtro-cor-dropdown"></div>
   </div>
   <div class="filtro-wrap">
-    <button id="btn-filtro-peso" onclick="toggleFiltroPeso(event)">⛃ Peso</button>
+    <button id="btn-filtro-peso" onclick="toggleFiltroPeso(event)">Peso</button>
     <div class="filtro-dropdown" id="filtro-peso-dropdown"></div>
   </div>
   <div class="filtro-wrap">
-    <button id="btn-filtro-situacao" onclick="toggleFiltroSituacao(event)">⛃ Situação</button>
+    <button id="btn-filtro-situacao" onclick="toggleFiltroSituacao(event)">Situação</button>
     <div class="filtro-dropdown" id="filtro-situacao-dropdown"></div>
   </div>
-  <button id="btn-editar" onclick="toggleEdicao()">✏️ Editar zonas</button>
+  <button id="btn-editar" onclick="toggleEdicao()">Editar zonas</button>
   <div class="legenda">
     <div class="leg-item"><div class="leg-dot" style="background:#27ae60"></div> &lt; 48h</div>
     <div class="leg-item"><div class="leg-dot" style="background:#f1c40f"></div> 48–96h</div>
@@ -179,7 +179,7 @@
   <div id="paineis-dir">
     <div id="painel-sim">
       <div class="pz-head" style="background:#2c3e50" onclick="togglePainelSim()">
-        <span>🚚 Simulador de entregas</span>
+        <span>Simulador de entregas</span>
         <span class="toggle" id="ps-toggle">▾</span>
       </div>
       <div id="ps-body"></div>
@@ -336,7 +336,7 @@
       '<div class="popup-row"><span class="popup-label">Kg planejados</span><span class="popup-valor">' + (rom.kgPlanejados || '—') + ' kg</span></div>' +
       '<span class="popup-idade" style="background:' + c.bg + ';color:' + c.txt + '">' + c.label + ' — ' + Math.round(horas) + 'h</span>' +
       '<div class="popup-acoes">' +
-        '<button class="popup-btn popup-btn-pdf" onclick="verPdf(\'' + rom.id + '\')">📄 Ver PDF</button>' +
+        '<button class="popup-btn popup-btn-pdf" onclick="verPdf(\'' + rom.id + '\')">Ver PDF</button>' +
         '<button class="popup-btn popup-btn-del" onclick="marcarEntregue(\'' + rom.id + '\')">✓ Entregue</button>' +
       '</div>' +
       (rom.status === 'em_rota'
@@ -646,9 +646,9 @@
         '</div>';
     });
     html += '<div class="ps-total"><span>Total (' + sel.length + ' ped.)</span><b>' + Math.round(tot) + ' kg</b></div>';
-    html += '<div class="ps-acoes"><button class="ps-btn ps-salvar" onclick="salvarEntrega()">💾 Salvar entrega</button></div>';
+    html += '<div class="ps-acoes"><button class="ps-btn ps-salvar" onclick="salvarEntrega()">Salvar entrega</button></div>';
     html += '<div class="ps-acoes">' +
-      '<button class="ps-btn ps-det" onclick="detalharTotais()">📄 Detalhar totais</button>' +
+      '<button class="ps-btn ps-det" onclick="detalharTotais()">Detalhar totais</button>' +
       '<button class="ps-btn ps-limpar" onclick="limparSim()">Limpar</button>' +
       '</div>';
     body.innerHTML = html;
@@ -793,7 +793,7 @@
       });
     } else {
       btn.classList.remove('ativo');
-      btn.textContent = '✏️ Editar zonas';
+      btn.textContent = 'Editar zonas';
       map.pm.disableDraw();
       map.pm.disableGlobalEditMode();
       map.pm.disableGlobalRemovalMode();
