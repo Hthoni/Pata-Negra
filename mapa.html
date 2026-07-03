@@ -35,8 +35,10 @@
 
     /* Filtro por cliente */
     .filtro-wrap { position:relative; }
-    #btn-filtro { padding:6px 12px; border-radius:var(--radius); border:1px solid var(--border); background:#fff; font-size:12px; cursor:pointer; }
-    #btn-filtro:hover { background:var(--bg); }
+    #btn-filtro, #btn-filtro-cor, #btn-filtro-peso, #btn-filtro-regiao { height:38px; min-width:120px; box-sizing:border-box; -webkit-appearance:none; appearance:none; margin:0; font-family:inherit; display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:0 16px; border-radius:var(--radius); border:1px solid var(--border); background:#fff; font-size:14px; cursor:pointer; line-height:1; }
+    #btn-filtro:hover, #btn-filtro-cor:hover, #btn-filtro-peso:hover, #btn-filtro-regiao:hover { background:var(--bg); }
+    #btn-filtro.filtro-ativo, #btn-filtro-cor.filtro-ativo, #btn-filtro-peso.filtro-ativo, #btn-filtro-regiao.filtro-ativo { background:var(--accent); color:#fff; border:1px solid var(--accent); }
+    #btn-filtro.filtro-ativo:hover, #btn-filtro-cor.filtro-ativo:hover, #btn-filtro-peso.filtro-ativo:hover, #btn-filtro-regiao.filtro-ativo:hover { background:#6F1515; }
     .filtro-dropdown { position:absolute; top:calc(100% + 6px); left:0; background:#fff; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 4px 16px rgba(0,0,0,.12); padding:8px; min-width:200px; max-height:320px; overflow:auto; z-index:600; display:none; }
     .filtro-head { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:2px 8px 8px; border-bottom:1px solid var(--border); margin-bottom:4px; }
     .filtro-head .titulo { font-size:11px; color:#888; font-weight:700; letter-spacing:.04em; }
@@ -69,7 +71,22 @@
     .popup-btn-del:hover { background:#fdedec; }
 
     /* Painel de somas por zona */
-    #painel-zonas { position:absolute; bottom:18px; right:12px; width:230px; background:#fff; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 4px 18px rgba(0,0,0,.14); z-index:500; overflow:hidden; }
+    #paineis-dir { position:absolute; bottom:18px; right:12px; width:236px; z-index:500; display:flex; flex-direction:column; gap:10px; max-height:calc(100vh - 140px); }
+    #painel-sim { background:#fff; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 4px 18px rgba(0,0,0,.14); overflow:hidden; flex-shrink:0; }
+    #ps-body { max-height:32vh; overflow:auto; }
+    .ps-row { display:flex; align-items:center; gap:6px; padding:6px 10px; border-top:1px solid #f0ece8; font-size:12px; }
+    .ps-row:first-child { border-top:none; }
+    .ps-nome { flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:600; }
+    .ps-nome em { color:#888; font-style:normal; font-weight:400; }
+    .ps-kg { color:#555; white-space:nowrap; }
+    .ps-x { border:none; background:none; color:#c0392b; font-size:16px; cursor:pointer; line-height:1; padding:0 2px; }
+    .ps-total { display:flex; justify-content:space-between; padding:8px 10px; background:#eef1f4; font-weight:700; font-size:12px; border-top:1px solid #e2ddd8; }
+    .ps-acoes { display:flex; gap:6px; padding:8px 10px; }
+    .ps-btn { flex:1; padding:7px 6px; border-radius:6px; font-size:11px; font-weight:600; cursor:pointer; border:1px solid var(--border); background:#fff; font-family:inherit; }
+    .ps-det { color:var(--accent); border-color:var(--accent); }
+    .ps-limpar { color:#666; }
+    .popup-btn-sim { color:#2c3e50; border-color:#2c3e50; }
+    #painel-zonas { position:relative; bottom:auto; right:auto; width:auto; background:#fff; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 4px 18px rgba(0,0,0,.14); overflow:hidden; }
     .pz-head { background:var(--accent); color:#fff; padding:8px 12px; font-size:12px; font-weight:700; display:flex; justify-content:space-between; align-items:center; cursor:pointer; }
     .pz-head .toggle { font-size:11px; opacity:.85; }
     #pz-body { max-height:46vh; overflow:auto; }
@@ -132,6 +149,18 @@
     <button id="btn-filtro" onclick="toggleFiltro(event)">⛃ Clientes</button>
     <div class="filtro-dropdown" id="filtro-dropdown"></div>
   </div>
+  <div class="filtro-wrap">
+    <button id="btn-filtro-cor" onclick="toggleFiltroCor(event)">⛃ Cor</button>
+    <div class="filtro-dropdown" id="filtro-cor-dropdown"></div>
+  </div>
+  <div class="filtro-wrap">
+    <button id="btn-filtro-peso" onclick="toggleFiltroPeso(event)">⛃ Peso</button>
+    <div class="filtro-dropdown" id="filtro-peso-dropdown"></div>
+  </div>
+  <div class="filtro-wrap">
+    <button id="btn-filtro-regiao" onclick="toggleFiltroRegiao(event)">⛃ Região</button>
+    <div class="filtro-dropdown" id="filtro-regiao-dropdown"></div>
+  </div>
   <button id="btn-editar" onclick="toggleEdicao()">✏️ Editar zonas</button>
   <div class="legenda">
     <div class="leg-item"><div class="leg-dot" style="background:#27ae60"></div> &lt; 48h</div>
@@ -147,12 +176,21 @@
     <p>Todos os romaneios foram entregues!</p>
   </div>
 
-  <div id="painel-zonas">
-    <div class="pz-head" onclick="togglePainel()">
-      <span>Resumo por zona</span>
-      <span class="toggle" id="pz-toggle">▾</span>
+  <div id="paineis-dir">
+    <div id="painel-sim">
+      <div class="pz-head" style="background:#2c3e50" onclick="togglePainelSim()">
+        <span>🚚 Simulador de entregas</span>
+        <span class="toggle" id="ps-toggle">▾</span>
+      </div>
+      <div id="ps-body"></div>
     </div>
-    <div id="pz-body"></div>
+    <div id="painel-zonas">
+      <div class="pz-head" onclick="togglePainel()">
+        <span>Resumo por zona</span>
+        <span class="toggle" id="pz-toggle">▾</span>
+      </div>
+      <div id="pz-body"></div>
+    </div>
   </div>
 </div>
 
@@ -192,6 +230,15 @@
   var zonasLayer = L.layerGroup().addTo(map); // polígonos das zonas (sob os pinos)
   var zonaLayerById = {};             // id -> layer leaflet, p/ editar/remover
   var edicaoAtiva = false;
+  var coresDesmarcadas = new Set();   // labels de idade ocultados pelo filtro
+  var faixasDesmarcadas = new Set();  // faixas de peso ocultadas pelo filtro
+  var regioesDesmarcadas = new Set(); // regiões ocultadas pelo filtro
+  function regiaoKey(rom) { return (rom.regiao && String(rom.regiao).trim()) || '__sem__'; }
+  // Simulador de plano de entregas: ids de romaneio selecionados (persiste no navegador).
+  var simIds = new Set(JSON.parse(localStorage.getItem('pn_sim_ids') || '[]'));
+  var spiderLegs = L.layerGroup().addTo(map);  // linhas do "leque" de pinos sobrepostos
+  var grupoAberto = null;             // chave do grupo atualmente em leque
+  var spiderTimer = null;
 
   L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
     attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, tiles by <a href="https://hot.openstreetmap.org/">HOT</a>',
@@ -208,6 +255,26 @@
     if (horas < 96)  return { cor:'#f1c40f', label:'Atenção', bg:'#fef9e7', txt:'#b7950b' };
     if (horas < 120) return { cor:'#e67e22', label:'Atrasado', bg:'#fdebd0', txt:'#a04000' };
     return              { cor:'#e74c3c', label:'Crítico',  bg:'#fdedec', txt:'#922b21' };
+  }
+
+  var CORES_FILTRO = [
+    { label:'Recente',  hex:'#27ae60' },
+    { label:'Atenção',  hex:'#f1c40f' },
+    { label:'Atrasado', hex:'#e67e22' },
+    { label:'Crítico',  hex:'#e74c3c' }
+  ];
+  var FAIXAS = [
+    { key:'0-200',    label:'0 – 200 kg' },
+    { key:'201-600',  label:'201 – 600 kg' },
+    { key:'601-1800', label:'601 – 1.800 kg' },
+    { key:'1801+',    label:'1.801 kg ou mais' }
+  ];
+  function faixaDe(kg) {
+    kg = Number(kg) || 0;
+    if (kg <= 200) return '0-200';
+    if (kg <= 600) return '201-600';
+    if (kg <= 1800) return '601-1800';
+    return '1801+';
   }
 
   // Tipo do pedido vem da coluna O do Perfil: filiais têm número; central traz o texto "Central".
@@ -249,7 +316,9 @@
   function pinoVisivel(rom) {
     if (!rom.lat || !rom.lng) return false;
     if (clientesDesmarcados.has(rom.cliente)) return false;
-    // futuros filtros (ex: central/filial) entram aqui e refletem em pinos + somas
+    if (coresDesmarcadas.has(corPorIdade(idadeHoras(rom.dataGeracao)).label)) return false;
+    if (faixasDesmarcadas.has(faixaDe(rom.kgPlanejados))) return false;
+    if (regioesDesmarcadas.has(regiaoKey(rom))) return false;
     return true;
   }
 
@@ -266,6 +335,9 @@
         '<button class="popup-btn popup-btn-pdf" onclick="verPdf(\'' + rom.id + '\')">📄 Ver PDF</button>' +
         '<button class="popup-btn popup-btn-del" onclick="excluirPino(\'' + rom.id + '\')">🗑 Excluir</button>' +
       '</div>' +
+      '<button class="popup-btn popup-btn-sim" style="width:100%;margin-top:6px" onclick="toggleSim(\'' + rom.id + '\')">' +
+        (simIds.has(rom.id) ? '− Remover da simulação' : '＋ Adicionar à simulação') +
+      '</button>' +
       '</div>';
   }
 
@@ -273,8 +345,11 @@
   function renderMarkers(ajustarZoom) {
     markers.forEach(function(m) { map.removeLayer(m); });
     markers = [];
+    spiderLegs.clearLayers();
+    grupoAberto = null;
 
     var visiveis = romaneios.filter(pinoVisivel);
+    var grupos = {}; // "lat,lng" -> [marker...]
 
     visiveis.forEach(function(rom) {
       var horas = idadeHoras(rom.dataGeracao);
@@ -282,9 +357,29 @@
       var corBolinha = (ehCentral(rom) || ehKanejo(rom)) ? '#000' : '#fff';
       // pmIgnore: pinos nunca são editáveis pelo Geoman (só as zonas)
       var marker = L.marker([rom.lat, rom.lng], { icon: criarIcone(c.cor, corBolinha), pmIgnore: true });
-      marker.bindPopup(montarPopup(rom, c, horas));
+      marker._rom = rom;
+      marker._html = montarPopup(rom, c, horas);
+      marker._latlngBase = L.latLng(rom.lat, rom.lng);
+      if (simIds.has(rom.id)) marker.setOpacity(0.35);  // esmaecido: já no simulador
       marker.addTo(map);
       markers.push(marker);
+      var chave = Number(rom.lat).toFixed(5) + ',' + Number(rom.lng).toFixed(5);
+      marker._chave = chave;
+      (grupos[chave] = grupos[chave] || []).push(marker);
+    });
+
+    // Pino isolado: clique abre o popup. Pinos sobrepostos: 1º clique abre o
+    // leque (fixo); clique em cada pino do leque abre o popup dele.
+    Object.keys(grupos).forEach(function(chave) {
+      var g = grupos[chave];
+      if (g.length === 1) { g[0].bindPopup(g[0]._html); return; }
+      g.forEach(function(mk) {
+        mk.on('click', function(e) {
+          L.DomEvent.stopPropagation(e);   // não chega ao mapa (que fecharia o leque)
+          if (grupoAberto === chave) abrirPopupSolto(mk);
+          else abrirLeque(chave, g);
+        });
+      });
     });
 
     document.getElementById('total-badge').textContent = visiveis.length + ' pedido' + (visiveis.length !== 1 ? 's' : '');
@@ -296,6 +391,48 @@
     }
 
     atualizarPainelZonas();
+    atualizarPainelSim();
+    atualizarBotoesFiltro();
+  }
+
+  // ── Leque de pinos sobrepostos (clique abre; fixo até clicar no mapa) ─
+  function abrirLeque(chave, g) {
+    fecharLeque();
+    map.closePopup();
+    grupoAberto = chave;
+    var centro = g[0]._latlngBase;
+    var cp = map.latLngToLayerPoint(centro);
+    var n = g.length;
+    var raio = 26 + n * 8;
+    g.forEach(function(mk, i) {
+      var ang = (2 * Math.PI * i / n) - Math.PI / 2;
+      var ll = map.layerPointToLatLng(L.point(cp.x + raio * Math.cos(ang), cp.y + raio * Math.sin(ang)));
+      mk.setLatLng(ll);
+      mk.setZIndexOffset(1000);
+      spiderLegs.addLayer(L.polyline([centro, ll], { color:'#8B1C1C', weight:1.5, opacity:0.55, interactive:false }));
+    });
+  }
+  // popup avulso (autoPan desligado p/ o leque não colapsar ao abrir)
+  function abrirPopupSolto(mk) {
+    L.popup({ autoPan:false, offset:[0,-34] }).setLatLng(mk.getLatLng()).setContent(mk._html).openOn(map);
+  }
+  function fecharLeque() {
+    if (!grupoAberto) return;
+    markers.forEach(function(mk) {
+      if (mk._chave === grupoAberto && mk._latlngBase) { mk.setLatLng(mk._latlngBase); mk.setZIndexOffset(0); }
+    });
+    spiderLegs.clearLayers();
+    grupoAberto = null;
+  }
+  map.on('click', fecharLeque);
+  map.on('zoomstart', fecharLeque);
+
+  // Realce nos botões de filtro quando há algo filtrado (sem precisar abrir).
+  function atualizarBotoesFiltro() {
+    document.getElementById('btn-filtro').classList.toggle('filtro-ativo', clientesDesmarcados.size > 0);
+    document.getElementById('btn-filtro-cor').classList.toggle('filtro-ativo', coresDesmarcadas.size > 0);
+    document.getElementById('btn-filtro-peso').classList.toggle('filtro-ativo', faixasDesmarcadas.size > 0);
+    document.getElementById('btn-filtro-regiao').classList.toggle('filtro-ativo', regioesDesmarcadas.size > 0);
   }
 
   // ── Filtro por cliente ──────────────────────────────────────────────
@@ -336,17 +473,144 @@
     renderMarkers(false);
   }
 
+  function fecharDropdowns(exceto) {
+    ['filtro-dropdown','filtro-cor-dropdown','filtro-peso-dropdown','filtro-regiao-dropdown'].forEach(function(id) {
+      if (id !== exceto) { var el = document.getElementById(id); if (el) el.style.display = 'none'; }
+    });
+  }
   function toggleFiltro(e) {
     if (e) e.stopPropagation();
+    fecharDropdowns('filtro-dropdown');
     var dd = document.getElementById('filtro-dropdown');
     dd.style.display = dd.style.display === 'block' ? 'none' : 'block';
   }
+  function toggleFiltroCor(e) {
+    if (e) e.stopPropagation();
+    fecharDropdowns('filtro-cor-dropdown');
+    var dd = document.getElementById('filtro-cor-dropdown');
+    dd.style.display = dd.style.display === 'block' ? 'none' : 'block';
+  }
+  function toggleFiltroPeso(e) {
+    if (e) e.stopPropagation();
+    fecharDropdowns('filtro-peso-dropdown');
+    var dd = document.getElementById('filtro-peso-dropdown');
+    dd.style.display = dd.style.display === 'block' ? 'none' : 'block';
+  }
+  function toggleFiltroRegiao(e) {
+    if (e) e.stopPropagation();
+    fecharDropdowns('filtro-regiao-dropdown');
+    var dd = document.getElementById('filtro-regiao-dropdown');
+    dd.style.display = dd.style.display === 'block' ? 'none' : 'block';
+  }
+
+  // ── Filtro por cor (idade) ──────────────────────────────────────────
+  function montarFiltroCor() {
+    var dd = document.getElementById('filtro-cor-dropdown');
+    var html = '<div class="filtro-head"><span class="titulo">COR (IDADE)</span>' +
+      '<span><button onclick="filtroCorTodos(true)">Todos</button><button onclick="filtroCorTodos(false)">Nenhum</button></span></div>';
+    CORES_FILTRO.forEach(function(c) {
+      var checked = coresDesmarcadas.has(c.label) ? '' : 'checked';
+      html += '<label><input type="checkbox" value="' + c.label + '" ' + checked + ' onchange="toggleCor(this)">' +
+        '<span class="leg-dot" style="background:' + c.hex + ';width:12px;height:12px"></span> ' + c.label + '</label>';
+    });
+    dd.innerHTML = html;
+  }
+  function toggleCor(cb) { if (cb.checked) coresDesmarcadas.delete(cb.value); else coresDesmarcadas.add(cb.value); renderMarkers(false); }
+  function filtroCorTodos(m) { CORES_FILTRO.forEach(function(c) { if (m) coresDesmarcadas.delete(c.label); else coresDesmarcadas.add(c.label); }); montarFiltroCor(); renderMarkers(false); }
+
+  // ── Filtro por faixa de peso ────────────────────────────────────────
+  function montarFiltroPeso() {
+    var dd = document.getElementById('filtro-peso-dropdown');
+    var html = '<div class="filtro-head"><span class="titulo">FAIXA DE PESO</span>' +
+      '<span><button onclick="filtroPesoTodos(true)">Todos</button><button onclick="filtroPesoTodos(false)">Nenhum</button></span></div>';
+    FAIXAS.forEach(function(f) {
+      var checked = faixasDesmarcadas.has(f.key) ? '' : 'checked';
+      html += '<label><input type="checkbox" value="' + f.key + '" ' + checked + ' onchange="togglePeso(this)"> ' + f.label + '</label>';
+    });
+    dd.innerHTML = html;
+  }
+  function togglePeso(cb) { if (cb.checked) faixasDesmarcadas.delete(cb.value); else faixasDesmarcadas.add(cb.value); renderMarkers(false); }
+  function filtroPesoTodos(m) { FAIXAS.forEach(function(f) { if (m) faixasDesmarcadas.delete(f.key); else faixasDesmarcadas.add(f.key); }); montarFiltroPeso(); renderMarkers(false); }
+
+  function montarFiltroRegiao(data) {
+    var vistos = {};
+    (data || []).forEach(function(r) { var k = regiaoKey(r); vistos[k] = (k === '__sem__') ? 'Sem região' : k; });
+    var keys = Object.keys(vistos).sort(function(a, b) { if (a === '__sem__') return 1; if (b === '__sem__') return -1; return vistos[a].localeCompare(vistos[b]); });
+    regioesDesmarcadas.forEach(function(k) { if (!vistos[k]) regioesDesmarcadas.delete(k); });
+    var dd = document.getElementById('filtro-regiao-dropdown');
+    if (keys.length === 0) { dd.innerHTML = '<div class="filtro-vazio">Nenhuma região</div>'; return; }
+    var html = '<div class="filtro-head"><span class="titulo">REGIÃO</span>' +
+      '<span><button onclick="filtroRegiaoTodos(true)">Todos</button><button onclick="filtroRegiaoTodos(false)">Nenhum</button></span></div>';
+    keys.forEach(function(k) {
+      var checked = regioesDesmarcadas.has(k) ? '' : 'checked';
+      html += '<label><input type="checkbox" value="' + k + '" ' + checked + ' onchange="toggleRegiao(this)"> ' + vistos[k] + '</label>';
+    });
+    dd.innerHTML = html;
+  }
+  function toggleRegiao(cb) { if (cb.checked) regioesDesmarcadas.delete(cb.value); else regioesDesmarcadas.add(cb.value); renderMarkers(false); }
+  function filtroRegiaoTodos(m) {
+    document.getElementById('filtro-regiao-dropdown').querySelectorAll('input[type=checkbox]').forEach(function(cb) {
+      cb.checked = m; if (m) regioesDesmarcadas.delete(cb.value); else regioesDesmarcadas.add(cb.value);
+    });
+    renderMarkers(false);
+  }
+
+  // ── Simulador de plano de entregas ──────────────────────────────────
+  function persistSim() { try { localStorage.setItem('pn_sim_ids', JSON.stringify(Array.from(simIds))); } catch (e) {} }
+  function toggleSim(id) { if (simIds.has(id)) simIds.delete(id); else simIds.add(id); persistSim(); map.closePopup(); renderMarkers(false); }
+  function limparSim() { if (!simIds.size || confirm('Limpar o simulador? Isso remove todos os pedidos selecionados.')) { simIds.clear(); persistSim(); renderMarkers(false); } }
+  function togglePainelSim() {
+    var b = document.getElementById('ps-body'), t = document.getElementById('ps-toggle');
+    var h = b.style.display === 'none'; b.style.display = h ? 'block' : 'none'; t.textContent = h ? '▾' : '▸';
+  }
+  async function detalharTotais() {
+    var ids = Array.from(simIds);
+    if (!ids.length) { alert('Selecione ao menos um pedido para detalhar.'); return; }
+    try {
+      var resp = await fetch(SERVER_URL + '/simular-totais', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: ids })
+      });
+      if (!resp.ok) {
+        var e = {}; try { e = await resp.json(); } catch (x) {}
+        alert('Erro ao gerar os totais: ' + (e.erro || resp.status));
+        return;
+      }
+      var blob = await resp.blob();
+      window.open(URL.createObjectURL(blob), '_blank');
+    } catch (err) {
+      alert('Erro de conexao ao gerar os totais: ' + err.message);
+    }
+  }
+  function atualizarPainelSim() {
+    var body = document.getElementById('ps-body');
+    // remove do simulador ids de pedidos que não existem mais
+    simIds.forEach(function(id) { if (!romaneios.some(function(r) { return r.id === id; })) simIds.delete(id); });
+    persistSim();
+    var sel = romaneios.filter(function(r) { return simIds.has(r.id); });
+    if (sel.length === 0) {
+      body.innerHTML = '<div class="pz-vazio">Nenhum pedido selecionado.<br>Use “＋ Adicionar à simulação” no pino.</div>';
+      return;
+    }
+    var html = '', tot = 0;
+    sel.sort(function(a, b) { return (a.clienteNome || '').localeCompare(b.clienteNome || ''); }).forEach(function(r) {
+      var kg = Number(r.kgPlanejados) || 0; tot += kg;
+      html += '<div class="ps-row">' +
+        '<span class="ps-nome" title="' + (r.clienteNome || '') + ' · ' + (r.filial || '') + '">' + (r.clienteNome || r.cliente) + ' <em>' + (r.filial || '') + '</em></span>' +
+        '<span class="ps-kg">' + Math.round(kg) + ' kg</span>' +
+        '<button class="ps-x" title="remover" onclick="toggleSim(\'' + r.id + '\')">×</button>' +
+        '</div>';
+    });
+    html += '<div class="ps-total"><span>Total (' + sel.length + ' ped.)</span><b>' + Math.round(tot) + ' kg</b></div>';
+    html += '<div class="ps-acoes">' +
+      '<button class="ps-btn ps-det" onclick="detalharTotais()">📄 Detalhar totais</button>' +
+      '<button class="ps-btn ps-limpar" onclick="limparSim()">Limpar</button>' +
+      '</div>';
+    body.innerHTML = html;
+  }
 
   document.addEventListener('click', function(e) {
-    var wrap = document.querySelector('.filtro-wrap');
-    if (wrap && !wrap.contains(e.target)) {
-      document.getElementById('filtro-dropdown').style.display = 'none';
-    }
+    if (!e.target.closest('.filtro-wrap')) fecharDropdowns();
   });
 
   // ── Ações do popup ──────────────────────────────────────────────────
@@ -601,6 +865,9 @@
         document.getElementById('loading').style.display = 'none';
         romaneios = data || [];
         montarFiltro(romaneios);
+        montarFiltroCor();
+        montarFiltroPeso();
+        montarFiltroRegiao(romaneios);
         renderMarkers(true);
       })
       .catch(function(e) {
