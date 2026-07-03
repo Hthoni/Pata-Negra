@@ -498,28 +498,24 @@
   function toggleSim(id) { if (simIds.has(id)) simIds.delete(id); else simIds.add(id); persistSim(); renderLista(); }
   function limparSim() { if (!simIds.size || confirm('Limpar o simulador? Isso remove todos os pedidos selecionados.')) { simIds.clear(); persistSim(); renderLista(); } }
   function togglePainelSim() { var b = document.getElementById('ps-body'), t = document.getElementById('ps-toggle'); var h = b.style.display === 'none'; b.style.display = h ? 'block' : 'none'; t.textContent = h ? '▾' : '▸'; }
-  function detalharTotais() { alert('“Detalhar totais” vai gerar um PDF com a soma por produto (código interno) dos pedidos selecionados. Essa parte depende da próxima etapa no backend, que ainda vamos fazer. Por ora, o simulador já mostra o peso total.'); }
-  function atualizarPainelSim() {
-    var body = document.getElementById('ps-body');
-    simIds.forEach(function(id) { if (!romaneios.some(function(r) { return r.id === id; })) simIds.delete(id); });
-    persistSim();
-    var sel = romaneios.filter(function(r) { return simIds.has(r.id); });
-    if (sel.length === 0) {
-      body.innerHTML = '<div class="ps-vazio">Nenhum pedido selecionado.<br>Use “＋ Simulação” no pedido (aqui ou no mapa).</div>';
-      return;
+  async function detalharTotais() {
+    var ids = Array.from(simIds);
+    if (!ids.length) { alert('Selecione ao menos um pedido para detalhar.'); return; }
+    try {
+      var resp = await fetch(SERVER_URL + '/simular-totais', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: ids })
+      });
+      if (!resp.ok) {
+        var e = {}; try { e = await resp.json(); } catch (x) {}
+        alert('Erro ao gerar os totais: ' + (e.erro || resp.status));
+        return;
+      }
+      var blob = await resp.blob();
+      window.open(URL.createObjectURL(blob), '_blank');
+    } catch (err) {
+      alert('Erro de conexao ao gerar os totais: ' + err.message);
     }
-    var html = '', tot = 0;
-    sel.sort(function(a, b) { return (a.clienteNome || '').localeCompare(b.clienteNome || ''); }).forEach(function(r) {
-      var kg = Number(r.kgPlanejados) || 0; tot += kg;
-      html += '<div class="ps-row">' +
-        '<span class="ps-nome" title="' + (r.clienteNome || '') + ' · ' + (r.filial || '') + '">' + (r.clienteNome || r.cliente) + ' <em>' + (r.filial || '') + '</em></span>' +
-        '<span class="ps-kg">' + Math.round(kg) + ' kg</span>' +
-        '<button class="ps-x" title="remover" onclick="toggleSim(\'' + r.id + '\')">×</button>' +
-        '</div>';
-    });
-    html += '<div class="ps-total"><span>Total (' + sel.length + ' ped.)</span><b>' + Math.round(tot) + ' kg</b></div>';
-    html += '<div class="ps-acoes"><button class="ps-btn ps-det" onclick="detalharTotais()">📄 Detalhar totais</button><button class="ps-btn ps-limpar" onclick="limparSim()">Limpar</button></div>';
-    body.innerHTML = html;
   }
 
   // sincroniza ao vivo quando a seleção muda em outra aba (ex: o mapa)
