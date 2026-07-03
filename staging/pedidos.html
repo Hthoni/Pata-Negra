@@ -80,6 +80,8 @@
     .btn-sim { height:28px; padding:0 20px; border-radius:var(--radius); border:1px solid var(--accent); background:#fff; color:var(--accent); font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; transition:background .13s; }
     .btn-sim:hover { background:var(--accent-lt); }
     .btn-sim.ativo { background:var(--accent); color:#fff; }
+    .btn-sim.em-rota { border-color:#aaa; color:#666; background:#f2f2f2; max-width:150px; overflow:hidden; text-overflow:ellipsis; }
+    .ps-salvar { color:#fff; background:var(--accent); border-color:var(--accent); }
 
     /* Painel simulador flutuante à direita */
     #painel-sim { position:fixed; top:72px; right:16px; width:248px; z-index:500; background:#fff; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 4px 18px rgba(0,0,0,.14); overflow:hidden; max-height:calc(100vh - 90px); display:flex; flex-direction:column; }
@@ -208,6 +210,7 @@
   function statusKey(rom) { return (rom.status === 'em_rota') ? 'em_rota' : 'pendente'; }
   // Simulador: mesma chave do mapa -> seleção compartilhada entre as páginas.
   var simIds = new Set(JSON.parse(localStorage.getItem('pn_sim_ids') || '[]'));
+  function romById(id) { for (var i = 0; i < romaneios.length; i++) { if (romaneios[i].id === id) return romaneios[i]; } return null; }
 
   // Ordenação da lista (uma por vez). Padrão: idade, mais antigo primeiro.
   var sortField = 'idade';
@@ -333,10 +336,11 @@
       var horas = idadeHoras(rom.dataGeracao);
       var c = classePorIdade(horas);
       var noSim = simIds.has(rom.id);
+      var emRota = rom.status === 'em_rota';
       var reg = (rom.regiao && String(rom.regiao).trim())
         ? '<div class="entrega-regiao">' + rom.regiao + '</div>'
         : '<div class="entrega-regiao sem">sem região</div>';
-      html += '<div class="card-entrega ' + c.cls + (noSim ? ' no-sim' : '') + '" id="card-' + rom.id + '">' +
+      html += '<div class="card-entrega ' + c.cls + ((noSim || emRota) ? ' no-sim' : '') + '" id="card-' + rom.id + '">' +
         '<div class="entrega-info">' +
           '<div class="entrega-titulo">' + (rom.clienteNome || rom.cliente) + '</div>' +
           '<div class="entrega-sub">' + (rom.filial || '—') + '</div>' +
@@ -354,7 +358,9 @@
         '</div>' +
         '<div class="card-acoes">' +
           '<button class="btn-pdf" onclick="verPdf(\'' + rom.id + '\')">PDF</button>' +
-          '<button class="btn-sim' + (noSim ? ' ativo' : '') + '" onclick="toggleSim(\'' + rom.id + '\')">' + (noSim ? '− Simulação' : '＋ Simulação') + '</button>' +
+          (emRota
+            ? '<button class="btn-sim em-rota" title="' + (rom.entregaNome || '') + '" onclick="toggleSim(\'' + rom.id + '\')">🔒 ' + (rom.entregaNome || 'Em rota') + '</button>'
+            : '<button class="btn-sim' + (noSim ? ' ativo' : '') + '" onclick="toggleSim(\'' + rom.id + '\')">' + (noSim ? '− Simulação' : '＋ Simulação') + '</button>') +
           '<button class="btn-entregar" onclick="confirmarEntrega(\'' + rom.id + '\',\'' + (rom.clienteNome||rom.cliente) + '\',\'' + (rom.filial||'') + '\')">Entregue</button>' +
         '</div>' +
       '</div>';
@@ -516,7 +522,29 @@
 
   // ── Simulador de entregas (seleção compartilhada com o mapa) ─────────
   function persistSim() { try { localStorage.setItem('pn_sim_ids', JSON.stringify(Array.from(simIds))); } catch (e) {} }
-  function toggleSim(id) { if (simIds.has(id)) simIds.delete(id); else simIds.add(id); persistSim(); renderLista(); }
+  function toggleSim(id) {
+    var rom = romById(id);
+    if (rom && rom.status === 'em_rota') { alert('Este pedido já está na entrega: ' + (rom.entregaNome || '?') + '.\nRemova de lá primeiro.'); return; }
+    if (simIds.has(id)) simIds.delete(id); else simIds.add(id); persistSim(); renderLista();
+  }
+  async function salvarEntrega() {
+    var ids = Array.from(simIds);
+    if (!ids.length) { alert('Selecione ao menos um pedido para salvar a entrega.'); return; }
+    var nome = prompt('Nome da entrega (ex.: Caminhão do Juca):');
+    if (!nome || !nome.trim()) return;
+    try {
+      var resp = await fetch(SERVER_URL + '/entregas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: nome.trim(), pedidoIds: ids }) });
+      var d = await resp.json();
+      if (resp.status === 409) {
+        var lista = (d.conflitos || []).map(function(c) { return '• ' + c.cliente + ' (' + c.filial + ') → ' + c.entrega; }).join('\n');
+        alert('Alguns pedidos já estão em outra entrega:\n' + lista + '\n\nResolva o conflito e tente de novo.'); return;
+      }
+      if (!resp.ok || d.erro) { alert('Erro ao salvar a entrega: ' + (d.erro || resp.status)); return; }
+      simIds.clear(); persistSim();
+      alert('Entrega "' + nome.trim() + '" salva com ' + ids.length + ' pedido(s).');
+      carregar();
+    } catch (e) { alert('Erro de conexão ao salvar a entrega: ' + e.message); }
+  }
   function limparSim() { if (!simIds.size || confirm('Limpar o simulador? Isso remove todos os pedidos selecionados.')) { simIds.clear(); persistSim(); renderLista(); } }
   function togglePainelSim() { var b = document.getElementById('ps-body'), t = document.getElementById('ps-toggle'); var h = b.style.display === 'none'; b.style.display = h ? 'block' : 'none'; t.textContent = h ? '▾' : '▸'; }
   async function detalharTotais() {
@@ -558,6 +586,7 @@
         '</div>';
     });
     html += '<div class="ps-total"><span>Total (' + sel.length + ' ped.)</span><b>' + Math.round(tot) + ' kg</b></div>';
+    html += '<div class="ps-acoes"><button class="ps-btn ps-salvar" onclick="salvarEntrega()">\ud83d\udcbe Salvar entrega</button></div>';
     html += '<div class="ps-acoes"><button class="ps-btn ps-det" onclick="detalharTotais()">\ud83d\udcc4 Detalhar totais</button><button class="ps-btn ps-limpar" onclick="limparSim()">Limpar</button></div>';
     body.innerHTML = html;
   }
