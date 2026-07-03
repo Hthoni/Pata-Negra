@@ -85,6 +85,7 @@
     .ps-btn { flex:1; padding:7px 6px; border-radius:6px; font-size:11px; font-weight:600; cursor:pointer; border:1px solid var(--border); background:#fff; font-family:inherit; }
     .ps-det { color:var(--accent); border-color:var(--accent); }
     .ps-limpar { color:#666; }
+    .ps-salvar { color:#fff; background:var(--accent); border-color:var(--accent); }
     .popup-btn-sim { color:#2c3e50; border-color:#2c3e50; }
     #painel-zonas { position:relative; bottom:auto; right:auto; width:auto; background:#fff; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 4px 18px rgba(0,0,0,.14); overflow:hidden; }
     .pz-head { background:var(--accent); color:#fff; padding:8px 12px; font-size:12px; font-weight:700; display:flex; justify-content:space-between; align-items:center; cursor:pointer; }
@@ -238,6 +239,7 @@
   function regiaoKey(rom) { return (rom.regiao && String(rom.regiao).trim()) || '__sem__'; }
   // Simulador de plano de entregas: ids de romaneio selecionados (persiste no navegador).
   var simIds = new Set(JSON.parse(localStorage.getItem('pn_sim_ids') || '[]'));
+  function romById(id) { for (var i = 0; i < romaneios.length; i++) { if (romaneios[i].id === id) return romaneios[i]; } return null; }
   var spiderLegs = L.layerGroup().addTo(map);  // linhas do "leque" de pinos sobrepostos
   var grupoAberto = null;             // chave do grupo atualmente em leque
   var spiderTimer = null;
@@ -337,9 +339,9 @@
         '<button class="popup-btn popup-btn-pdf" onclick="verPdf(\'' + rom.id + '\')">📄 Ver PDF</button>' +
         '<button class="popup-btn popup-btn-del" onclick="marcarEntregue(\'' + rom.id + '\')">✓ Entregue</button>' +
       '</div>' +
-      '<button class="popup-btn popup-btn-sim" style="width:100%;margin-top:6px" onclick="toggleSim(\'' + rom.id + '\')">' +
-        (simIds.has(rom.id) ? '− Remover da simulação' : '＋ Adicionar à simulação') +
-      '</button>' +
+      (rom.status === 'em_rota'
+        ? '<button class="popup-btn" style="width:100%;margin-top:6px;color:#666;border-color:#aaa;background:#f2f2f2" onclick="toggleSim(\'' + rom.id + '\')">🔒 Em rota: ' + (rom.entregaNome || '') + '</button>'
+        : '<button class="popup-btn popup-btn-sim" style="width:100%;margin-top:6px" onclick="toggleSim(\'' + rom.id + '\')">' + (simIds.has(rom.id) ? '− Remover da simulação' : '＋ Adicionar à simulação') + '</button>') +
       '</div>';
   }
 
@@ -362,7 +364,7 @@
       marker._rom = rom;
       marker._html = montarPopup(rom, c, horas);
       marker._latlngBase = L.latLng(rom.lat, rom.lng);
-      if (simIds.has(rom.id)) marker.setOpacity(0.35);  // esmaecido: já no simulador
+      if (simIds.has(rom.id) || rom.status === 'em_rota') marker.setOpacity(0.35);  // esmaecido: no simulador ou em rota
       marker.addTo(map);
       markers.push(marker);
       var chave = Number(rom.lat).toFixed(5) + ',' + Number(rom.lng).toFixed(5);
@@ -577,7 +579,29 @@
 
   // ── Simulador de plano de entregas ──────────────────────────────────
   function persistSim() { try { localStorage.setItem('pn_sim_ids', JSON.stringify(Array.from(simIds))); } catch (e) {} }
-  function toggleSim(id) { if (simIds.has(id)) simIds.delete(id); else simIds.add(id); persistSim(); map.closePopup(); renderMarkers(false); }
+  function toggleSim(id) {
+    var rom = romById(id);
+    if (rom && rom.status === 'em_rota') { alert('Este pedido já está na entrega: ' + (rom.entregaNome || '?') + '.\nRemova de lá primeiro.'); return; }
+    if (simIds.has(id)) simIds.delete(id); else simIds.add(id); persistSim(); map.closePopup(); renderMarkers(false);
+  }
+  async function salvarEntrega() {
+    var ids = Array.from(simIds);
+    if (!ids.length) { alert('Selecione ao menos um pedido para salvar a entrega.'); return; }
+    var nome = prompt('Nome da entrega (ex.: Caminhão do Juca):');
+    if (!nome || !nome.trim()) return;
+    try {
+      var resp = await fetch(SERVER_URL + '/entregas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: nome.trim(), pedidoIds: ids }) });
+      var d = await resp.json();
+      if (resp.status === 409) {
+        var lista = (d.conflitos || []).map(function(c) { return '• ' + c.cliente + ' (' + c.filial + ') → ' + c.entrega; }).join('\n');
+        alert('Alguns pedidos já estão em outra entrega:\n' + lista + '\n\nResolva o conflito e tente de novo.'); return;
+      }
+      if (!resp.ok || d.erro) { alert('Erro ao salvar a entrega: ' + (d.erro || resp.status)); return; }
+      simIds.clear(); persistSim();
+      alert('Entrega "' + nome.trim() + '" salva com ' + ids.length + ' pedido(s).');
+      carregarRomaneios();
+    } catch (e) { alert('Erro de conexão ao salvar a entrega: ' + e.message); }
+  }
   function limparSim() { if (!simIds.size || confirm('Limpar o simulador? Isso remove todos os pedidos selecionados.')) { simIds.clear(); persistSim(); renderMarkers(false); } }
   function togglePainelSim() {
     var b = document.getElementById('ps-body'), t = document.getElementById('ps-toggle');
@@ -622,6 +646,7 @@
         '</div>';
     });
     html += '<div class="ps-total"><span>Total (' + sel.length + ' ped.)</span><b>' + Math.round(tot) + ' kg</b></div>';
+    html += '<div class="ps-acoes"><button class="ps-btn ps-salvar" onclick="salvarEntrega()">💾 Salvar entrega</button></div>';
     html += '<div class="ps-acoes">' +
       '<button class="ps-btn ps-det" onclick="detalharTotais()">📄 Detalhar totais</button>' +
       '<button class="ps-btn ps-limpar" onclick="limparSim()">Limpar</button>' +
