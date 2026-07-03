@@ -19,7 +19,7 @@ import datetime
 import traceback
 from flask_cors import CORS
 
-from storage import perfil_existe, salvar_perfil, carregar_perfil_bytes, perfil_filename, salvar_romaneio, listar_romaneios, deletar_romaneio, salvar_pedido_pdf, carregar_pedido_pdf, salvar_geofence, listar_geofences, deletar_geofence, salvar_master, master_existe, carregar_master_bytes, atualizar_status_romaneio
+from storage import perfil_existe, salvar_perfil, carregar_perfil_bytes, perfil_filename, salvar_romaneio, listar_romaneios, deletar_romaneio, salvar_pedido_pdf, carregar_pedido_pdf, salvar_geofence, listar_geofences, deletar_geofence, salvar_master, master_existe, carregar_master_bytes, atualizar_status_romaneio, salvar_entrega, carregar_entrega, listar_entregas, deletar_entrega
 from perfil import ler_perfil, ler_filiais, buscar_filial, ler_operadores
 from excel_gen import gerar_excel
 from pdf_gen import gerar_pdf, _kg_pdf, gerar_pdf_totais
@@ -199,6 +199,80 @@ def set_status_romaneio(romaneio_id):
         if ok:
             return jsonify({'ok': True, 'status': novo})
         return jsonify({'erro': 'Romaneio não encontrado'}), 404
+    except Exception as e:
+        return jsonify({'erro': str(e)}), 500
+
+
+@app.route('/entregas', methods=['GET'])
+def get_entregas():
+    """Lista as entregas salvas (rotas do dia)."""
+    try:
+        return jsonify(listar_entregas())
+    except Exception as e:
+        return jsonify({'erro': str(e)}), 500
+
+
+@app.route('/entregas', methods=['POST'])
+def criar_entrega():
+    """Cria uma entrega a partir de uma seleção do simulador.
+    Body: {nome, pedidoIds:[...]}. Marca cada pedido como em_rota (com trava:
+    pedido que ja esta em outra entrega e recusado)."""
+    body = request.get_json(silent=True) or {}
+    nome = (body.get('nome') or '').strip()
+    ids = body.get('pedidoIds') or []
+    if not nome:
+        return jsonify({'erro': 'Dê um nome à entrega'}), 400
+    if not ids:
+        return jsonify({'erro': 'Nenhum pedido selecionado'}), 400
+    try:
+        # trava: verifica se algum pedido ja esta em rota (em outra entrega)
+        idx = {r['id']: r for r in listar_romaneios()}
+        conflitos = []
+        for pid in ids:
+            r = idx.get(pid)
+            if r and r.get('status') == 'em_rota':
+                conflitos.append({'id': pid, 'entrega': r.get('entregaNome', '?'),
+                                  'cliente': r.get('clienteNome') or r.get('cliente'),
+                                  'filial': r.get('filial', '')})
+        if conflitos:
+            return jsonify({'erro': 'Há pedidos já em outra entrega', 'conflitos': conflitos}), 409
+
+        eid = f"ENT-{datetime.datetime.utcnow().strftime('%Y%m%d-%H%M%S')}"
+        entrega = {'id': eid, 'nome': nome, 'criadaEm': datetime.datetime.utcnow().isoformat(),
+                   'status': 'em_andamento', 'pedidoIds': ids}
+        salvar_entrega(eid, entrega)
+        # marca os pedidos como em_rota, carimbando a entrega
+        for pid in ids:
+            r = idx.get(pid)
+            if not r:
+                continue
+            r['status'] = 'em_rota'
+            r['entregaId'] = eid
+            r['entregaNome'] = nome
+            salvar_romaneio(pid, r)
+        return jsonify({'ok': True, 'entrega': entrega})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'erro': str(e)}), 500
+
+
+@app.route('/entregas/<entrega_id>', methods=['DELETE'])
+def excluir_entrega(entrega_id):
+    """Desfaz uma entrega: devolve os pedidos para pendente e apaga a entrega."""
+    try:
+        ent = carregar_entrega(entrega_id)
+        if not ent:
+            return jsonify({'erro': 'Entrega não encontrada'}), 404
+        idx = {r['id']: r for r in listar_romaneios()}
+        for pid in ent.get('pedidoIds', []):
+            r = idx.get(pid)
+            if r and r.get('status') == 'em_rota':
+                r['status'] = 'pendente'
+                r.pop('entregaId', None)
+                r.pop('entregaNome', None)
+                salvar_romaneio(pid, r)
+        deletar_entrega(entrega_id)
+        return jsonify({'ok': True})
     except Exception as e:
         return jsonify({'erro': str(e)}), 500
 
