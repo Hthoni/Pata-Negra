@@ -1,6 +1,5 @@
 """
 Armazenamento de perfis de clientes no Google Cloud Storage.
-Persistente entre deploys do Cloud Run (que não tem disco persistente).
 """
 import os
 import json
@@ -32,13 +31,11 @@ def perfil_existe(cliente):
 def salvar_perfil(cliente, file_bytes, filename=None):
     _perfil_blob(cliente).upload_from_string(
         file_bytes,
-        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    )
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     if filename:
         _meta_blob(cliente).upload_from_string(
             json.dumps({'filename': filename}),
-            content_type='application/json'
-        )
+            content_type='application/json')
 
 
 def carregar_perfil_bytes(cliente):
@@ -52,6 +49,23 @@ def perfil_filename(cliente):
     return ''
 
 
+# ── Tabela mestra de produtos (MASTER.xlsx, no bucket de perfis) ──────────────
+def _master_blob():
+    return _bucket().blob('MASTER.xlsx')
+
+
+def master_existe():
+    return _master_blob().exists()
+
+
+def salvar_master(file_bytes):
+    _master_blob().upload_from_string(
+        file_bytes,
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+def carregar_master_bytes():
+    return _master_blob().download_as_bytes()
 # ── Romaneios (bucket separado) ───────────────────────────────────────────────
 GCS_ROMANEIOS_BUCKET = os.environ.get('GCS_ROMANEIOS_BUCKET', 'pata-negra-romaneios')
 _gcs_romaneios_client = None
