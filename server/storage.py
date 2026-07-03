@@ -193,3 +193,55 @@ def deletar_geofence(geofence_id):
         blob.delete()
         return True
     return False
+
+
+# ── Entregas salvas (rotas do dia — bucket próprio) ───────────────────────────
+# Uma entrega agrupa pedidos numa rota nomeada ("Caminhao do Juca"). Dado
+# compartilhado entre dispositivos (por isso no servidor, nao no localStorage).
+# {id, nome, criadaEm, status:'em_andamento', pedidoIds:[...]}
+GCS_ENTREGAS_BUCKET = os.environ.get('GCS_ENTREGAS_BUCKET', 'pata-negra-entregas')
+_gcs_entregas_client = None
+
+
+def _entregas_bucket():
+    global _gcs_entregas_client
+    if _gcs_entregas_client is None:
+        _gcs_entregas_client = gcs.Client()
+    return _gcs_entregas_client.bucket(GCS_ENTREGAS_BUCKET)
+
+
+def salvar_entrega(entrega_id, dados):
+    """Salva (ou sobrescreve) uma entrega como JSON."""
+    blob = _entregas_bucket().blob(f'{entrega_id}.json')
+    blob.upload_from_string(json.dumps(dados, ensure_ascii=False),
+                            content_type='application/json')
+
+
+def carregar_entrega(entrega_id):
+    """Retorna o dict da entrega, ou None se nao existir."""
+    blob = _entregas_bucket().blob(f'{entrega_id}.json')
+    if not blob.exists():
+        return None
+    return json.loads(blob.download_as_bytes())
+
+
+def listar_entregas():
+    """Lista todas as entregas salvas. Retorna lista de dicts."""
+    result = []
+    for blob in _entregas_bucket().list_blobs():
+        if not blob.name.endswith('.json'):
+            continue
+        try:
+            result.append(json.loads(blob.download_as_bytes()))
+        except Exception:
+            pass
+    return result
+
+
+def deletar_entrega(entrega_id):
+    """Remove uma entrega. Retorna True se existia."""
+    blob = _entregas_bucket().blob(f'{entrega_id}.json')
+    if blob.exists():
+        blob.delete()
+        return True
+    return False
