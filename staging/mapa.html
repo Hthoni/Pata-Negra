@@ -35,10 +35,10 @@
 
     /* Filtro por cliente */
     .filtro-wrap { position:relative; }
-    #btn-filtro, #btn-filtro-cor, #btn-filtro-peso, #btn-filtro-regiao { height:38px; min-width:120px; box-sizing:border-box; -webkit-appearance:none; appearance:none; margin:0; font-family:inherit; display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:0 16px; border-radius:var(--radius); border:1px solid var(--border); background:#fff; font-size:14px; cursor:pointer; line-height:1; }
-    #btn-filtro:hover, #btn-filtro-cor:hover, #btn-filtro-peso:hover, #btn-filtro-regiao:hover { background:var(--bg); }
-    #btn-filtro.filtro-ativo, #btn-filtro-cor.filtro-ativo, #btn-filtro-peso.filtro-ativo, #btn-filtro-regiao.filtro-ativo { background:var(--accent); color:#fff; border:1px solid var(--accent); }
-    #btn-filtro.filtro-ativo:hover, #btn-filtro-cor.filtro-ativo:hover, #btn-filtro-peso.filtro-ativo:hover, #btn-filtro-regiao.filtro-ativo:hover { background:#6F1515; }
+    #btn-filtro, #btn-filtro-cor, #btn-filtro-peso, #btn-filtro-regiao, #btn-filtro-situacao { height:38px; min-width:120px; box-sizing:border-box; -webkit-appearance:none; appearance:none; margin:0; font-family:inherit; display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:0 16px; border-radius:var(--radius); border:1px solid var(--border); background:#fff; font-size:14px; cursor:pointer; line-height:1; }
+    #btn-filtro:hover, #btn-filtro-cor:hover, #btn-filtro-peso:hover, #btn-filtro-regiao:hover, #btn-filtro-situacao:hover { background:var(--bg); }
+    #btn-filtro.filtro-ativo, #btn-filtro-cor.filtro-ativo, #btn-filtro-peso.filtro-ativo, #btn-filtro-regiao.filtro-ativo, #btn-filtro-situacao.filtro-ativo { background:var(--accent); color:#fff; border:1px solid var(--accent); }
+    #btn-filtro.filtro-ativo:hover, #btn-filtro-cor.filtro-ativo:hover, #btn-filtro-peso.filtro-ativo:hover, #btn-filtro-regiao.filtro-ativo:hover, #btn-filtro-situacao.filtro-ativo:hover { background:#6F1515; }
     .filtro-dropdown { position:absolute; top:calc(100% + 6px); left:0; background:#fff; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 4px 16px rgba(0,0,0,.12); padding:8px; min-width:200px; max-height:320px; overflow:auto; z-index:600; display:none; }
     .filtro-head { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:2px 8px 8px; border-bottom:1px solid var(--border); margin-bottom:4px; }
     .filtro-head .titulo { font-size:11px; color:#888; font-weight:700; letter-spacing:.04em; }
@@ -161,6 +161,10 @@
     <button id="btn-filtro-regiao" onclick="toggleFiltroRegiao(event)">⛃ Região</button>
     <div class="filtro-dropdown" id="filtro-regiao-dropdown"></div>
   </div>
+  <div class="filtro-wrap">
+    <button id="btn-filtro-situacao" onclick="toggleFiltroSituacao(event)">⛃ Situação</button>
+    <div class="filtro-dropdown" id="filtro-situacao-dropdown"></div>
+  </div>
   <button id="btn-editar" onclick="toggleEdicao()">✏️ Editar zonas</button>
   <div class="legenda">
     <div class="leg-item"><div class="leg-dot" style="background:#27ae60"></div> &lt; 48h</div>
@@ -233,6 +237,9 @@
   var coresDesmarcadas = new Set();   // labels de idade ocultados pelo filtro
   var faixasDesmarcadas = new Set();  // faixas de peso ocultadas pelo filtro
   var regioesDesmarcadas = new Set(); // regiões ocultadas pelo filtro
+  var statusDesmarcados = new Set();  // situações ocultadas (pendente/em_rota)
+  var SITUACOES = [{ key:'pendente', label:'Pendente' }, { key:'em_rota', label:'Em rota' }];
+  function statusKey(rom) { return (rom.status === 'em_rota') ? 'em_rota' : 'pendente'; }
   function regiaoKey(rom) { return (rom.regiao && String(rom.regiao).trim()) || '__sem__'; }
   // Simulador de plano de entregas: ids de romaneio selecionados (persiste no navegador).
   var simIds = new Set(JSON.parse(localStorage.getItem('pn_sim_ids') || '[]'));
@@ -319,6 +326,7 @@
     if (coresDesmarcadas.has(corPorIdade(idadeHoras(rom.dataGeracao)).label)) return false;
     if (faixasDesmarcadas.has(faixaDe(rom.kgPlanejados))) return false;
     if (regioesDesmarcadas.has(regiaoKey(rom))) return false;
+    if (statusDesmarcados.has(statusKey(rom))) return false;
     return true;
   }
 
@@ -333,7 +341,7 @@
       '<span class="popup-idade" style="background:' + c.bg + ';color:' + c.txt + '">' + c.label + ' — ' + Math.round(horas) + 'h</span>' +
       '<div class="popup-acoes">' +
         '<button class="popup-btn popup-btn-pdf" onclick="verPdf(\'' + rom.id + '\')">📄 Ver PDF</button>' +
-        '<button class="popup-btn popup-btn-del" onclick="excluirPino(\'' + rom.id + '\')">🗑 Excluir</button>' +
+        '<button class="popup-btn popup-btn-del" onclick="marcarEntregue(\'' + rom.id + '\')">✓ Entregue</button>' +
       '</div>' +
       '<button class="popup-btn popup-btn-sim" style="width:100%;margin-top:6px" onclick="toggleSim(\'' + rom.id + '\')">' +
         (simIds.has(rom.id) ? '− Remover da simulação' : '＋ Adicionar à simulação') +
@@ -433,6 +441,7 @@
     document.getElementById('btn-filtro-cor').classList.toggle('filtro-ativo', coresDesmarcadas.size > 0);
     document.getElementById('btn-filtro-peso').classList.toggle('filtro-ativo', faixasDesmarcadas.size > 0);
     document.getElementById('btn-filtro-regiao').classList.toggle('filtro-ativo', regioesDesmarcadas.size > 0);
+    document.getElementById('btn-filtro-situacao').classList.toggle('filtro-ativo', statusDesmarcados.size > 0);
   }
 
   // ── Filtro por cliente ──────────────────────────────────────────────
@@ -474,7 +483,7 @@
   }
 
   function fecharDropdowns(exceto) {
-    ['filtro-dropdown','filtro-cor-dropdown','filtro-peso-dropdown','filtro-regiao-dropdown'].forEach(function(id) {
+    ['filtro-dropdown','filtro-cor-dropdown','filtro-peso-dropdown','filtro-regiao-dropdown','filtro-situacao-dropdown'].forEach(function(id) {
       if (id !== exceto) { var el = document.getElementById(id); if (el) el.style.display = 'none'; }
     });
   }
@@ -502,6 +511,24 @@
     var dd = document.getElementById('filtro-regiao-dropdown');
     dd.style.display = dd.style.display === 'block' ? 'none' : 'block';
   }
+  function toggleFiltroSituacao(e) {
+    if (e) e.stopPropagation();
+    fecharDropdowns('filtro-situacao-dropdown');
+    var dd = document.getElementById('filtro-situacao-dropdown');
+    dd.style.display = dd.style.display === 'block' ? 'none' : 'block';
+  }
+  function montarFiltroSituacao() {
+    var html = '<div class="filtro-head"><span class="titulo">SITUAÇÃO</span>' +
+      '<span><button onclick="filtroSituacaoTodos(true)">Todos</button><button onclick="filtroSituacaoTodos(false)">Nenhum</button></span></div>';
+    SITUACOES.forEach(function(s) {
+      var checked = statusDesmarcados.has(s.key) ? '' : 'checked';
+      html += '<label><input type="checkbox" value="' + s.key + '" ' + checked + ' onchange="toggleSituacao(this)"> ' + s.label + '</label>';
+    });
+    document.getElementById('filtro-situacao-dropdown').innerHTML = html;
+  }
+  function toggleSituacao(cb) { if (cb.checked) statusDesmarcados.delete(cb.value); else statusDesmarcados.add(cb.value); renderMarkers(false); }
+  function filtroSituacaoTodos(m) { SITUACOES.forEach(function(s) { if (m) statusDesmarcados.delete(s.key); else statusDesmarcados.add(s.key); }); montarFiltroSituacao(); renderMarkers(false); }
+
 
   // ── Filtro por cor (idade) ──────────────────────────────────────────
   function montarFiltroCor() {
@@ -618,13 +645,13 @@
     window.open(SERVER_URL + '/romaneio-pdf/' + id, '_blank');
   }
 
-  function excluirPino(id) {
+  function marcarEntregue(id) {
     var rom = null;
     for (var i = 0; i < romaneios.length; i++) { if (romaneios[i].id === id) { rom = romaneios[i]; break; } }
     var nome = rom ? (rom.filial || rom.clienteNome || rom.cliente) : id;
-    if (!confirm('Excluir o pedido da filial ' + nome + '?')) return;
+    if (!confirm('Marcar como ENTREGUE o pedido da filial ' + nome + '?')) return;
 
-    fetch(SERVER_URL + '/romaneio/' + id, { method:'DELETE' })
+    fetch(SERVER_URL + '/romaneio/' + id + '/status', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({status:'entregue'}) })
       .then(function(r) { return r.json(); })
       .then(function(data) {
         if (data.ok) {
@@ -868,6 +895,7 @@
         montarFiltroCor();
         montarFiltroPeso();
         montarFiltroRegiao(romaneios);
+        montarFiltroSituacao();
         renderMarkers(true);
       })
       .catch(function(e) {
