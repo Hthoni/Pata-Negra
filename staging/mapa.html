@@ -35,10 +35,10 @@
 
     /* Filtro por cliente */
     .filtro-wrap { position:relative; }
-    #btn-filtro, #btn-filtro-cor, #btn-filtro-peso, #btn-filtro-regiao, #btn-filtro-situacao { height:38px; min-width:120px; box-sizing:border-box; -webkit-appearance:none; appearance:none; margin:0; font-family:inherit; display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:0 16px; border-radius:var(--radius); border:1px solid var(--border); background:#fff; font-size:14px; cursor:pointer; line-height:1; }
-    #btn-filtro:hover, #btn-filtro-cor:hover, #btn-filtro-peso:hover, #btn-filtro-regiao:hover, #btn-filtro-situacao:hover { background:var(--bg); }
-    #btn-filtro.filtro-ativo, #btn-filtro-cor.filtro-ativo, #btn-filtro-peso.filtro-ativo, #btn-filtro-regiao.filtro-ativo, #btn-filtro-situacao.filtro-ativo { background:var(--accent); color:#fff; border:1px solid var(--accent); }
-    #btn-filtro.filtro-ativo:hover, #btn-filtro-cor.filtro-ativo:hover, #btn-filtro-peso.filtro-ativo:hover, #btn-filtro-regiao.filtro-ativo:hover, #btn-filtro-situacao.filtro-ativo:hover { background:#6F1515; }
+    #btn-filtro, #btn-filtro-cor, #btn-filtro-peso, #btn-filtro-situacao { height:38px; min-width:120px; box-sizing:border-box; -webkit-appearance:none; appearance:none; margin:0; font-family:inherit; display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:0 16px; border-radius:var(--radius); border:1px solid var(--border); background:#fff; font-size:14px; cursor:pointer; line-height:1; }
+    #btn-filtro:hover, #btn-filtro-cor:hover, #btn-filtro-peso:hover, #btn-filtro-situacao:hover { background:var(--bg); }
+    #btn-filtro.filtro-ativo, #btn-filtro-cor.filtro-ativo, #btn-filtro-peso.filtro-ativo, #btn-filtro-situacao.filtro-ativo { background:var(--accent); color:#fff; border:1px solid var(--accent); }
+    #btn-filtro.filtro-ativo:hover, #btn-filtro-cor.filtro-ativo:hover, #btn-filtro-peso.filtro-ativo:hover, #btn-filtro-situacao.filtro-ativo:hover { background:#6F1515; }
     .filtro-dropdown { position:absolute; top:calc(100% + 6px); left:0; background:#fff; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 4px 16px rgba(0,0,0,.12); padding:8px; min-width:200px; max-height:320px; overflow:auto; z-index:600; display:none; }
     .filtro-head { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:2px 8px 8px; border-bottom:1px solid var(--border); margin-bottom:4px; }
     .filtro-head .titulo { font-size:11px; color:#888; font-weight:700; letter-spacing:.04em; }
@@ -142,7 +142,6 @@
 </header>
 
 <div class="toolbar">
-  <h2>Pedidos Pendentes</h2>
   <span class="stat-badge" id="total-badge">0 pedidos</span>
   <button id="btn-refresh" onclick="carregarRomaneios()">↺ Atualizar</button>
   <div class="filtro-wrap">
@@ -156,10 +155,6 @@
   <div class="filtro-wrap">
     <button id="btn-filtro-peso" onclick="toggleFiltroPeso(event)">⛃ Peso</button>
     <div class="filtro-dropdown" id="filtro-peso-dropdown"></div>
-  </div>
-  <div class="filtro-wrap">
-    <button id="btn-filtro-regiao" onclick="toggleFiltroRegiao(event)">⛃ Região</button>
-    <div class="filtro-dropdown" id="filtro-regiao-dropdown"></div>
   </div>
   <div class="filtro-wrap">
     <button id="btn-filtro-situacao" onclick="toggleFiltroSituacao(event)">⛃ Situação</button>
@@ -325,7 +320,6 @@
     if (clientesDesmarcados.has(rom.cliente)) return false;
     if (coresDesmarcadas.has(corPorIdade(idadeHoras(rom.dataGeracao)).label)) return false;
     if (faixasDesmarcadas.has(faixaDe(rom.kgPlanejados))) return false;
-    if (regioesDesmarcadas.has(regiaoKey(rom))) return false;
     if (statusDesmarcados.has(statusKey(rom))) return false;
     return true;
   }
@@ -440,7 +434,6 @@
     document.getElementById('btn-filtro').classList.toggle('filtro-ativo', clientesDesmarcados.size > 0);
     document.getElementById('btn-filtro-cor').classList.toggle('filtro-ativo', coresDesmarcadas.size > 0);
     document.getElementById('btn-filtro-peso').classList.toggle('filtro-ativo', faixasDesmarcadas.size > 0);
-    document.getElementById('btn-filtro-regiao').classList.toggle('filtro-ativo', regioesDesmarcadas.size > 0);
     document.getElementById('btn-filtro-situacao').classList.toggle('filtro-ativo', statusDesmarcados.size > 0);
   }
 
@@ -483,7 +476,7 @@
   }
 
   function fecharDropdowns(exceto) {
-    ['filtro-dropdown','filtro-cor-dropdown','filtro-peso-dropdown','filtro-regiao-dropdown','filtro-situacao-dropdown'].forEach(function(id) {
+    ['filtro-dropdown','filtro-cor-dropdown','filtro-peso-dropdown','filtro-situacao-dropdown'].forEach(function(id) {
       if (id !== exceto) { var el = document.getElementById(id); if (el) el.style.display = 'none'; }
     });
   }
@@ -894,7 +887,6 @@
         montarFiltro(romaneios);
         montarFiltroCor();
         montarFiltroPeso();
-        montarFiltroRegiao(romaneios);
         montarFiltroSituacao();
         renderMarkers(true);
       })
