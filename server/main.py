@@ -19,7 +19,7 @@ import datetime
 import traceback
 from flask_cors import CORS
 
-from storage import perfil_existe, salvar_perfil, carregar_perfil_bytes, perfil_filename, salvar_romaneio, listar_romaneios, deletar_romaneio, salvar_pedido_pdf, carregar_pedido_pdf, salvar_geofence, listar_geofences, deletar_geofence, salvar_master, master_existe, carregar_master_bytes, atualizar_status_romaneio, salvar_entrega, carregar_entrega, listar_entregas, deletar_entrega
+from storage import perfil_existe, salvar_perfil, carregar_perfil_bytes, perfil_filename, salvar_romaneio, listar_romaneios, deletar_romaneio, salvar_pedido_pdf, carregar_pedido_pdf, salvar_geofence, listar_geofences, deletar_geofence, salvar_master, master_existe, carregar_master_bytes, atualizar_status_romaneio, salvar_entrega, carregar_entrega, listar_entregas, deletar_entrega, registrar_desfecho_entrega
 from perfil import ler_perfil, ler_filiais, buscar_filial, ler_operadores
 from excel_gen import gerar_excel
 from pdf_gen import gerar_pdf, _kg_pdf, gerar_pdf_totais
@@ -195,19 +195,56 @@ def set_status_romaneio(romaneio_id):
     if novo not in ('pendente', 'em_rota', 'entregue', 'falhou'):
         return jsonify({'erro': 'status invalido'}), 400
     try:
-        ok = atualizar_status_romaneio(romaneio_id, novo)
-        if ok:
-            return jsonify({'ok': True, 'status': novo})
-        return jsonify({'erro': 'Romaneio não encontrado'}), 404
+        # descobre se o pedido está numa entrega (para registrar o desfecho lá)
+        idx = {r['id']: r for r in listar_romaneios()}
+        rom = idx.get(romaneio_id)
+        entrega_id = rom.get('entregaId') if rom else None
+
+        if novo == 'falhou':
+            # falha: pedido volta para PENDENTE (mantém data original), registra a falha.
+            ok = atualizar_status_romaneio(romaneio_id, 'pendente', falha=True)
+            resultado = 'pendente'
+        else:
+            ok = atualizar_status_romaneio(romaneio_id, novo)
+            resultado = novo
+        if not ok:
+            return jsonify({'erro': 'Romaneio não encontrado'}), 404
+
+        # se estava numa entrega e o desfecho é definitivo, registra e arquiva se esvaziou
+        finalizada = False
+        if entrega_id and novo in ('entregue', 'falhou'):
+            snap = {'cliente': (rom.get('clienteNome') or rom.get('cliente') or ''),
+                    'filial': rom.get('filial', ''), 'kg': rom.get('kgPlanejados', 0)}
+            _, finalizada = registrar_desfecho_entrega(entrega_id, romaneio_id, novo, snap)
+        return jsonify({'ok': True, 'status': resultado, 'entregaFinalizada': finalizada})
     except Exception as e:
+        traceback.print_exc()
         return jsonify({'erro': str(e)}), 500
 
 
 @app.route('/entregas', methods=['GET'])
 def get_entregas():
-    """Lista as entregas salvas (rotas do dia)."""
+    """Lista entregas. Por padrão as ativas (em_andamento). ?status=finalizada
+    devolve o histórico (últimos 20 dias)."""
     try:
-        return jsonify(listar_entregas())
+        filtro = (request.args.get('status') or 'em_andamento').strip()
+        todas = listar_entregas()
+        if filtro == 'finalizada':
+            limite = datetime.datetime.utcnow() - datetime.timedelta(days=20)
+            out = []
+            for e in todas:
+                if e.get('status') != 'finalizada':
+                    continue
+                try:
+                    fim = datetime.datetime.fromisoformat(e.get('finalizadaEm', ''))
+                    if fim >= limite:
+                        out.append(e)
+                except Exception:
+                    out.append(e)
+            out.sort(key=lambda x: x.get('finalizadaEm', ''), reverse=True)
+            return jsonify(out)
+        # ativas: em_andamento (default) — trata ausência de status como ativa
+        return jsonify([e for e in todas if e.get('status', 'em_andamento') != 'finalizada'])
     except Exception as e:
         return jsonify({'erro': str(e)}), 500
 
