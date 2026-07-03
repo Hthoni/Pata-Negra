@@ -526,8 +526,24 @@
     var b = document.getElementById('ps-body'), t = document.getElementById('ps-toggle');
     var h = b.style.display === 'none'; b.style.display = h ? 'block' : 'none'; t.textContent = h ? '▾' : '▸';
   }
-  function detalharTotais() {
-    alert('“Detalhar totais” vai gerar um PDF com a soma por produto (código interno) dos pedidos selecionados. Essa parte depende da próxima etapa no backend, que ainda vamos fazer. Por ora, o simulador já mostra o peso total.');
+  async function detalharTotais() {
+    var ids = Array.from(simIds);
+    if (!ids.length) { alert('Selecione ao menos um pedido para detalhar.'); return; }
+    try {
+      var resp = await fetch(SERVER_URL + '/simular-totais', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: ids })
+      });
+      if (!resp.ok) {
+        var e = {}; try { e = await resp.json(); } catch (x) {}
+        alert('Erro ao gerar os totais: ' + (e.erro || resp.status));
+        return;
+      }
+      var blob = await resp.blob();
+      window.open(URL.createObjectURL(blob), '_blank');
+    } catch (err) {
+      alert('Erro de conexao ao gerar os totais: ' + err.message);
+    }
   }
   function atualizarPainelSim() {
     var body = document.getElementById('ps-body');
