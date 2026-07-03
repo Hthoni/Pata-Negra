@@ -16,21 +16,25 @@
     .logo { width:30px; height:30px; background:rgba(255,255,255,.18); border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:11px; }
     header h1 { font-size:15px; font-weight:600; }
     .header-actions { margin-left:auto; display:flex; gap:8px; }
-    .btn-header { padding:6px 14px; border-radius:var(--radius); border:1px solid rgba(255,255,255,.4); background:rgba(255,255,255,.15); color:#fff; font-size:12px; font-weight:600; cursor:pointer; text-decoration:none; transition:background .13s; }
+    .btn-header { -webkit-appearance:none; appearance:none; font-family:inherit; box-sizing:border-box; height:34px; min-width:110px; display:inline-flex; align-items:center; justify-content:center; padding:0 14px; border-radius:var(--radius); border:1px solid rgba(255,255,255,.4); background:rgba(255,255,255,.15); color:#fff; font-size:12px; font-weight:600; cursor:pointer; text-decoration:none; transition:background .13s; white-space:nowrap; }
     .btn-header:hover { background:rgba(255,255,255,.28); }
 
-    main { max-width:900px; margin:28px auto; padding:0 16px; }
+    main { max-width:1180px; margin:28px auto; padding:0 280px 0 16px; }
 
-    .toolbar { display:flex; align-items:center; gap:12px; margin-bottom:20px; flex-wrap:wrap; }
+    .toolbar { position:sticky; top:0; z-index:50; background:var(--bg); display:flex; align-items:center; gap:10px; margin:0 0 12px; padding:12px 0; flex-wrap:wrap; box-shadow:0 6px 10px -6px rgba(0,0,0,.12); }
     .toolbar h2 { font-size:16px; font-weight:600; }
     .stat-badge { background:var(--accent-lt); color:var(--accent); padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600; }
-    .btn-refresh { padding:7px 14px; border-radius:var(--radius); border:1px solid var(--border); background:#fff; font-size:12px; cursor:pointer; margin-left:auto; }
-    .btn-refresh:hover { background:var(--bg); }
 
-    /* Filtro por cliente */
+    /* Filtros (cliente, cor, peso, região) */
     .filtro-wrap { position:relative; }
-    #btn-filtro { padding:7px 14px; border-radius:var(--radius); border:1px solid var(--border); background:#fff; font-size:12px; cursor:pointer; }
-    #btn-filtro:hover { background:var(--bg); }
+    #btn-filtro, #btn-filtro-cor, #btn-filtro-peso, #btn-filtro-regiao { height:38px; min-width:120px; box-sizing:border-box; -webkit-appearance:none; appearance:none; margin:0; font-family:inherit; display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:0 16px; border-radius:var(--radius); border:1px solid var(--border); background:#fff; font-size:14px; cursor:pointer; line-height:1; }
+    #btn-filtro:hover, #btn-filtro-cor:hover, #btn-filtro-peso:hover, #btn-filtro-regiao:hover { background:var(--bg); }
+    #btn-filtro.filtro-ativo, #btn-filtro-cor.filtro-ativo, #btn-filtro-peso.filtro-ativo, #btn-filtro-regiao.filtro-ativo { background:var(--accent); color:#fff; border:1px solid var(--accent); }
+    #btn-filtro.filtro-ativo:hover, #btn-filtro-cor.filtro-ativo:hover, #btn-filtro-peso.filtro-ativo:hover, #btn-filtro-regiao.filtro-ativo:hover { background:#6F1515; }
+    .btn-master { height:38px; box-sizing:border-box; -webkit-appearance:none; appearance:none; margin-left:auto; padding:0 16px; border-radius:var(--radius); border:1px solid var(--accent); background:#fff; color:var(--accent); font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; }
+    .btn-master:hover { background:var(--accent-lt); }
+    .btn-refresh { height:38px; box-sizing:border-box; -webkit-appearance:none; appearance:none; padding:0 14px; border-radius:var(--radius); border:1px solid var(--border); background:#fff; font-size:13px; cursor:pointer; font-family:inherit; }
+    .btn-refresh:hover { background:var(--bg); }
     .filtro-dropdown { position:absolute; top:calc(100% + 6px); left:0; background:#fff; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 4px 16px rgba(0,0,0,.12); padding:8px; min-width:200px; max-height:320px; overflow:auto; z-index:600; display:none; }
     .filtro-head { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:2px 8px 8px; border-bottom:1px solid var(--border); margin-bottom:4px; }
     .filtro-head .titulo { font-size:11px; color:#888; font-weight:700; letter-spacing:.04em; }
@@ -38,31 +42,70 @@
     .filtro-head button:hover { text-decoration:underline; }
     .filtro-dropdown label { display:flex; align-items:center; gap:8px; padding:6px 8px; font-size:13px; cursor:pointer; border-radius:6px; }
     .filtro-dropdown label:hover { background:var(--bg); }
+    .filtro-sort { padding:2px 4px 8px; border-bottom:1px solid var(--border); margin-bottom:6px; }
+    .filtro-sort .rot { font-size:10px; color:#aaa; font-weight:700; letter-spacing:.05em; display:block; padding:0 4px 4px; }
+    .filtro-sort button { display:block; width:100%; text-align:left; background:none; border:none; padding:5px 8px; font-size:12px; color:var(--text); cursor:pointer; border-radius:6px; font-family:inherit; }
+    .filtro-sort button:hover { background:var(--bg); }
+    .filtro-sort button.sort-on { background:var(--accent-lt); color:var(--accent); font-weight:700; }
     .filtro-vazio { padding:8px; font-size:12px; color:#888; }
 
     .lista { display:flex; flex-direction:column; gap:10px; }
 
-    .card-entrega { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px 20px; display:flex; align-items:center; gap:16px; border-left:4px solid #ccc; transition:box-shadow .13s; }
+    .card-entrega { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:12px 20px; display:flex; align-items:stretch; gap:18px; border-left:10px solid #ccc; transition:box-shadow .13s; }
     .card-entrega:hover { box-shadow:0 2px 12px rgba(0,0,0,.08); }
     .card-entrega.verde  { border-left-color:#27ae60; }
     .card-entrega.amarelo { border-left-color:#f1c40f; }
     .card-entrega.laranja { border-left-color:#e67e22; }
     .card-entrega.vermelho { border-left-color:#e74c3c; }
 
-    .entrega-info { flex:1; }
-    .entrega-titulo { font-weight:700; font-size:14px; margin-bottom:2px; }
-    .entrega-sub { font-size:12px; color:#666; margin-bottom:8px; }
+    .entrega-info { flex:1; min-width:0; display:flex; flex-direction:column; justify-content:center; }
+    .entrega-titulo { font-weight:700; font-size:22px; line-height:1.1; margin-bottom:2px; }
+    .entrega-sub { font-size:12px; color:#666; margin-bottom:7px; }
     .entrega-meta { display:flex; gap:16px; flex-wrap:wrap; }
     .meta-item { font-size:12px; }
     .meta-label { color:#888; }
     .meta-valor { font-weight:600; }
 
-    .badge-idade { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; white-space:nowrap; }
+    .estado-col { display:flex; flex-direction:column; justify-content:flex-end; gap:6px; width:170px; flex-shrink:0; }
+    .entrega-regiao { font-size:17px; font-weight:600; color:var(--accent); text-align:center; line-height:1.15; white-space:nowrap; }
+    .entrega-regiao.sem { color:#bbb; font-weight:500; font-style:italic; }
 
-    .card-acoes { display:flex; flex-direction:column; gap:6px; }
-    .btn-pdf { padding:8px 18px; border-radius:var(--radius); border:1px solid var(--accent); background:#fff; color:var(--accent); font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; transition:background .13s; }
+    .card-entrega.no-sim { opacity:.5; }
+
+    .badge-idade { text-align:center; border-radius:12px; padding:8px 14px; width:100%; box-sizing:border-box; }
+    .badge-idade .fase { display:block; font-size:12px; font-weight:700; }
+    .badge-idade .horas { display:block; font-size:24px; font-weight:800; line-height:1.1; }
+
+    .card-acoes { display:flex; flex-direction:column; justify-content:flex-end; gap:5px; flex-shrink:0; }
+    .btn-sim { height:28px; padding:0 20px; border-radius:var(--radius); border:1px solid var(--accent); background:#fff; color:var(--accent); font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; transition:background .13s; }
+    .btn-sim:hover { background:var(--accent-lt); }
+    .btn-sim.ativo { background:var(--accent); color:#fff; }
+
+    /* Painel simulador flutuante à direita */
+    #painel-sim { position:fixed; top:72px; right:16px; width:248px; z-index:500; background:#fff; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 4px 18px rgba(0,0,0,.14); overflow:hidden; max-height:calc(100vh - 90px); display:flex; flex-direction:column; }
+    .ps-head { background:#2c3e50; color:#fff; padding:8px 12px; font-size:12px; font-weight:700; display:flex; justify-content:space-between; align-items:center; cursor:pointer; flex-shrink:0; }
+    .ps-head .toggle { font-size:11px; opacity:.85; }
+    #ps-body { overflow:auto; }
+    .ps-row { display:flex; align-items:center; gap:6px; padding:6px 10px; border-top:1px solid #f0ece8; font-size:12px; }
+    .ps-row:first-child { border-top:none; }
+    .ps-nome { flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:600; }
+    .ps-nome em { color:#888; font-style:normal; font-weight:400; }
+    .ps-kg { color:#555; white-space:nowrap; }
+    .ps-x { border:none; background:none; color:#c0392b; font-size:16px; cursor:pointer; line-height:1; padding:0 2px; }
+    .ps-total { display:flex; justify-content:space-between; padding:8px 10px; background:#eef1f4; font-weight:700; font-size:12px; border-top:1px solid #e2ddd8; }
+    .ps-acoes { display:flex; gap:6px; padding:8px 10px; }
+    .ps-btn { flex:1; padding:7px 6px; border-radius:6px; font-size:11px; font-weight:600; cursor:pointer; border:1px solid var(--border); background:#fff; font-family:inherit; }
+    .ps-det { color:var(--accent); border-color:var(--accent); }
+    .ps-limpar { color:#666; }
+    .ps-vazio { padding:12px; font-size:12px; color:#999; text-align:center; }
+
+    @media (max-width: 760px) {
+      main { padding:0 16px; }
+      #painel-sim { position:static; width:auto; max-width:900px; margin:0 auto 16px; max-height:none; }
+    }
+    .btn-pdf { height:28px; padding:0 20px; border-radius:var(--radius); border:1px solid var(--accent); background:#fff; color:var(--accent); font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; transition:background .13s; }
     .btn-pdf:hover { background:var(--accent-lt); }
-    .btn-entregar { padding:8px 18px; border-radius:var(--radius); border:none; background:var(--green); color:#fff; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; transition:background .13s; }
+    .btn-entregar { height:28px; padding:0 20px; border-radius:var(--radius); border:none; background:var(--green); color:#fff; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; transition:background .13s; }
     .btn-entregar:hover { background:#145230; }
     .btn-entregar:disabled { background:#aaa; cursor:not-allowed; }
 
@@ -91,8 +134,11 @@
   <div class="logo">PN</div>
   <h1>Pata Negra — Gerenciar Entregas</h1>
   <div class="header-actions">
-    <a href="mapa.html" class="btn-header">🗺️ Ver Mapa</a>
-    <a href="index.html" class="btn-header">← Voltar</a>
+    <a href="mapa.html" class="btn-header">Ver Mapa</a>
+    <a href="index.html" class="btn-header">Voltar</a>
+    <button class="btn-header" onclick="document.getElementById('inp-master').click()">Subir Master</button>
+    <input type="file" id="inp-master" accept=".xlsx" style="display:none" onchange="uploadMaster(this)">
+    <button class="btn-header" onclick="carregar()">Atualizar</button>
   </div>
 </header>
 
@@ -104,7 +150,18 @@
       <button id="btn-filtro" onclick="toggleFiltro(event)">⛃ Clientes</button>
       <div class="filtro-dropdown" id="filtro-dropdown"></div>
     </div>
-    <button class="btn-refresh" onclick="carregar()">↺ Atualizar</button>
+    <div class="filtro-wrap">
+      <button id="btn-filtro-cor" onclick="toggleFiltroCor(event)">⛃ Cor</button>
+      <div class="filtro-dropdown" id="filtro-cor-dropdown"></div>
+    </div>
+    <div class="filtro-wrap">
+      <button id="btn-filtro-peso" onclick="toggleFiltroPeso(event)">⛃ Peso</button>
+      <div class="filtro-dropdown" id="filtro-peso-dropdown"></div>
+    </div>
+    <div class="filtro-wrap">
+      <button id="btn-filtro-regiao" onclick="toggleFiltroRegiao(event)">⛃ Região</button>
+      <div class="filtro-dropdown" id="filtro-regiao-dropdown"></div>
+    </div>
   </div>
 
   <div id="loading">
@@ -113,6 +170,15 @@
   </div>
   <div class="lista" id="lista"></div>
 </main>
+
+<!-- Simulador de entregas (compartilha a seleção com o mapa via localStorage) -->
+<div id="painel-sim">
+  <div class="ps-head" onclick="togglePainelSim()">
+    <span>🚚 Simulador de entregas</span>
+    <span class="toggle" id="ps-toggle">▾</span>
+  </div>
+  <div id="ps-body"></div>
+</div>
 
 <!-- Modal confirmação -->
 <div class="modal-overlay" id="modal">
@@ -131,6 +197,68 @@
   var romaneios = [];
   var pendingId = null;
   var clientesDesmarcados = new Set(); // clientes ocultados pelo filtro
+  var coresDesmarcadas = new Set();    // idades ocultadas
+  var faixasDesmarcadas = new Set();   // faixas de peso ocultadas
+  var regioesDesmarcadas = new Set();  // regiões ocultadas
+  // Simulador: mesma chave do mapa -> seleção compartilhada entre as páginas.
+  var simIds = new Set(JSON.parse(localStorage.getItem('pn_sim_ids') || '[]'));
+
+  // Ordenação da lista (uma por vez). Padrão: idade, mais antigo primeiro.
+  var sortField = 'idade';
+  var sortDir = 'asc';
+  function compararPedidos(a, b) {
+    var dir = sortDir === 'asc' ? 1 : -1;
+    if (sortField === 'cliente') return dir * String(a.clienteNome || a.cliente || '').localeCompare(String(b.clienteNome || b.cliente || ''));
+    if (sortField === 'peso') return dir * ((Number(a.kgPlanejados) || 0) - (Number(b.kgPlanejados) || 0));
+    if (sortField === 'regiao') {
+      var ra = (a.regiao && String(a.regiao).trim()) || '\uffff';
+      var rb = (b.regiao && String(b.regiao).trim()) || '\uffff';
+      return dir * ra.localeCompare(rb);
+    }
+    return dir * (new Date(a.dataGeracao) - new Date(b.dataGeracao)); // idade
+  }
+  function setSort(field, dir) {
+    sortField = field; sortDir = dir;
+    renderLista();
+    montarFiltro(romaneios); montarFiltroCor(); montarFiltroPeso(); montarFiltroRegiao(romaneios);
+  }
+  function sortRow(field, labelAsc, labelDesc) {
+    var a = (sortField === field && sortDir === 'asc') ? ' sort-on' : '';
+    var d = (sortField === field && sortDir === 'desc') ? ' sort-on' : '';
+    return '<div class="filtro-sort"><span class="rot">CLASSIFICAR</span>' +
+      '<button class="' + a.trim() + '" onclick="setSort(\'' + field + '\',\'asc\')">' + labelAsc + '</button>' +
+      '<button class="' + d.trim() + '" onclick="setSort(\'' + field + '\',\'desc\')">' + labelDesc + '</button>' +
+      '</div>';
+  }
+
+  var CORES_FILTRO = [
+    { label:'Recente',  hex:'#27ae60' },
+    { label:'Atenção',  hex:'#f1c40f' },
+    { label:'Atrasado', hex:'#e67e22' },
+    { label:'Crítico',  hex:'#e74c3c' }
+  ];
+  var FAIXAS = [
+    { key:'0-200',    label:'0 – 200 kg' },
+    { key:'201-600',  label:'201 – 600 kg' },
+    { key:'601-1800', label:'601 – 1.800 kg' },
+    { key:'1801+',    label:'1.801 kg ou mais' }
+  ];
+  function faixaDe(kg) {
+    kg = Number(kg) || 0;
+    if (kg <= 200) return '0-200';
+    if (kg <= 600) return '201-600';
+    if (kg <= 1800) return '601-1800';
+    return '1801+';
+  }
+  function regiaoKey(rom) { return (rom.regiao && String(rom.regiao).trim()) || '__sem__'; }
+
+  function pedidoVisivel(rom) {
+    if (clientesDesmarcados.has(rom.cliente)) return false;
+    if (coresDesmarcadas.has(classePorIdade(idadeHoras(rom.dataGeracao)).label)) return false;
+    if (faixasDesmarcadas.has(faixaDe(rom.kgPlanejados))) return false;
+    if (regioesDesmarcadas.has(regiaoKey(rom))) return false;
+    return true;
+  }
 
   function idadeHoras(dataGeracao) {
     return (Date.now() - new Date(dataGeracao).getTime()) / 3600000;
@@ -162,6 +290,9 @@
         document.getElementById('loading').style.display = 'none';
         romaneios = data || [];
         montarFiltro(romaneios);
+        montarFiltroCor();
+        montarFiltroPeso();
+        montarFiltroRegiao(romaneios);
         renderLista();
       })
       .catch(function(e) {
@@ -171,19 +302,21 @@
   }
 
   function renderLista() {
-    var data = romaneios.filter(function(rom) { return !clientesDesmarcados.has(rom.cliente); });
+    var data = romaneios.filter(pedidoVisivel);
 
     // Ordenar por idade (mais antigo primeiro)
-    data.sort(function(a, b) { return new Date(a.dataGeracao) - new Date(b.dataGeracao); });
+    data.sort(compararPedidos);
 
     document.getElementById('total-badge').textContent = data.length + ' pedido' + (data.length !== 1 ? 's' : '');
 
     if (romaneios.length === 0) {
       document.getElementById('lista').innerHTML = '<div class="sem-dados"><h3>🎉 Tudo entregue!</h3><p>Nenhum pedido pendente no momento.</p></div>';
+      atualizarPainelSim(); atualizarBotoesFiltro();
       return;
     }
     if (data.length === 0) {
-      document.getElementById('lista').innerHTML = '<div class="sem-dados"><p>Nenhum pedido para os clientes selecionados.</p></div>';
+      document.getElementById('lista').innerHTML = '<div class="sem-dados"><p>Nenhum pedido para os filtros selecionados.</p></div>';
+      atualizarPainelSim(); atualizarBotoesFiltro();
       return;
     }
 
@@ -191,7 +324,11 @@
     data.forEach(function(rom) {
       var horas = idadeHoras(rom.dataGeracao);
       var c = classePorIdade(horas);
-      html += '<div class="card-entrega ' + c.cls + '" id="card-' + rom.id + '">' +
+      var noSim = simIds.has(rom.id);
+      var reg = (rom.regiao && String(rom.regiao).trim())
+        ? '<div class="entrega-regiao">' + rom.regiao + '</div>'
+        : '<div class="entrega-regiao sem">sem região</div>';
+      html += '<div class="card-entrega ' + c.cls + (noSim ? ' no-sim' : '') + '" id="card-' + rom.id + '">' +
         '<div class="entrega-info">' +
           '<div class="entrega-titulo">' + (rom.clienteNome || rom.cliente) + '</div>' +
           '<div class="entrega-sub">' + (rom.filial || '—') + '</div>' +
@@ -202,18 +339,47 @@
             '<div class="meta-item"><span class="meta-label">Gerado: </span><span class="meta-valor">' + formatarData(rom.dataGeracao) + '</span></div>' +
           '</div>' +
         '</div>' +
-        '<span class="badge-idade" style="background:' + c.bg + ';color:' + c.txt + '">' + c.label + '<br>' + Math.round(horas) + 'h</span>' +
+        '<div class="estado-col">' + reg +
+          '<div class="badge-idade" style="background:' + c.bg + ';color:' + c.txt + '">' +
+            '<span class="fase">' + c.label + '</span><span class="horas">' + Math.round(horas) + 'h</span>' +
+          '</div>' +
+        '</div>' +
         '<div class="card-acoes">' +
-          '<button class="btn-pdf" onclick="verPdf(\'' + rom.id + '\')">📄 PDF</button>' +
-          '<button class="btn-entregar" onclick="confirmarEntrega(\'' + rom.id + '\',\'' + (rom.clienteNome||rom.cliente) + '\',\'' + (rom.filial||'') + '\')">✓ Entregue</button>' +
+          '<button class="btn-pdf" onclick="verPdf(\'' + rom.id + '\')">PDF</button>' +
+          '<button class="btn-sim' + (noSim ? ' ativo' : '') + '" onclick="toggleSim(\'' + rom.id + '\')">' + (noSim ? '− Simulação' : '＋ Simulação') + '</button>' +
+          '<button class="btn-entregar" onclick="confirmarEntrega(\'' + rom.id + '\',\'' + (rom.clienteNome||rom.cliente) + '\',\'' + (rom.filial||'') + '\')">Entregue</button>' +
         '</div>' +
       '</div>';
     });
     document.getElementById('lista').innerHTML = html;
+    atualizarPainelSim();
+    atualizarBotoesFiltro();
   }
 
   function verPdf(id) {
     window.open(SERVER_URL + '/romaneio-pdf/' + id, '_blank');
+  }
+
+  async function uploadMaster(inp) {
+    var f = inp.files[0];
+    if (!f) return;
+    inp.value = '';
+    var btn = inp.previousElementSibling || document.querySelector('.btn-header[onclick*="inp-master"]');
+    var txt = btn ? btn.textContent : '';
+    if (btn) btn.textContent = 'Enviando…';
+    try {
+      var form = new FormData();
+      form.append('master', f);
+      var resp = await fetch(SERVER_URL + '/master', { method: 'POST', body: form });
+      if (resp.status === 404) { alert('A rota /master ainda não está disponível (deploy do backend pendente). Aguarde o deploy terminar e tente de novo.'); return; }
+      var d = await resp.json();
+      if (!resp.ok || d.erro) { alert('Erro ao subir a tabela mestra: ' + (d.erro || resp.status)); return; }
+      alert('Tabela mestra atualizada: ' + (d.codigos || 0) + ' códigos mapeados.');
+    } catch (e) {
+      alert('Erro de conexão ao subir a tabela mestra: ' + e.message);
+    } finally {
+      if (btn) btn.textContent = txt;
+    }
   }
 
   // ── Filtro por cliente ──────────────────────────────────────────────
@@ -229,7 +395,8 @@
       dd.innerHTML = '<div class="filtro-vazio">Nenhum cliente com pedido</div>';
       return;
     }
-    var html = '<div class="filtro-head"><span class="titulo">CLIENTES</span>' +
+    var html = sortRow('cliente', 'A → Z', 'Z → A') +
+      '<div class="filtro-head"><span class="titulo">CLIENTES</span>' +
       '<span><button onclick="filtroTodos(true)">Todos</button><button onclick="filtroTodos(false)">Nenhum</button></span></div>';
     ids.forEach(function(cid) {
       var checked = clientesDesmarcados.has(cid) ? '' : 'checked';
@@ -254,17 +421,133 @@
     renderLista();
   }
 
-  function toggleFiltro(e) {
-    if (e) e.stopPropagation();
-    var dd = document.getElementById('filtro-dropdown');
-    dd.style.display = dd.style.display === 'block' ? 'none' : 'block';
+  function fecharDropdowns(exceto) {
+    ['filtro-dropdown','filtro-cor-dropdown','filtro-peso-dropdown','filtro-regiao-dropdown'].forEach(function(id) {
+      if (id !== exceto) { var el = document.getElementById(id); if (el) el.style.display = 'none'; }
+    });
+  }
+  function abreDropdown(id, exceto) { fecharDropdowns(exceto); var dd = document.getElementById(id); dd.style.display = dd.style.display === 'block' ? 'none' : 'block'; }
+  function toggleFiltro(e) { if (e) e.stopPropagation(); abreDropdown('filtro-dropdown', 'filtro-dropdown'); }
+  function toggleFiltroCor(e) { if (e) e.stopPropagation(); abreDropdown('filtro-cor-dropdown', 'filtro-cor-dropdown'); }
+  function toggleFiltroPeso(e) { if (e) e.stopPropagation(); abreDropdown('filtro-peso-dropdown', 'filtro-peso-dropdown'); }
+  function toggleFiltroRegiao(e) { if (e) e.stopPropagation(); abreDropdown('filtro-regiao-dropdown', 'filtro-regiao-dropdown'); }
+
+  // ── Filtro por cor (idade) ──────────────────────────────────────────
+  function montarFiltroCor() {
+    var html = sortRow('idade', 'Mais antigo primeiro', 'Mais novo primeiro') +
+      '<div class="filtro-head"><span class="titulo">COR (IDADE)</span>' +
+      '<span><button onclick="filtroCorTodos(true)">Todos</button><button onclick="filtroCorTodos(false)">Nenhum</button></span></div>';
+    CORES_FILTRO.forEach(function(c) {
+      var checked = coresDesmarcadas.has(c.label) ? '' : 'checked';
+      html += '<label><input type="checkbox" value="' + c.label + '" ' + checked + ' onchange="toggleCor(this)">' +
+        '<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:' + c.hex + '"></span> ' + c.label + '</label>';
+    });
+    document.getElementById('filtro-cor-dropdown').innerHTML = html;
+  }
+  function toggleCor(cb) { if (cb.checked) coresDesmarcadas.delete(cb.value); else coresDesmarcadas.add(cb.value); renderLista(); }
+  function filtroCorTodos(m) { CORES_FILTRO.forEach(function(c) { if (m) coresDesmarcadas.delete(c.label); else coresDesmarcadas.add(c.label); }); montarFiltroCor(); renderLista(); }
+
+  // ── Filtro por faixa de peso ────────────────────────────────────────
+  function montarFiltroPeso() {
+    var html = sortRow('peso', 'Menor → maior', 'Maior → menor') +
+      '<div class="filtro-head"><span class="titulo">FAIXA DE PESO</span>' +
+      '<span><button onclick="filtroPesoTodos(true)">Todos</button><button onclick="filtroPesoTodos(false)">Nenhum</button></span></div>';
+    FAIXAS.forEach(function(f) {
+      var checked = faixasDesmarcadas.has(f.key) ? '' : 'checked';
+      html += '<label><input type="checkbox" value="' + f.key + '" ' + checked + ' onchange="togglePeso(this)"> ' + f.label + '</label>';
+    });
+    document.getElementById('filtro-peso-dropdown').innerHTML = html;
+  }
+  function togglePeso(cb) { if (cb.checked) faixasDesmarcadas.delete(cb.value); else faixasDesmarcadas.add(cb.value); renderLista(); }
+  function filtroPesoTodos(m) { FAIXAS.forEach(function(f) { if (m) faixasDesmarcadas.delete(f.key); else faixasDesmarcadas.add(f.key); }); montarFiltroPeso(); renderLista(); }
+
+  // ── Filtro por região ───────────────────────────────────────────────
+  function montarFiltroRegiao(data) {
+    var vistos = {};
+    data.forEach(function(r) { var k = regiaoKey(r); vistos[k] = (k === '__sem__') ? 'Sem região' : k; });
+    var keys = Object.keys(vistos).sort(function(a, b) { if (a === '__sem__') return 1; if (b === '__sem__') return -1; return vistos[a].localeCompare(vistos[b]); });
+    regioesDesmarcadas.forEach(function(k) { if (!vistos[k]) regioesDesmarcadas.delete(k); });
+    var dd = document.getElementById('filtro-regiao-dropdown');
+    if (keys.length === 0) { dd.innerHTML = '<div class="filtro-vazio">Nenhuma região</div>'; return; }
+    var html = sortRow('regiao', 'A → Z', 'Z → A') +
+      '<div class="filtro-head"><span class="titulo">REGIÃO</span>' +
+      '<span><button onclick="filtroRegiaoTodos(true)">Todos</button><button onclick="filtroRegiaoTodos(false)">Nenhum</button></span></div>';
+    keys.forEach(function(k) {
+      var checked = regioesDesmarcadas.has(k) ? '' : 'checked';
+      html += '<label><input type="checkbox" value="' + k + '" ' + checked + ' onchange="toggleRegiao(this)"> ' + vistos[k] + '</label>';
+    });
+    dd.innerHTML = html;
+  }
+  function toggleRegiao(cb) { if (cb.checked) regioesDesmarcadas.delete(cb.value); else regioesDesmarcadas.add(cb.value); renderLista(); }
+  function filtroRegiaoTodos(m) {
+    document.getElementById('filtro-regiao-dropdown').querySelectorAll('input[type=checkbox]').forEach(function(cb) {
+      cb.checked = m; if (m) regioesDesmarcadas.delete(cb.value); else regioesDesmarcadas.add(cb.value);
+    });
+    renderLista();
   }
 
-  document.addEventListener('click', function(e) {
-    var wrap = document.querySelector('.filtro-wrap');
-    if (wrap && !wrap.contains(e.target)) {
-      document.getElementById('filtro-dropdown').style.display = 'none';
+  function atualizarBotoesFiltro() {
+    document.getElementById('btn-filtro').classList.toggle('filtro-ativo', clientesDesmarcados.size > 0);
+    document.getElementById('btn-filtro-cor').classList.toggle('filtro-ativo', coresDesmarcadas.size > 0);
+    document.getElementById('btn-filtro-peso').classList.toggle('filtro-ativo', faixasDesmarcadas.size > 0);
+    document.getElementById('btn-filtro-regiao').classList.toggle('filtro-ativo', regioesDesmarcadas.size > 0);
+  }
+
+  // ── Simulador de entregas (seleção compartilhada com o mapa) ─────────
+  function persistSim() { try { localStorage.setItem('pn_sim_ids', JSON.stringify(Array.from(simIds))); } catch (e) {} }
+  function toggleSim(id) { if (simIds.has(id)) simIds.delete(id); else simIds.add(id); persistSim(); renderLista(); }
+  function limparSim() { if (!simIds.size || confirm('Limpar o simulador? Isso remove todos os pedidos selecionados.')) { simIds.clear(); persistSim(); renderLista(); } }
+  function togglePainelSim() { var b = document.getElementById('ps-body'), t = document.getElementById('ps-toggle'); var h = b.style.display === 'none'; b.style.display = h ? 'block' : 'none'; t.textContent = h ? '▾' : '▸'; }
+  async function detalharTotais() {
+    var ids = Array.from(simIds);
+    if (!ids.length) { alert('Selecione ao menos um pedido para detalhar.'); return; }
+    try {
+      var resp = await fetch(SERVER_URL + '/simular-totais', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: ids })
+      });
+      if (!resp.ok) {
+        var e = {}; try { e = await resp.json(); } catch (x) {}
+        alert('Erro ao gerar os totais: ' + (e.erro || resp.status));
+        return;
+      }
+      var blob = await resp.blob();
+      window.open(URL.createObjectURL(blob), '_blank');
+    } catch (err) {
+      alert('Erro de conexao ao gerar os totais: ' + err.message);
     }
+  }
+
+  function atualizarPainelSim() {
+    var body = document.getElementById('ps-body');
+    simIds.forEach(function(id) { if (!romaneios.some(function(r) { return r.id === id; })) simIds.delete(id); });
+    persistSim();
+    var sel = romaneios.filter(function(r) { return simIds.has(r.id); });
+    if (sel.length === 0) {
+      body.innerHTML = '<div class="ps-vazio">Nenhum pedido selecionado.<br>Use \u201c\uFF0B Simula\u00e7\u00e3o\u201d no pedido (aqui ou no mapa).</div>';
+      return;
+    }
+    var html = '', tot = 0;
+    sel.sort(function(a, b) { return (a.clienteNome || '').localeCompare(b.clienteNome || ''); }).forEach(function(r) {
+      var kg = Number(r.kgPlanejados) || 0; tot += kg;
+      html += '<div class="ps-row">' +
+        '<span class="ps-nome" title="' + (r.clienteNome || '') + ' \u00b7 ' + (r.filial || '') + '">' + (r.clienteNome || r.cliente) + ' <em>' + (r.filial || '') + '</em></span>' +
+        '<span class="ps-kg">' + Math.round(kg) + ' kg</span>' +
+        '<button class="ps-x" title="remover" onclick="toggleSim(\'' + r.id + '\')">\u00d7</button>' +
+        '</div>';
+    });
+    html += '<div class="ps-total"><span>Total (' + sel.length + ' ped.)</span><b>' + Math.round(tot) + ' kg</b></div>';
+    html += '<div class="ps-acoes"><button class="ps-btn ps-det" onclick="detalharTotais()">\ud83d\udcc4 Detalhar totais</button><button class="ps-btn ps-limpar" onclick="limparSim()">Limpar</button></div>';
+    body.innerHTML = html;
+  }
+
+  // sincroniza ao vivo quando a seleção muda em outra aba (ex: o mapa)
+  window.addEventListener('storage', function(e) {
+    if (e.key === 'pn_sim_ids') { simIds = new Set(JSON.parse(e.newValue || '[]')); renderLista(); }
+  });
+
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('.filtro-wrap')) fecharDropdowns();
   });
 
   // ── Confirmar entrega (DELETE) ──────────────────────────────────────
@@ -296,9 +579,9 @@
           if (card) {
             card.style.opacity = '0';
             card.style.transition = 'opacity .3s';
-            setTimeout(function() { montarFiltro(romaneios); renderLista(); }, 300);
+            setTimeout(function() { montarFiltro(romaneios); montarFiltroRegiao(romaneios); renderLista(); }, 300);
           } else {
-            montarFiltro(romaneios); renderLista();
+            montarFiltro(romaneios); montarFiltroRegiao(romaneios); renderLista();
           }
         } else {
           alert('Erro: ' + (data.erro || 'Falha ao remover'));
