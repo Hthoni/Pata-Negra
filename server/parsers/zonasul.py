@@ -4,12 +4,14 @@ Empresa por item vem do Perfil (coluna A / Fat.). O CNPJ da loja que
 pede é lido do cabeçalho ("CNPJ/CPF:") e casado, no main.py, contra a
 tabela de filiais (M:T) do Perfil para enriquecer nome/região/lat/lng.
 
-IMPORTANTE: SuasVendas fatura na mesma unidade do pedido (kg), sem
-converter para caixas.
+Código do produto tem dígito verificador (ex. 2329-9, 110617-1), então a
+regex do código é (\\d+-\\d+).
 
-Única diferença de layout p/ o Princesa: o código do produto do Zona Sul
-tem dígito verificador (ex. 2329-9, 110617-1), então a regex do código é
-(\\d+-\\d+) em vez de (\\d+). Qtde e preço continuam direto do PDF.
+Unidade por item: o Zona Sul MISTURA unidades no mesmo pedido — a maioria
+vem em kg, mas alguns produtos (ex. linguiça) vêm em CAIXAS, apesar de o
+PDF rotular "Kg". Por isso o emb_tipo é decidido item a item pelo próprio
+Perfil: se o produto casado tem unidFat='cx', passamos 'CX' (a qtde do PDF
+é nº de caixas → kg = qtde × kgCx); senão 'KG' (qtde já em kg).
 """
 
 __cliente_nome__ = "Zona Sul"
@@ -17,7 +19,7 @@ __cliente_nome__ = "Zona Sul"
 import io
 import re
 import pdfplumber
-from perfil import processar_item
+from perfil import processar_item, match_perfil
 
 
 def parse(pdf_bytes, produtos):
@@ -47,8 +49,10 @@ def parse(pdf_bytes, produtos):
         qtde_ped = float(m.group(4).replace('.', '').replace(',', '.'))
         preco = float(m.group(5).replace('.', '').replace(',', '.'))
         total = float(m.group(6).replace('.', '').replace(',', '.'))
-        # qtde e preço direto do PDF, sem conversão de unidade
-        it = processar_item(m.group(2), nome, 'KG', 1, qtde_ped, preco, total, produtos)
+        # Decide a unidade pelo Perfil: produto cadastrado como caixa -> 'CX'
+        pf = match_perfil(nome, produtos)
+        emb_tipo = 'CX' if (pf and str(pf.get('unidFat', '')).lower() == 'cx') else 'KG'
+        it = processar_item(m.group(2), nome, emb_tipo, 1, qtde_ped, preco, total, produtos)
         itens.append(it)
 
     if itens:
