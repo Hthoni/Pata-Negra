@@ -1,44 +1,80 @@
 """
-Gerador do PDF de expedição — espelho das colunas A-I do Excel,
-para o encarregado de embarque conferir e preencher kg embarcados.
+Gerador do Excel de upload — uma aba por filial, com fórmulas vivas
+e formatação completa (cores, bordas, mesclagens).
 """
 import io
-from reportlab.lib.pagesizes import landscape, A4
-from reportlab.lib import colors
-from reportlab.lib.units import mm
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, KeepTogether, Image, PageBreak
-from reportlab.lib.styles import ParagraphStyle
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+import re
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
+from openpyxl.utils import get_column_letter
+from openpyxl.formatting.rule import FormulaRule
 import master
 
 
-def _kg_por_pacote(it):
-    """Peso de 1 pacote em kg = kg por caixa ÷ pacotes por caixa.
-    Os pacotes por caixa vêm da embalagem no formato 'CX-N' (ex.: CX-40 -> 40);
-    kg por caixa vem de kgCx. Ex.: CX-40 com kgCx=20 -> 0,5; CX-50 -> 0,4.
-    Fallback: gramas explícitas na embalagem ('400G'), senão 0,5."""
-    import re
-    emb = str(it.get('embalagem', '')).upper()
-    kgcx = float(it.get('kgCx', 0) or 0)
-    m = re.search(r'CX[-\s]?(\d+)', emb)
-    if m and kgcx:
-        n = int(m.group(1))
-        if n:
-            return kgcx / n
-    m = re.search(r'(\d+)\s*G\b', emb)
-    if m:
-        return int(m.group(1)) / 1000.0
-    return 0.5
+def _thin():
+    return Side(style='thin')
 
 
-def _kg_pdf(it):
-    """Kg a exibir no PDF de expedição. Itens vendidos em pacote
-    (unidFat='pct') são convertidos de nº de pacotes para kg; os demais
-    já estão em kg. O Excel e o pedido seguem em pacotes — só o PDF converte."""
-    base = float(it.get('kgPlanejados', 0) or 0)
-    if str(it.get('unidFat', '')).lower() == 'pct':
-        return base * _kg_por_pacote(it)
-    return base
+def _brd(t=0, b=0, l=0, r=0):
+    return Border(
+        top=_thin() if t else Side(), bottom=_thin() if b else Side(),
+        left=_thin() if l else Side(), right=_thin() if r else Side())
+
+
+def _fill(rgb):
+    return PatternFill(fill_type='solid', fgColor=rgb)
+
+
+def _fnt(bold=False, sz=9, color='FF000000'):
+    return Font(bold=bold, size=sz, color=color)
+
+
+def _aln(h='left', wrap=False):
+    return Alignment(horizontal=h, vertical='center', wrap_text=wrap)
+
+
+BALL = _brd(1, 1, 1, 1)
+BBOT = _brd(b=1)
+BG_TIT = _fill('FFE0E0E0')
+BG_SUB = _fill('FFF0F0F0')
+BG_META = _fill('FFF8F8F8')
+BG_HDR = _fill('FFD0D0D0')
+BG_AZL = _fill('FF2980B9')
+BG_AZLT = _fill('FFEBF5FB')
+BG_CZ = _fill('FFE8E8E8')
+BG_PAR = _fill('FFF5F5F5')
+BG_TOTV = _fill('FFD5F5E3')
+F_TIT = _fnt(True, 11)
+F_SUB = _fnt(True, 10)
+F_MB = _fnt(True, 9)
+F_M = _fnt(sz=9)
+F_HW = _fnt(True, 9, 'FFFFFFFF')
+F_HB = _fnt(True, 9)
+F_IT = _fnt(sz=9)
+F_TOT = _fnt(True, 9)
+F_NT = _fnt(sz=8, color='FF666666')
+F_NR = _fnt(sz=8, color='FFC0392B')
+F_CX = _fnt(True, 9, 'FF854F0B')
+F_DIF = _fnt(True, 9, 'FFCC0000')
+
+FMT_MONEY = '#.##0,00'
+FMT_NUM  = '#.##0,0'
+FMT_INT  = '0'       # número inteiro (ex: nº caixas)
+
+
+def _ap(cell, val=None, fn=None, bg=None, bo=None, al=None, fmt=None):
+    if val is not None:
+        cell.value = val
+    if fn:
+        cell.font = fn
+    if bg:
+        cell.fill = bg
+    if bo:
+        cell.border = bo
+    if al:
+        cell.alignment = al
+    if fmt:
+        cell.number_format = fmt
 
 
 def _nome_prod(it):
@@ -47,46 +83,18 @@ def _nome_prod(it):
     return nm if nm else (str(it.get('nomeProduto', '')).strip() + '  (SEM MASTER)')
 
 
-def gerar_pdf(dados, empresa_override=None, logo_bytes=None):
-    """Gera o PDF completo. Se empresa_override for passado, filtra
+def gerar_excel(dados, empresa_override=None):
+    """Gera o Excel completo. Se empresa_override for passado, filtra
     apenas os itens daquela empresa (usado no modo split)."""
-    buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
-                             leftMargin=10 * mm, rightMargin=10 * mm,
-                             topMargin=8 * mm, bottomMargin=8 * mm)
-
-    cli = dados.get('clienteNome', '')
+    emp = empresa_override if empresa_override else dados.get('empresa', 2)
+    cv = str(dados.get('codVend', ''))
+    cc = str(dados.get('codCond', ''))
     vend = dados.get('vendedor', '')
     tel = dados.get('telefone', '')
+    cli = dados.get('clienteNome', '')
 
-    COR_TIT = colors.HexColor('#E0E0E0')
-    COR_SUB = colors.HexColor('#F0F0F0')
-    COR_META = colors.HexColor('#F8F8F8')
-    COR_HDR = colors.HexColor('#D0D0D0')
-    COR_PAR = colors.HexColor('#F5F5F5')
-    COR_CZ = colors.HexColor('#E8E8E8')
-    COR_RG = colors.HexColor('#8B1C1C')
-
-    col_w = [8 * mm, 18 * mm, 95 * mm, 24 * mm, 18 * mm, 22 * mm, 26 * mm, 20 * mm, 46 * mm]
-    W = sum(col_w)
-
-    # --- Linhas 1 e 2: cliente em destaque (maior) e tipo de doc. secundário ---
-    ST_TIT = ParagraphStyle('t', fontSize=10, fontName='Helvetica-Bold', alignment=TA_CENTER, leading=12, textColor=colors.HexColor('#555555'))
-    ST_SUB = ParagraphStyle('s', fontSize=16, fontName='Helvetica-Bold', alignment=TA_CENTER, leading=19)
-    # --- Campo Região (canto direito, alinhado à coluna Obs.) ---
-    ST_RGL = ParagraphStyle('rgl', fontSize=8, fontName='Helvetica-Bold', alignment=TA_LEFT, leading=10, textColor=colors.HexColor('#7A746E'))
-    ST_RGV = ParagraphStyle('rgv', fontSize=14, fontName='Helvetica-Bold', alignment=TA_LEFT, leading=16, textColor=COR_RG)
-    ST_MB = ParagraphStyle('mb', fontSize=10, fontName='Helvetica-Bold', alignment=TA_LEFT, leading=12)
-    ST_MV = ParagraphStyle('mv', fontSize=10, fontName='Helvetica', alignment=TA_LEFT, leading=12)
-    ST_HDR = ParagraphStyle('h', fontSize=10, fontName='Helvetica-Bold', alignment=TA_CENTER, leading=11)
-    ST_IT = ParagraphStyle('i', fontSize=10, fontName='Helvetica', alignment=TA_LEFT, leading=11)
-    ST_ITC = ParagraphStyle('ic', fontSize=10, fontName='Helvetica', alignment=TA_CENTER, leading=11)
-    ST_ITR = ParagraphStyle('ir', fontSize=10, fontName='Helvetica', alignment=TA_RIGHT, leading=11)
-    ST_TOT = ParagraphStyle('to', fontSize=10, fontName='Helvetica-Bold', alignment=TA_LEFT, leading=11)
-    ST_TOTR = ParagraphStyle('tr', fontSize=10, fontName='Helvetica-Bold', alignment=TA_RIGHT, leading=11)
-    ST_NOTA = ParagraphStyle('n', fontSize=8, fontName='Helvetica', textColor=colors.HexColor('#666666'))
-
-    story = []
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
 
     for fd in dados['filiais']:
         if empresa_override:
@@ -97,157 +105,156 @@ def gerar_pdf(dados, empresa_override=None, logo_bytes=None):
         if not its:
             continue
         n = len(its)
-        emp_fd = empresa_override if empresa_override else fd.get('empresa', dados.get('empresa', 2))
+        emp_fd = empresa_override if empresa_override else fd.get('empresa', emp)
         tit_fd = 'PEDIDO PATA NEGRA DISTRIBUIDORA' if emp_fd == 2 else 'PEDIDO INDÚSTRIA PATA NEGRA'
-        nota_empresa = 'Pata Negra Distribuidora' if emp_fd == 2 else 'Indústria Pata Negra'
-        tkg = sum(_kg_pdf(it) for it in its)
+        numPed = re.sub(r'[/\\*?\[\]:]', '-', fd.get('pedidoNum', '')).strip().strip('-')
+        nomeAba = ((numPed + ' - ' + fd['filial']) if numPed else fd['filial'])[:31]
+        ws = wb.create_sheet(nomeAba)
+
+        for i, w in enumerate([4, 10, 38, 12, 7, 12, 12, 9, 14, 2, 11, 12, 14, 12, 10, 8], 1):
+            ws.column_dimensions[get_column_letter(i)].width = w
+
+        ws.merge_cells('A1:I1')
+        _ap(ws['A1'], tit_fd, F_TIT, BG_TIT, al=_aln('center'))
+        ws.merge_cells('A2:I2')
         subtitulo = (cli + ' — ' + fd['filial']) if cli else fd['filial']
+        _ap(ws['A2'], subtitulo, F_SUB, BG_SUB, al=_aln('center'))
 
-        # --- Cabeçalho: linhas 1 e 2 DESMESCLADAS + campo Região alinhado à coluna Obs. ---
-        REGIAO_W = col_w[8]  # largura da coluna Obs. -> alinha o campo Região por ela
-        regiao_val = fd.get('regiao', '') or '—'
-        regiao_cell = [Paragraph('REGIÃO', ST_RGL), Paragraph(regiao_val, ST_RGV)]
-        cab = [
-            [Paragraph(tit_fd, ST_TIT), regiao_cell],
-            [Paragraph(subtitulo, ST_SUB), ''],
-        ]
-        tbl_cab = Table(cab, colWidths=[W - REGIAO_W, REGIAO_W])
-        tbl_cab.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (0, 0), COR_TIT),
-            ('BACKGROUND', (0, 1), (0, 1), COR_SUB),
-            ('SPAN', (1, 0), (1, 1)),
-            ('BACKGROUND', (1, 0), (1, 1), colors.white),
-            ('BOX', (1, 0), (1, 1), 1, COR_RG),
-            ('ALIGN', (0, 0), (0, 1), 'CENTER'),
-            ('VALIGN', (0, 0), (0, 1), 'MIDDLE'),
-            ('VALIGN', (1, 0), (1, 1), 'MIDDLE'),
-            ('LEFTPADDING', (1, 0), (1, 1), 8),
-            ('TOPPADDING', (0, 0), (0, 0), 5), ('BOTTOMPADDING', (0, 0), (0, 0), 2),
-            ('TOPPADDING', (0, 1), (0, 1), 2), ('BOTTOMPADDING', (0, 1), (0, 1), 5),
-            ('TOPPADDING', (1, 0), (1, 1), 4), ('BOTTOMPADDING', (1, 0), (1, 1), 4),
-        ]))
+        for r in [3, 4, 6, 7]:
+            ws.merge_cells(f'A{r}:B{r}')
+            ws.merge_cells(f'C{r}:F{r}')
+            ws.merge_cells(f'H{r}:I{r}')
+        # Linha 5 não mescla C:F — fica C:D (nome filial) + E (label) + F (número)
+        ws.merge_cells('A5:B5')
+        ws.merge_cells('C5:D5')
+        ws.merge_cells('H5:I5')
 
-        def ml(t):
-            return Paragraph(t, ST_MB)
+        _ap(ws['A3'], 'Pedido Nº:', F_MB, BG_META, al=_aln('left'))
+        _ap(ws['C3'], fd.get('pedidoNum', ''), F_M, BG_META)
+        _ap(ws['G3'], 'Data Pedido:', F_MB, BG_META, al=_aln('left'))
+        _ap(ws['H3'], fd.get('dataPedido', ''), F_M, BG_META, al=_aln('left'))
 
-        def mv(t):
-            return Paragraph(str(t) if t else '—', ST_MV)
+        _ap(ws['A4'], 'CNPJ:', F_MB, BG_META, al=_aln('left'))
+        _ap(ws['C4'], fd.get('cnpj', ''), F_M, BG_META)
+        _ap(ws['G4'], 'Data Entrega:', F_MB, BG_META, al=_aln('left'))
+        _ap(ws['H4'], fd.get('dataEntrega', ''), F_M, BG_META, al=_aln('left'))
 
-        def fl(t):
-            return Paragraph(str(t) if t else '—', ST_MV)
+        _ap(ws['A5'], 'Filial:', F_MB, BG_META, al=_aln('left'))
+        _ap(ws['C5'], fd['filial'], F_M, BG_META)
+        _ap(ws['E5'], 'Núm. Filial:', F_MB, BG_META, al=_aln('left'))
+        _ap(ws['F5'], fd.get('numFilial', ''), F_M, BG_META, al=_aln('center'))
+        _ap(ws['G5'], 'Solicitante:', F_MB, BG_META, al=_aln('left'))
+        _ap(ws['H5'], fd.get('solicitante', ''), F_M, BG_META, al=_aln('left'))
+        _ap(ws['K5'], 'Código vend.', F_HW, BG_AZL, BALL, _aln('center', True))
+        _ap(ws['L5'], 'código cond', F_HW, BG_AZL, BALL, _aln('center', True))
+        _ap(ws['M5'], 'empresa', F_HW, BG_AZL, BALL, _aln('center', True))
 
-        meta = [
-            [ml('Pedido Nº:'), mv(fd.get('pedidoNum', '')), ml('Data Pedido:'), mv(fd.get('dataPedido', ''))],
-            [ml('CNPJ:'), mv(fd.get('cnpj', '')), ml('Data Entrega:'), mv(fd.get('dataEntrega', ''))],
-            [ml('Filial:'), Paragraph((str(fd['filial']) + ('   |   Núm. Filial: ' + str(fd['numFilial']) if fd.get('numFilial') is not None else '')), ST_MV), ml('Solicitante:'), mv(fd.get('solicitante', ''))],
-            [ml('Endereço:'), mv(fd.get('endereco', '')), ml('Vendedor:'), mv(vend)],
-            [ml('Cond. Pgto.:'), mv(fd.get('condPgto', '')), ml('Tel. Vendedor:'), mv(tel)],
-        ]
-        LOGO_W = 38 * mm
-        VAL4_W = W - 25 * mm - 100 * mm - 32 * mm - LOGO_W
-        if logo_bytes:
-            try:
-                # Preservar proporção: deixar ReportLab calcular dimensões reais
-                # e escalar respeitando max_w e max_h
-                _tmp = Image(io.BytesIO(logo_bytes))
-                orig_w, orig_h = _tmp.imageWidth, _tmp.imageHeight
-                max_h = 22 * mm
-                max_w = LOGO_W - 4 * mm
-                ratio = min(max_w / orig_w, max_h / orig_h)
-                logo_img = Image(io.BytesIO(logo_bytes), width=orig_w * ratio, height=orig_h * ratio)
-                logo_img.hAlign = 'CENTER'
-                for row in meta:
-                    row.append('')
-                meta[0][4] = logo_img
-                tbl_meta = Table(meta, colWidths=[25*mm, 100*mm, 32*mm, VAL4_W, LOGO_W])
-                tbl_meta.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, -1), COR_META),
-                    ('FONTSIZE', (0, 0), (-1, -1), 10),
-                    ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-                    ('LEFTPADDING', (0, 0), (-1, -1), 4),
-                    ('LINEBELOW', (0, 4), (-1, 4), 0.5, colors.grey),
-                    ('SPAN', (4, 0), (4, 4)),
-                    ('VALIGN', (4, 0), (4, 4), 'MIDDLE'),
-                    ('ALIGN', (4, 0), (4, 4), 'CENTER'),
-                ]))
-            except Exception:
-                tbl_meta = Table(meta, colWidths=[25*mm, 100*mm, 32*mm, W - 25*mm - 100*mm - 32*mm])
-                tbl_meta.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, -1), COR_META),
-                    ('FONTSIZE', (0, 0), (-1, -1), 10),
-                    ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-                    ('LEFTPADDING', (0, 0), (-1, -1), 4),
-                    ('LINEBELOW', (0, 4), (-1, 4), 0.5, colors.grey),
-                ]))
-        else:
-            tbl_meta = Table(meta, colWidths=[25*mm, 100*mm, 32*mm, W - 25*mm - 100*mm - 32*mm])
-            tbl_meta.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, -1), COR_META),
-                ('FONTSIZE', (0, 0), (-1, -1), 10),
-                ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-                ('LEFTPADDING', (0, 0), (-1, -1), 4),
-                ('LINEBELOW', (0, 4), (-1, 4), 0.5, colors.grey),
-            ]))
+        _ap(ws['A6'], 'Endereço:', F_MB, BG_META, al=_aln('left'))
+        _ap(ws['C6'], fd.get('endereco', ''), F_M, BG_META)
+        _ap(ws['G6'], 'Vendedor:', F_MB, BG_META, al=_aln('left'))
+        _ap(ws['H6'], vend, F_M, BG_META, al=_aln('left'))
+        ws['K6'].value = int(cv) if cv.isdigit() else cv
+        ws['L6'].value = int(cc) if cc.isdigit() else cc
+        ws['M6'].value = emp_fd
 
-        header = [
-            Paragraph('#', ST_HDR), Paragraph('Cód.\nInterno', ST_HDR),
-            Paragraph('Produtos', ST_HDR), Paragraph('Formato', ST_HDR),
-            Paragraph('Caixa', ST_HDR), Paragraph('Kg\nPlanejados', ST_HDR),
-            Paragraph('Kgs\nEmbarcados', ST_HDR), Paragraph('Nº\nCaixas', ST_HDR),
-            Paragraph('Obs.', ST_HDR),
-        ]
-        rows = [header]
+        _ap(ws['A7'], 'Cond. Pgto.:', F_MB, BG_META, BBOT, _aln('left'))
+        _ap(ws['C7'], fd.get('condPgto', ''), F_M, BG_META, BBOT)
+        for col in ['B7', 'D7', 'E7', 'F7']:
+            ws[col].border = BBOT
+        _ap(ws['G7'], 'Tel. Vendedor:', F_MB, BG_META, al=_aln('left'))
+        _ap(ws['H7'], tel, F_M, BG_META, al=_aln('left'))
+
+        for col, h, az in [('A', '#', 0), ('B', 'Cód.\nInterno', 0), ('C', 'Produtos', 0),
+                            ('D', 'Formato', 0), ('E', 'Caixa', 0), ('F', 'Kg\nPlanejados', 0),
+                            ('G', 'Kg\nEmbarcados', 0), ('H', 'Nº\nCaixas', 0), ('I', 'Obs.', 0),
+                            ('K', 'Qtde\nMultipl.', 1), ('L', 'Preço Unit.\n(R$)', 1),
+                            ('M', 'Valor Pedido\n(R$)', 1), ('N', 'Preço\nSistema', 1),
+                            ('O', 'Dif.\nPreço', 1), ('P', 'Unid.\nfat.', 1)]:
+            _ap(ws[f'{col}8'], h, F_HW if az else F_HB, BG_AZL if az else BG_HDR, BALL, _aln('center', True))
+        ws.row_dimensions[8].height = 28
+
         for idx, it in enumerate(its):
+            r = idx + 9
+            par = (idx % 2 == 1)
+            bg = BG_PAR if par else None
+            isCx = (it.get('unidFat', 'kg') == 'cx')
             kgcx = it.get('kgCx', 20)
-            kgPlan = _kg_pdf(it)
-            nrCx = int(round(kgPlan / kgcx, 0)) if kgcx else ""
-            rows.append([
-                Paragraph(str(idx + 1), ST_ITC),
-                Paragraph(str(it.get('codInterno', '')), ST_ITC),
-                Paragraph(_nome_prod(it), ST_IT),
-                Paragraph(str(it.get('formato', '') or ''), ST_ITC),
-                Paragraph(str(it.get('embalagem', '')), ST_ITC),
-                Paragraph(f"{kgPlan:.1f}".replace(".",",") if kgPlan else "", ST_ITR),
-                Paragraph('', ST_ITC),
-                Paragraph(str(nrCx) if nrCx else '', ST_ITR),
-                Paragraph(str(it.get('obs', '') or ''), ST_IT),
-            ])
 
-        rows.append([
-            Paragraph(f'TOTAL — {n} itens', ST_TOT), '', '', '', '',
-            Paragraph(f"{tkg:.1f}".replace(".",","), ST_TOTR), '', '', ''
-        ])
+            def c(col):
+                return ws[f'{col}{r}']
 
-        tbl_itens = Table(rows, colWidths=col_w, repeatRows=1)
-        cmds = [
-            ('BACKGROUND', (0, 0), (-1, 0), COR_HDR),
-            ('FONTSIZE', (0, 0), (-1, -1), 10),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('GRID', (0, 0), (-1, -2), 0.5, colors.HexColor('#BBBBBB')),
-            ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-            ('LEFTPADDING', (0, 0), (-1, -1), 3), ('RIGHTPADDING', (0, 0), (-1, -1), 3),
-            ('BACKGROUND', (6, 1), (6, -2), COR_CZ),
-            ('BACKGROUND', (0, -1), (-1, -1), COR_HDR),
-            ('SPAN', (0, -1), (4, -1)),
-            ('LINEABOVE', (0, -1), (-1, -1), 0.8, colors.grey),
-            ('LINEBELOW', (0, -1), (-1, -1), 0.8, colors.grey),
-        ]
-        for i in range(1, len(rows) - 1):
-            if i % 2 == 0:
-                cmds.append(('BACKGROUND', (0, i), (-1, i), COR_PAR))
-        tbl_itens.setStyle(TableStyle(cmds))
+            _ap(c('A'), idx + 1, F_IT, bg, BALL, _aln('center'))
+            _ap(c('B'), it.get('codInterno'), F_IT, bg, BALL, _aln('center'))
+            _ap(c('C'), _nome_prod(it), F_IT, bg, BALL, _aln('left'))
+            _ap(c('D'), it.get('formato') or None, F_IT, bg, BALL, _aln('center'))
+            _ap(c('E'), it.get('embalagem', ''), F_IT, bg, BALL, _aln('center'))
+            _ap(c('F'), it.get('kgPlanejados'), F_IT, bg, BALL, _aln('center'), FMT_NUM)
+            _ap(c('G'), None, F_IT, BG_CZ, BALL, _aln('center'))
+            if isCx:
+                c('K').value = f'=IF(G{r}<>"",G{r}/{kgcx},F{r}/{kgcx})'
+            else:
+                c('K').value = f'=IF(G{r}<>"",G{r},F{r})'
+            _ap(c('K'), None, F_IT, BG_AZLT, BALL, _aln('center'))
+            c('H').value = f'=IF(G{r}<>"",G{r}/{kgcx},F{r}/{kgcx})'
+            _ap(c('H'), None, F_IT, bg, BALL, _aln('center'), FMT_INT)
+            _ap(c('I'), it.get('obs') or None, F_IT, bg, BALL, _aln('center'))
+            _ap(c('L'), it.get('precoUnit'), F_IT, BG_AZLT, BALL, _aln('center'), FMT_MONEY)
+            c('M').value = f'=L{r}*K{r}' if isCx else f'=IF(G{r}<>"",L{r}*G{r},L{r}*F{r})'
+            _ap(c('M'), None, F_IT, BG_AZLT, BALL, _aln('center'), FMT_MONEY)
+            _ap(c('N'), it.get('precoSistema') or 0, F_IT, BG_AZLT, BALL, _aln('center'), FMT_MONEY)
+            c('O').value = f'=IF(AND(L{r}<>"",N{r}<>"",L{r}<>N{r}),L{r}-N{r},"")'
+            _ap(c('O'), None, F_DIF, BG_AZLT, BALL, _aln('center'), FMT_MONEY)
+            _ap(c('P'), it.get('unidFat', 'kg'), F_CX if isCx else F_IT, BG_AZLT, BALL, _aln('center'))
 
-        nota = Paragraph(
-            f'Col. G — Kg Embarcados: preenchida pelo encarregado de embarque.   |   {nota_empresa}',
-            ST_NOTA)
+        ws.conditional_formatting.add(
+            f'O9:O{n+8}',
+            FormulaRule(formula=['O9=""'], font=Font(bold=False, size=9, color='FF000000'))
+        )
 
-        story.append(KeepTogether([tbl_cab, tbl_meta, tbl_itens, nota]))
-        story.append(PageBreak())
+        rT = n + 9
+        r1 = 9
+        r2 = n + 8
+        ws.merge_cells(f'A{rT}:E{rT}')
+        _ap(ws[f'A{rT}'], f'TOTAL  —  {n} itens', F_TOT, None, _brd(1, 1, 1, 0), _aln('left'))
+        for col in ['B', 'C', 'D', 'E']:
+            ws[f'{col}{rT}'].border = _brd(1, 1, 0, 0)
+        for col in ['F', 'G', 'H']:
+            ws[f'{col}{rT}'].value = f'=SUM({col}{r1}:{col}{r2})'
+            _ap(ws[f'{col}{rT}'], None, F_TOT, BG_HDR, BALL, _aln('center'), FMT_NUM)
+        ws[f'M{rT}'].value = f'=SUM(M{r1}:M{r2})'
+        _ap(ws[f'M{rT}'], None, F_TOT, BG_TOTV, BALL, _aln('center'), FMT_MONEY)
 
-    # Remover o último PageBreak (não precisa após a última filial)
-    if story and isinstance(story[-1], PageBreak):
-        story.pop()
+        rI = rT + 2
+        ws.merge_cells(f'A{rI}:I{rI}')
+        ws.merge_cells(f'K{rI}:P{rI}')
+        _ap(ws[f'A{rI}'], f'Imprimir: selecionar A1:I{rT-1} → Imprimir Seleção', F_NT, al=_aln('left'))
+        _ap(ws[f'K{rI}'], 'Col K=qtde faturamento | Col P=unidade | Dif. Preço vermelho=revisar', F_NR, al=_aln('left'))
 
-    doc.build(story)
+    wsr = wb.create_sheet('RESUMO GERAL')
+    for i, w in enumerate([22, 12, 22, 6, 12, 14], 1):
+        wsr.column_dimensions[get_column_letter(i)].width = w
+    for ci, h in enumerate(['Filial', 'Pedido Nº', 'CNPJ', 'Itens', 'Kg Plan.', 'Valor (R$)'], 1):
+        _ap(wsr.cell(1, ci), h, F_HB, BG_HDR, BALL, _aln('center'))
+    skg = sv = sit = 0
+    for ri, fd in enumerate(dados['filiais'], 2):
+        its2 = fd['itens']
+        kg = sum(i.get('kgPlanejados', 0) for i in its2)
+        val = sum(i.get('valorPedido', 0) for i in its2)
+        skg += kg
+        sv += val
+        sit += len(its2)
+        par = (ri % 2 == 0)
+        bg2 = BG_PAR if par else None
+        for ci, v in enumerate([fd['filial'], fd.get('pedidoNum', ''), fd.get('cnpj', ''),
+                                 len(its2), round(kg, 1), round(val, 2)], 1):
+            fmt2 = FMT_MONEY if ci == 6 else (FMT_NUM if ci == 5 else None)
+            _ap(wsr.cell(ri, ci), v, F_IT, bg2, BALL, fmt=fmt2)
+    rTR = len(dados['filiais']) + 2
+    for ci, v in enumerate(['TOTAL', '', '', sit, round(skg, 1), round(sv, 2)], 1):
+        fmt2 = FMT_MONEY if ci == 6 else (FMT_NUM if ci == 5 else None)
+        _ap(wsr.cell(rTR, ci), v, F_TOT, BG_HDR, BALL, fmt=fmt2)
+
+    buf = io.BytesIO()
+    wb.save(buf)
     buf.seek(0)
     return buf.read()
