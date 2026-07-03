@@ -88,16 +88,23 @@ def salvar_romaneio(romaneio_id, dados):
     )
 
 
-def atualizar_status_romaneio(romaneio_id, status, data=None):
+def atualizar_status_romaneio(romaneio_id, status, data=None, falha=False):
     """Atualiza o status do romaneio SEM apagar (pendente/em_rota/entregue/falhou).
-    Preserva todos os dados originais (inclusive a data de inclusao). Registra
-    a data da mudanca de status. Retorna True se o romaneio existia."""
+    Preserva a data de inclusao original. Ao voltar para 'pendente' (inclusive
+    quando falha=True), libera o vinculo com a entrega. falha=True registra a
+    ocorrencia (para o historico). Retorna True se o romaneio existia."""
     blob = _romaneios_bucket().blob(f'{romaneio_id}.json')
     if not blob.exists():
         return False
     dados = json.loads(blob.download_as_bytes())
     dados['status'] = status
     dados['statusData'] = data or datetime.datetime.utcnow().isoformat()
+    if status == 'pendente':
+        dados.pop('entregaId', None)
+        dados.pop('entregaNome', None)
+    if falha:
+        dados['falhas'] = int(dados.get('falhas', 0)) + 1
+        dados['ultimaFalhaEm'] = datetime.datetime.utcnow().isoformat()
     blob.upload_from_string(json.dumps(dados, ensure_ascii=False),
                             content_type='application/json')
     return True
@@ -245,3 +252,29 @@ def deletar_entrega(entrega_id):
         blob.delete()
         return True
     return False
+
+
+def registrar_desfecho_entrega(entrega_id, pedido_id, desfecho, snapshot=None):
+    """Registra o desfecho de um pedido dentro da entrega (entregue/falhou).
+    Move o pedido de pedidoIds -> resolvidos[] (guardando um snapshot de
+    cliente/filial/kg para o historico ser auto-suficiente). Se nao sobrar
+    pedido ativo, marca a entrega como 'finalizada'. Retorna
+    (entrega_atualizada | None, finalizada_bool)."""
+    ent = carregar_entrega(entrega_id)
+    if not ent:
+        return None, False
+    ativos = [p for p in ent.get('pedidoIds', []) if p != pedido_id]
+    ent['pedidoIds'] = ativos
+    resolvidos = ent.get('resolvidos', [])
+    reg = {'pedidoId': pedido_id, 'desfecho': desfecho,
+           'quando': datetime.datetime.utcnow().isoformat()}
+    if snapshot:
+        reg.update(snapshot)
+    resolvidos.append(reg)
+    ent['resolvidos'] = resolvidos
+    finalizada = (len(ativos) == 0)
+    if finalizada:
+        ent['status'] = 'finalizada'
+        ent['finalizadaEm'] = datetime.datetime.utcnow().isoformat()
+    salvar_entrega(entrega_id, ent)
+    return ent, finalizada
