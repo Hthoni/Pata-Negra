@@ -81,7 +81,6 @@
     .btn-sim:hover { background:var(--accent-lt); }
     .btn-sim.ativo { background:var(--accent); color:#fff; }
     .btn-sim.em-rota { border-color:#aaa; color:#666; background:#f2f2f2; max-width:150px; overflow:hidden; text-overflow:ellipsis; }
-    .ps-salvar { color:#fff; background:var(--accent); border-color:var(--accent); }
 
     /* Painel simulador flutuante à direita */
     #painel-sim { position:fixed; top:72px; right:16px; width:248px; z-index:500; background:#fff; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 4px 18px rgba(0,0,0,.14); overflow:hidden; max-height:calc(100vh - 90px); display:flex; flex-direction:column; }
@@ -99,6 +98,7 @@
     .ps-btn { flex:1; padding:7px 6px; border-radius:6px; font-size:11px; font-weight:600; cursor:pointer; border:1px solid var(--border); background:#fff; font-family:inherit; }
     .ps-det { color:var(--accent); border-color:var(--accent); }
     .ps-limpar { color:#666; }
+    .ps-salvar { color:#fff; background:var(--accent); border-color:var(--accent); }
     .ps-vazio { padding:12px; font-size:12px; color:#999; text-align:center; }
 
     @media (max-width: 760px) {
@@ -136,11 +136,11 @@
   <div class="logo">PN</div>
   <h1>Pata Negra — Gerenciar Pedidos</h1>
   <div class="header-actions">
-    <a href="mapa.html" class="btn-header">Ver Mapa</a>
-    <a href="index.html" class="btn-header">Voltar</a>
+    <a href="index.html" class="btn-header">Criar Pedido</a>
+    <a href="mapa.html" class="btn-header">Mapa</a>
+    <a href="entregas.html" class="btn-header">Entregas</a>
     <button class="btn-header" onclick="document.getElementById('inp-master').click()">Subir Master</button>
     <input type="file" id="inp-master" accept=".xlsx" style="display:none" onchange="uploadMaster(this)">
-    <button class="btn-header" onclick="carregar()">Atualizar</button>
   </div>
 </header>
 
@@ -148,23 +148,23 @@
   <div class="toolbar">
     <span class="stat-badge" id="total-badge">—</span>
     <div class="filtro-wrap">
-      <button id="btn-filtro" onclick="toggleFiltro(event)">⛃ Clientes</button>
+      <button id="btn-filtro" onclick="toggleFiltro(event)">Clientes</button>
       <div class="filtro-dropdown" id="filtro-dropdown"></div>
     </div>
     <div class="filtro-wrap">
-      <button id="btn-filtro-cor" onclick="toggleFiltroCor(event)">⛃ Cor</button>
+      <button id="btn-filtro-cor" onclick="toggleFiltroCor(event)">Cor</button>
       <div class="filtro-dropdown" id="filtro-cor-dropdown"></div>
     </div>
     <div class="filtro-wrap">
-      <button id="btn-filtro-peso" onclick="toggleFiltroPeso(event)">⛃ Peso</button>
+      <button id="btn-filtro-peso" onclick="toggleFiltroPeso(event)">Peso</button>
       <div class="filtro-dropdown" id="filtro-peso-dropdown"></div>
     </div>
     <div class="filtro-wrap">
-      <button id="btn-filtro-regiao" onclick="toggleFiltroRegiao(event)">⛃ Região</button>
+      <button id="btn-filtro-regiao" onclick="toggleFiltroRegiao(event)">Região</button>
       <div class="filtro-dropdown" id="filtro-regiao-dropdown"></div>
     </div>
     <div class="filtro-wrap">
-      <button id="btn-filtro-situacao" onclick="toggleFiltroSituacao(event)">⛃ Situação</button>
+      <button id="btn-filtro-situacao" onclick="toggleFiltroSituacao(event)">Situação</button>
       <div class="filtro-dropdown" id="filtro-situacao-dropdown"></div>
     </div>
   </div>
@@ -179,7 +179,7 @@
 <!-- Simulador de entregas (compartilha a seleção com o mapa via localStorage) -->
 <div id="painel-sim">
   <div class="ps-head" onclick="togglePainelSim()">
-    <span>🚚 Simulador de entregas</span>
+    <span>Simulador de entregas</span>
     <span class="toggle" id="ps-toggle">▾</span>
   </div>
   <div id="ps-body"></div>
@@ -586,8 +586,8 @@
         '</div>';
     });
     html += '<div class="ps-total"><span>Total (' + sel.length + ' ped.)</span><b>' + Math.round(tot) + ' kg</b></div>';
-    html += '<div class="ps-acoes"><button class="ps-btn ps-salvar" onclick="salvarEntrega()">\ud83d\udcbe Salvar entrega</button></div>';
-    html += '<div class="ps-acoes"><button class="ps-btn ps-det" onclick="detalharTotais()">\ud83d\udcc4 Detalhar totais</button><button class="ps-btn ps-limpar" onclick="limparSim()">Limpar</button></div>';
+    html += '<div class="ps-acoes"><button class="ps-btn ps-salvar" onclick="salvarEntrega()">Salvar entrega</button></div>';
+    html += '<div class="ps-acoes"><button class="ps-btn ps-det" onclick="detalharTotais()">Detalhar totais</button><button class="ps-btn ps-limpar" onclick="limparSim()">Limpar</button></div>';
     body.innerHTML = html;
   }
 
