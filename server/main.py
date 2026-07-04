@@ -19,7 +19,7 @@ import datetime
 import traceback
 from flask_cors import CORS
 
-from storage import perfil_existe, salvar_perfil, carregar_perfil_bytes, perfil_filename, salvar_romaneio, listar_romaneios, deletar_romaneio, salvar_pedido_pdf, carregar_pedido_pdf, salvar_geofence, listar_geofences, deletar_geofence, salvar_master, master_existe, carregar_master_bytes, atualizar_status_romaneio, salvar_entrega, carregar_entrega, listar_entregas, deletar_entrega, registrar_desfecho_entrega
+from storage import perfil_existe, salvar_perfil, carregar_perfil_bytes, perfil_filename, salvar_romaneio, listar_romaneios, deletar_romaneio, salvar_pedido_pdf, carregar_pedido_pdf, salvar_geofence, listar_geofences, deletar_geofence, salvar_master, master_existe, carregar_master_bytes, atualizar_status_romaneio, salvar_entrega, carregar_entrega, listar_entregas, deletar_entrega, registrar_desfecho_entrega, salvar_estoque, carregar_estoque
 from perfil import ler_perfil, ler_filiais, buscar_filial, ler_operadores
 from excel_gen import gerar_excel
 from pdf_gen import gerar_pdf, _kg_pdf, gerar_pdf_totais
@@ -204,6 +204,75 @@ def demandas():
         linhas = [{'nome': n, 'raiz': master.raiz(n), 'vol': round(agregado.get(n, 0), 1)} for n in ordem]
         total = round(sum(l['vol'] for l in linhas), 1)
         return jsonify({'ordem': linhas, 'clientes': clientes, 'totalGeral': total})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'erro': str(e)}), 500
+
+
+@app.route('/estoque', methods=['GET'])
+def get_estoque():
+    """Estoque atual de produtos acabados (por nome master)."""
+    try:
+        return jsonify(carregar_estoque())
+    except Exception as e:
+        return jsonify({'erro': str(e)}), 500
+
+
+@app.route('/estoque', methods=['POST'])
+def set_estoque():
+    """Salva o estoque. Body: {itens: {nome_master: kg}}. Carimba data/hora."""
+    body = request.get_json(silent=True) or {}
+    itens = body.get('itens') or {}
+    try:
+        limpo = {}
+        for nome, kg in itens.items():
+            try:
+                v = float(kg)
+            except (TypeError, ValueError):
+                v = 0
+            if v:
+                limpo[nome] = v
+        dados = {'itens': limpo, 'atualizadoEm': datetime.datetime.utcnow().isoformat()}
+        salvar_estoque(dados)
+        return jsonify({'ok': True, 'atualizadoEm': dados['atualizadoEm']})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'erro': str(e)}), 500
+
+
+@app.route('/embarque')
+def embarque():
+    """Painel de embarque: por produto (ordem da master, linha a linha),
+    o estoque de produtos acabados, o volume EM ROTA (pedidos dentro das
+    entregas) e o quanto falta produzir (em_rota - estoque, mínimo 0)."""
+    try:
+        emrota = [r for r in listar_romaneios() if r.get('status') == 'em_rota']
+        agregado = {}
+        for r in emrota:
+            for it in (r.get('itens') or []):
+                cod = str(it.get('cod') or '').strip()
+                kg = float(it.get('kg') or 0)
+                if not cod:
+                    continue
+                nome = master.nome_master(cod, '')
+                if nome:
+                    agregado[nome] = agregado.get(nome, 0) + kg
+
+        est = carregar_estoque()
+        estoque_itens = est.get('itens', {})
+        ordem = master.get_ordem()
+        linhas = []
+        total_falta = 0
+        for n in ordem:
+            emr = round(agregado.get(n, 0), 1)
+            estq = round(float(estoque_itens.get(n, 0)), 1)
+            falta = emr - estq
+            if falta < 0:
+                falta = 0
+            total_falta += falta
+            linhas.append({'nome': n, 'estoque': estq, 'emRota': emr, 'falta': round(falta, 1)})
+        return jsonify({'linhas': linhas, 'totalFalta': round(total_falta, 1),
+                        'atualizadoEm': est.get('atualizadoEm')})
     except Exception as e:
         traceback.print_exc()
         return jsonify({'erro': str(e)}), 500
