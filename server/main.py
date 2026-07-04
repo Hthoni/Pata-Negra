@@ -173,6 +173,42 @@ def simular_totais():
         return jsonify({'erro': str(e)}), 500
 
 
+@app.route('/demandas')
+def demandas():
+    """Demanda de produção: soma o kg físico por produto (nome master) dos
+    pedidos PENDENTES (em rota não entram), na ordem da planilha master.
+    Opcional ?clientes=A,B para filtrar. Devolve também a raiz de cada produto
+    (para o subtotal por agrupamento) e a lista de clientes disponível."""
+    try:
+        filtro = request.args.get('clientes')
+        alvos = set(s.strip() for s in filtro.split('|') if s.strip()) if filtro else None
+
+        pend = [r for r in listar_romaneios() if (r.get('status') or 'pendente') == 'pendente']
+        clientes = sorted(set((r.get('clienteNome') or r.get('cliente') or '—') for r in pend))
+
+        agregado = {}   # nome_master -> kg
+        for r in pend:
+            cli = r.get('clienteNome') or r.get('cliente') or '—'
+            if alvos is not None and cli not in alvos:
+                continue
+            for it in (r.get('itens') or []):
+                cod = str(it.get('cod') or '').strip()
+                kg = float(it.get('kg') or 0)
+                if not cod:
+                    continue
+                nome = master.nome_master(cod, '')
+                if nome:
+                    agregado[nome] = agregado.get(nome, 0) + kg
+
+        ordem = master.get_ordem()
+        linhas = [{'nome': n, 'raiz': master.raiz(n), 'vol': round(agregado.get(n, 0), 1)} for n in ordem]
+        total = round(sum(l['vol'] for l in linhas), 1)
+        return jsonify({'ordem': linhas, 'clientes': clientes, 'totalGeral': total})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'erro': str(e)}), 500
+
+
 
 @app.route('/romaneio/<romaneio_id>', methods=['DELETE'])
 def delete_romaneio(romaneio_id):
