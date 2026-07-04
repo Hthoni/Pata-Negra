@@ -107,6 +107,8 @@
     }
     .btn-pdf { height:28px; padding:0 20px; border-radius:var(--radius); border:1px solid var(--accent); background:#fff; color:var(--accent); font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; transition:background .13s; }
     .btn-pdf:hover { background:var(--accent-lt); }
+    .btn-xls { height:28px; padding:0 20px; border-radius:var(--radius); border:1px solid var(--accent); background:#fff; color:var(--accent); font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; transition:background .13s; }
+    .btn-xls:hover { background:var(--accent-lt); }
     .btn-entregar { height:28px; padding:0 20px; border-radius:var(--radius); border:none; background:var(--green); color:#fff; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; transition:background .13s; }
     .btn-entregar:hover { background:#145230; }
     .btn-entregar:disabled { background:#aaa; cursor:not-allowed; }
@@ -360,6 +362,7 @@
         '</div>' +
         '<div class="card-acoes">' +
           '<button class="btn-pdf" onclick="verPdf(\'' + rom.id + '\')">PDF</button>' +
+          '<button class="btn-xls" onclick="baixarExcel(\'' + rom.id + '\')">Gerar xlx</button>' +
           (emRota
             ? '<button class="btn-sim em-rota" title="' + (rom.entregaNome || '') + '" onclick="toggleSim(\'' + rom.id + '\')">🔒 ' + (rom.entregaNome || 'Em rota') + '</button>'
             : '<button class="btn-sim' + (noSim ? ' ativo' : '') + '" onclick="toggleSim(\'' + rom.id + '\')">' + (noSim ? '− Simulação' : '＋ Simulação') + '</button>') +
@@ -374,6 +377,9 @@
 
   function verPdf(id) {
     window.open(SERVER_URL + '/romaneio-pdf/' + id, '_blank');
+  }
+  function baixarExcel(id) {
+    window.open(SERVER_URL + '/romaneio-excel/' + id, '_blank');
   }
 
   async function uploadMaster(inp) {
