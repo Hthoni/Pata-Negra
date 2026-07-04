@@ -679,7 +679,7 @@ def processar():
                 print(f'[WARN] falha ao salvar PDF do romaneio {rid}: {_e}')
             # Persistir tambem o Excel da filial junto ao romaneio (best-effort)
             try:
-                xls_fd = gerar_excel({**dados, 'filiais': [fd]}, empresa_override=override)
+                xls_fd = gerar_excel({**dados, 'filiais': [fd]})
                 salvar_pedido_excel(rid, xls_fd)
             except Exception as _e:
                 print(f'[WARN] falha ao salvar Excel do romaneio {rid}: {_e}')
@@ -933,7 +933,7 @@ def processar_manual():
                 print(f'[WARN] falha ao salvar PDF do romaneio {rid}: {_e}')
             # Persistir tambem o Excel da filial junto ao romaneio (best-effort)
             try:
-                xls_fd = gerar_excel({**dados, 'filiais': [filiais[0]]}, empresa_override=override)
+                xls_fd = gerar_excel({**dados, 'filiais': [filiais[0]]})
                 salvar_pedido_excel(rid, xls_fd)
             except Exception as _e:
                 print(f'[WARN] falha ao salvar Excel do romaneio {rid}: {_e}')
@@ -968,5 +968,6 @@ if __name__ == '__main__':
     import os
     port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port)
+
 
 
