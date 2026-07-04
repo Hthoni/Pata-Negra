@@ -66,6 +66,8 @@
     .popup-acoes { display:flex; gap:6px; margin-top:10px; }
     .popup-btn { flex:1; padding:6px 8px; border-radius:6px; border:1px solid var(--border); background:#fff; font-size:11px; font-weight:600; cursor:pointer; }
     .popup-btn-pdf { color:var(--accent); border-color:var(--accent); }
+    .popup-btn-xls { color:var(--accent); border-color:var(--accent); }
+    .popup-btn-xls:hover { background:var(--accent-lt); }
     .popup-btn-pdf:hover { background:var(--accent-lt); }
     .popup-btn-del { color:#c0392b; border-color:#e6b0aa; }
     .popup-btn-del:hover { background:#fdedec; }
@@ -339,6 +341,7 @@
       '<span class="popup-idade" style="background:' + c.bg + ';color:' + c.txt + '">' + c.label + ' — ' + Math.round(horas) + 'h</span>' +
       '<div class="popup-acoes">' +
         '<button class="popup-btn popup-btn-pdf" onclick="verPdf(\'' + rom.id + '\')">Ver PDF</button>' +
+      '<button class="popup-btn popup-btn-xls" onclick="baixarExcel(\'' + rom.id + '\')">Gerar xlx</button>' +
         '<button class="popup-btn popup-btn-del" onclick="marcarEntregue(\'' + rom.id + '\')">✓ Entregue</button>' +
       '</div>' +
       (rom.status === 'em_rota'
@@ -663,6 +666,9 @@
   // ── Ações do popup ──────────────────────────────────────────────────
   function verPdf(id) {
     window.open(SERVER_URL + '/romaneio-pdf/' + id, '_blank');
+  }
+  function baixarExcel(id) {
+    window.open(SERVER_URL + '/romaneio-excel/' + id, '_blank');
   }
 
   function marcarEntregue(id) {
