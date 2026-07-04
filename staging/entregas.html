@@ -73,6 +73,8 @@
     .ped-acoes button { -webkit-appearance:none; appearance:none; font-family:inherit; height:26px; padding:0 12px; border-radius:6px; font-size:11px; font-weight:600; cursor:pointer; }
     .b-entregue { border:none; background:var(--green); color:#fff; }
     .b-entregue:hover { background:#145230; }
+    .b-xls { border:1px solid var(--accent); background:#fff; color:var(--accent); }
+    .b-xls:hover { background:var(--accent-lt); }
     .b-falhou { border:1px solid #e67e22; background:#fff; color:#e67e22; }
     .b-falhou:hover { background:#fff5ec; }
   </style>
@@ -183,6 +185,7 @@
             '<div class="ped-kg">' + fmtKg(r.kgPlanejados) + '</div>' +
             '<div class="ped-idade" style="background:' + cp.bg + ';color:' + cp.txt + '">' + Math.round(hp) + 'h</div>' +
             '<div class="ped-acoes">' +
+              '<button class="b-xls" onclick="baixarExcel(\'' + r.id + '\')">Gerar xlx</button>' +
               '<button class="b-entregue" onclick="marcarPedido(\'' + r.id + '\',\'entregue\',\'' + escapeAttr(r.clienteNome || r.cliente || '') + '\')">Entregue</button>' +
               '<button class="b-falhou" onclick="marcarPedido(\'' + r.id + '\',\'falhou\',\'' + escapeAttr(r.clienteNome || r.cliente || '') + '\')">Falhou entrega</button>' +
             '</div>' +
@@ -201,6 +204,8 @@
   function escapeAttr(s) { return String(s == null ? '' : s).replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
 
   // ── Ações ──────────────────────────────────────────────────────────
+  function baixarExcel(id) { window.open(SERVER_URL + '/romaneio-excel/' + id, '_blank'); }
+
   async function marcarPedido(id, desfecho, nome) {
     var msg = (desfecho === 'entregue')
       ? 'Confirmar ENTREGA do pedido de ' + nome + '?'
