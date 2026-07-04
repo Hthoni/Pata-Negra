@@ -65,6 +65,25 @@ def salvar_master(file_bytes):
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 
+def salvar_estoque(dados):
+    """Salva o estoque de produtos acabados como JSON no bucket de perfis.
+    Estrutura: {'itens': {nome_master: kg}, 'atualizadoEm': iso}."""
+    blob = _bucket().blob('ESTOQUE.json')
+    blob.upload_from_string(json.dumps(dados, ensure_ascii=False),
+                            content_type='application/json')
+
+
+def carregar_estoque():
+    """Retorna o estoque salvo, ou {'itens': {}, 'atualizadoEm': None} se não houver."""
+    blob = _bucket().blob('ESTOQUE.json')
+    if not blob.exists():
+        return {'itens': {}, 'atualizadoEm': None}
+    try:
+        return json.loads(blob.download_as_bytes())
+    except Exception:
+        return {'itens': {}, 'atualizadoEm': None}
+
+
 def carregar_master_bytes():
     return _master_blob().download_as_bytes()
 # ── Romaneios (bucket separado) ───────────────────────────────────────────────
