@@ -158,6 +158,21 @@ def carregar_pedido_pdf(romaneio_id):
     return None
 
 
+
+
+def salvar_pedido_excel(romaneio_id, excel_bytes):
+    """Salva o Excel da filial associado a um romaneio (mesmo id, extensão .xlsx)."""
+    blob = _romaneios_bucket().blob(f'{romaneio_id}.xlsx')
+    blob.upload_from_string(excel_bytes,
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+def carregar_pedido_excel(romaneio_id):
+    """Retorna os bytes do Excel do romaneio, ou None se não existir."""
+    blob = _romaneios_bucket().blob(f'{romaneio_id}.xlsx')
+    if blob.exists():
+        return blob.download_as_bytes()
+    return None
 def deletar_romaneio(romaneio_id):
     """Deleta um romaneio pelo ID (JSON + PDF). Retorna True se o JSON existia, False se não."""
     # apaga o PDF associado se existir (best-effort; soft-delete do bucket cobre recuperação)
