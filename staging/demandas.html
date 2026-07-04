@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pata Negra — Demandas de Produção</title>
+<style>
+  :root { --accent:#8B1C1C; --accent-lt:#FDF0F0; --bg:#F7F5F2; --surface:#fff; --border:#E3DED7; --text:#2b2b2b; --radius:8px; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:var(--bg); color:var(--text); }
+  header { background:var(--accent); color:#fff; padding:0 24px; height:56px; display:flex; align-items:center; gap:12px; }
+  .logo { width:34px;height:34px;border-radius:8px;background:#fff;color:var(--accent);font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center; }
+  header h1 { font-size:17px; font-weight:700; }
+  .header-actions { margin-left:auto; display:flex; gap:8px; }
+  .btn-header { -webkit-appearance:none; appearance:none; font-family:inherit; height:34px; min-width:110px; display:inline-flex; align-items:center; justify-content:center; padding:0 14px; border-radius:var(--radius); border:1px solid rgba(255,255,255,.4); background:rgba(255,255,255,.15); color:#fff; font-size:12px; font-weight:600; cursor:pointer; text-decoration:none; }
+  .btn-header:hover { background:rgba(255,255,255,.28); }
+  main { max-width:840px; margin:0 auto; padding:22px 16px 60px; }
+  .toolbar { display:flex; align-items:center; gap:12px; margin-bottom:18px; flex-wrap:wrap; }
+  .stat-badge { background:var(--accent-lt); color:var(--accent); padding:4px 12px; border-radius:20px; font-size:13px; font-weight:600; }
+  .filtro-wrap { position:relative; }
+  .btn-filtro { height:38px; box-sizing:border-box; -webkit-appearance:none; appearance:none; display:inline-flex; align-items:center; gap:6px; padding:0 16px; border-radius:var(--radius); border:1px solid var(--border); background:#fff; font-size:14px; cursor:pointer; font-family:inherit; }
+  .btn-filtro.ativo { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .filtro-dropdown { display:none; position:absolute; top:44px; left:0; z-index:50; background:#fff; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 6px 20px rgba(0,0,0,.14); min-width:230px; max-height:340px; overflow:auto; padding:6px; }
+  .filtro-dropdown.aberto { display:block; }
+  .filtro-head { display:flex; justify-content:space-between; align-items:center; padding:4px 8px 8px; border-bottom:1px solid var(--border); margin-bottom:6px; }
+  .filtro-head .titulo { font-size:10px; font-weight:700; color:#aaa; letter-spacing:.05em; }
+  .filtro-head button { background:none; border:none; color:var(--accent); font-size:11px; font-weight:600; cursor:pointer; padding:2px 4px; }
+  .filtro-dropdown label { display:flex; align-items:center; gap:8px; padding:6px 8px; font-size:13px; border-radius:6px; cursor:pointer; }
+  .filtro-dropdown label:hover { background:var(--bg); }
+  .btn-print { margin-left:auto; height:38px; -webkit-appearance:none; appearance:none; font-family:inherit; padding:0 18px; border-radius:var(--radius); border:1px solid var(--accent); background:var(--accent); color:#fff; font-size:13px; font-weight:600; cursor:pointer; }
+  .btn-print:hover { background:#6F1515; }
+
+  table { width:100%; border-collapse:collapse; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+  thead th { background:var(--accent); color:#fff; font-size:12px; font-weight:700; text-align:left; padding:11px 16px; }
+  thead th.num { text-align:right; }
+  tbody td { padding:10px 16px; font-size:15px; border-bottom:1px solid #f0ece6; }
+  tbody tr:last-child td { border-bottom:none; }
+  .nome { font-weight:500; }
+  .vol { text-align:right; font-weight:600; font-variant-numeric:tabular-nums; }
+  .raiz-rot { text-align:left; font-weight:800; background:var(--accent-lt); color:var(--accent); border-left:1px solid var(--border); vertical-align:middle; font-size:22px; text-transform:capitalize; }
+  .raiz-cell { text-align:right; font-weight:800; font-variant-numeric:tabular-nums; background:var(--accent-lt); color:var(--accent); border-left:1px solid var(--border); vertical-align:middle; font-size:26px; }
+  .grupo-sep td { border-top:3px solid #c9a9a9; }
+  tfoot td { padding:14px 16px; font-weight:800; background:#2b2b2b; color:#fff; font-size:14px; }
+  tfoot td.rotulo { text-align:right; }
+  tfoot td.total-c { text-align:right; font-variant-numeric:tabular-nums; background:var(--accent); font-size:22px; }
+  #loading { text-align:center; color:#999; padding:50px; }
+
+  @media print {
+    @page { size:A4 portrait; margin:8mm; }
+    header, .toolbar { display:none !important; }
+    html, body { background:#fff; }
+    main { max-width:100%; padding:0; }
+    table { border:1px solid #000; font-size:11px; }
+    thead th { background:#fff !important; color:#000 !important; border-bottom:2px solid #000; padding:4px 8px; font-size:10px; }
+    tbody td { padding:2.5px 8px !important; font-size:11px; line-height:1.15; }
+    .vol { font-size:11px; }
+    .raiz-rot { background:#fff !important; color:#000 !important; font-size:14px; padding:2px 8px !important; }
+    .raiz-cell { background:#fff !important; color:#000 !important; font-size:15px; padding:2px 8px !important; }
+    .grupo-sep td { border-top:2px solid #000 !important; }
+    tfoot td { background:#fff !important; color:#000 !important; border-top:2px solid #000; padding:5px 8px; font-size:12px; }
+    tfoot td.total-c { background:#fff !important; color:#000 !important; font-size:14px; font-weight:800; }
+    tr, td, th { page-break-inside:avoid; }
+    thead { display:table-header-group; }
+    * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">PN</div>
+  <h1>Pata Negra — Demandas de Produção</h1>
+  <div class="header-actions">
+    <a href="index.html" class="btn-header">Criar Pedido</a>
+    <a href="mapa.html" class="btn-header">Mapa</a>
+    <a href="entregas.html" class="btn-header">Entregas</a>
+  </div>
+</header>
+<main>
+  <div class="toolbar">
+    <span class="stat-badge" id="badge">—</span>
+    <div class="filtro-wrap">
+      <button class="btn-filtro" id="fcli" onclick="toggleFiltro(event)">Clientes <span id="fcli-lbl">(todos)</span></button>
+      <div class="filtro-dropdown" id="fcli-dd"></div>
+    </div>
+    <span style="font-size:12px;color:#888">apenas pedidos <b>pendentes</b></span>
+    <button class="btn-print" onclick="window.print()">Imprimir</button>
+  </div>
+  <div id="loading">Carregando demandas…</div>
+  <table id="tabela" style="display:none">
+    <thead><tr><th>Produto</th><th class="num">Volume (kg)</th><th style="width:150px">Grupo</th><th class="num" style="width:150px">Total do grupo</th></tr></thead>
+    <tbody id="corpo"></tbody>
+    <tfoot><tr><td class="rotulo" colspan="3">TOTAL GERAL</td><td class="total-c" id="tot">—</td></tr></tfoot>
+  </table>
+</main>
+<script>
+  var SERVER_URL = 'https://pata-negra-staging-784065203515.us-central1.run.app';
+
+  var ROTULOS = {
+    'BACON':'Bacon','BACON LOMBO':'bacon lombo','LOMBO DEFUMADO':'lombinho',
+    'COPA LOMBO DEFUMADO':'copa lombo','COSTELA DEFUMADA':'costelinha','LINGUIÇA':'linguiça',
+    'COSTELA SALGADA':'costela','LOMBO PERNIL':'pernil','PONTA DE COSTELA':'ponta',
+    'LOMBO CARRE SALGADO':'Carré','BARRIGA SALGADA':'barriga','CHISPE':'chispe',
+    'GARGANTA SALGADA':'garganta','ORELHA SALGADA':'orelha','RABO SALGADO':'rabo',
+    'INGREDIENTES DE FEIJOADA':'ingredientes'
+  };
+  function rotulo(raiz) { return ROTULOS[raiz] || raiz; }
+  function fmt(v) { return v ? Number(v).toLocaleString('pt-BR') : ''; }
+  function fmtG(v) { return v ? Number(v).toLocaleString('pt-BR') : '—'; }
+
+  var linhas = [], clientes = [], desmarcados = new Set();  // vazio = todos marcados
+
+  function toggleFiltro(e) {
+    if (e) e.stopPropagation();
+    document.getElementById('fcli-dd').classList.toggle('aberto');
+  }
+  document.addEventListener('click', function() { document.getElementById('fcli-dd').classList.remove('aberto'); });
+
+  function montarFiltroClientes() {
+    var dd = document.getElementById('fcli-dd');
+    var html = '<div class="filtro-head"><span class="titulo">CLIENTES</span>' +
+      '<span><button onclick="filtroTodos(true)">Todos</button><button onclick="filtroTodos(false)">Nenhum</button></span></div>';
+    clientes.forEach(function(c) {
+      var checked = desmarcados.has(c) ? '' : 'checked';
+      html += '<label><input type="checkbox" value="' + c.replace(/"/g, '&quot;') + '" ' + checked + ' onchange="toggleCliente(this)"> ' + c + '</label>';
+    });
+    dd.innerHTML = html;
+  }
+  function toggleCliente(cb) {
+    if (cb.checked) desmarcados.delete(cb.value); else desmarcados.add(cb.value);
+    atualizarLabel(); carregar();
+  }
+  function filtroTodos(m) {
+    desmarcados.clear();
+    if (!m) clientes.forEach(function(c) { desmarcados.add(c); });
+    montarFiltroClientes(); atualizarLabel(); carregar();
+  }
+  function atualizarLabel() {
+    var lbl = document.getElementById('fcli-lbl'), btn = document.getElementById('fcli');
+    var sel = clientes.length - desmarcados.size;
+    if (desmarcados.size === 0) { lbl.textContent = '(todos)'; btn.classList.remove('ativo'); }
+    else if (sel === 0) { lbl.textContent = '(nenhum)'; btn.classList.add('ativo'); }
+    else { lbl.textContent = '(' + sel + ')'; btn.classList.add('ativo'); }
+  }
+
+  function render() {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('tabela').style.display = '';
+    var corpo = document.getElementById('corpo');
+    var html = '', totalGeral = 0, i = 0;
+    while (i < linhas.length) {
+      var rz = linhas[i].raiz, grupo = [];
+      while (i < linhas.length && linhas[i].raiz === rz) { grupo.push(linhas[i]); i++; }
+      var sub = grupo.reduce(function(s, d) { return s + d.vol; }, 0);
+      totalGeral += sub;
+      grupo.forEach(function(d, gi) {
+        html += '<tr' + (gi === 0 ? ' class="grupo-sep"' : '') + '>' +
+          '<td class="nome">' + d.nome + '</td>' +
+          '<td class="vol">' + fmt(d.vol) + '</td>';
+        if (gi === 0) {
+          html += '<td class="raiz-rot" rowspan="' + grupo.length + '">' + rotulo(rz) + '</td>';
+          html += '<td class="raiz-cell" rowspan="' + grupo.length + '">' + fmtG(sub) + '</td>';
+        }
+        html += '</tr>';
+      });
+    }
+    corpo.innerHTML = html;
+    document.getElementById('tot').textContent = fmtG(totalGeral) + ' kg';
+    document.getElementById('badge').textContent = 'demanda total: ' + fmtG(totalGeral) + ' kg';
+  }
+
+  async function carregar() {
+    try {
+      var url = SERVER_URL + '/demandas';
+      var selecionados = clientes.filter(function(c) { return !desmarcados.has(c); });
+      if (desmarcados.size > 0) {
+        // "nenhum" selecionado: manda um sentinela que não casa com ninguém -> zeros
+        var lista = selecionados.length ? selecionados : ['__nenhum__'];
+        url += '?clientes=' + lista.map(encodeURIComponent).join('|');
+      }
+      var d = await fetch(url).then(function(r) { return r.json(); });
+      linhas = d.ordem || [];
+      if (!clientes.length) { clientes = d.clientes || []; montarFiltroClientes(); atualizarLabel(); }
+      render();
+    } catch (e) {
+      document.getElementById('loading').textContent = 'Erro ao carregar: ' + e.message;
+    }
+  }
+
+  carregar();
+</script>
+</body>
+</html>
