@@ -341,7 +341,9 @@
       '<span class="popup-idade" style="background:' + c.bg + ';color:' + c.txt + '">' + c.label + ' — ' + Math.round(horas) + 'h</span>' +
       '<div class="popup-acoes">' +
         '<button class="popup-btn popup-btn-pdf" onclick="verPdf(\'' + rom.id + '\')">Ver PDF</button>' +
-      '<button class="popup-btn popup-btn-xls" onclick="baixarExcel(\'' + rom.id + '\')">Gerar xlx</button>' +
+        '<button class="popup-btn popup-btn-xls" onclick="baixarExcel(\'' + rom.id + '\')">Gerar xlx</button>' +
+      '</div>' +
+      '<div class="popup-acoes" style="margin-top:6px">' +
         '<button class="popup-btn popup-btn-del" onclick="marcarEntregue(\'' + rom.id + '\')">✓ Entregue</button>' +
       '</div>' +
       (rom.status === 'em_rota'
