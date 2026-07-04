@@ -71,6 +71,10 @@
     .popup-btn-pdf:hover { background:var(--accent-lt); }
     .popup-btn-del { color:#c0392b; border-color:#e6b0aa; }
     .popup-btn-del:hover { background:#fdedec; }
+    .popup-btn-entregue { color:#1A6B3C; border-color:#1A6B3C; }
+    .popup-btn-entregue:hover { background:#F0FAF4; }
+    .popup-btn-falhou { color:#c0392b; border-color:#c0392b; }
+    .popup-btn-falhou:hover { background:#fdedec; }
 
     /* Painel de somas por zona */
     #paineis-dir { position:absolute; bottom:18px; right:12px; width:236px; z-index:500; display:flex; flex-direction:column; gap:10px; max-height:calc(100vh - 140px); }
@@ -343,12 +347,13 @@
         '<button class="popup-btn popup-btn-pdf" onclick="verPdf(\'' + rom.id + '\')">Ver PDF</button>' +
         '<button class="popup-btn popup-btn-xls" onclick="baixarExcel(\'' + rom.id + '\')">Gerar xlx</button>' +
       '</div>' +
-      '<div class="popup-acoes" style="margin-top:6px">' +
-        '<button class="popup-btn popup-btn-del" onclick="marcarEntregue(\'' + rom.id + '\')">✓ Entregue</button>' +
-      '</div>' +
       (rom.status === 'em_rota'
         ? '<button class="popup-btn" style="width:100%;margin-top:6px;color:#666;border-color:#aaa;background:#f2f2f2" onclick="toggleSim(\'' + rom.id + '\')">🔒 Em rota: ' + (rom.entregaNome || '') + '</button>'
         : '<button class="popup-btn popup-btn-sim" style="width:100%;margin-top:6px" onclick="toggleSim(\'' + rom.id + '\')">' + (simIds.has(rom.id) ? '− Remover da simulação' : '＋ Adicionar à simulação') + '</button>') +
+      '<div class="popup-acoes" style="margin-top:6px">' +
+        '<button class="popup-btn popup-btn-falhou" onclick="marcarFalhou(\'' + rom.id + '\')">Falhou entrega</button>' +
+        '<button class="popup-btn popup-btn-entregue" onclick="marcarEntregue(\'' + rom.id + '\')">Entregue</button>' +
+      '</div>' +
       '</div>';
   }
 
@@ -671,6 +676,26 @@
   }
   function baixarExcel(id) {
     window.open(SERVER_URL + '/romaneio-excel/' + id, '_blank');
+  }
+
+  function marcarFalhou(id) {
+    var rom = null;
+    for (var i = 0; i < romaneios.length; i++) { if (romaneios[i].id === id) { rom = romaneios[i]; break; } }
+    var nome = rom ? (rom.filial || rom.clienteNome || rom.cliente) : id;
+    if (!confirm('Marcar FALHA na entrega da filial ' + nome + '?\nO pedido volta para pendentes (mantendo a data original).')) return;
+    fetch(SERVER_URL + '/romaneio/' + id + '/status', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({status:'falhou'}) })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.ok) {
+          for (var i = 0; i < romaneios.length; i++) { if (romaneios[i].id === id) { romaneios[i].status = 'pendente'; delete romaneios[i].entregaId; delete romaneios[i].entregaNome; break; } }
+          map.closePopup();
+          montarFiltro(romaneios);
+          renderMarkers(false);
+        } else {
+          alert('Erro: ' + (data.erro || 'Falha ao registrar'));
+        }
+      })
+      .catch(function(e) { alert('Erro: ' + e.message); });
   }
 
   function marcarEntregue(id) {
