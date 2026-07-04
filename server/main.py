@@ -19,7 +19,7 @@ import datetime
 import traceback
 from flask_cors import CORS
 
-from storage import perfil_existe, salvar_perfil, carregar_perfil_bytes, perfil_filename, salvar_romaneio, listar_romaneios, deletar_romaneio, salvar_pedido_pdf, carregar_pedido_pdf, salvar_geofence, listar_geofences, deletar_geofence, salvar_master, master_existe, carregar_master_bytes, atualizar_status_romaneio, salvar_entrega, carregar_entrega, listar_entregas, deletar_entrega, registrar_desfecho_entrega, salvar_estoque, carregar_estoque
+from storage import perfil_existe, salvar_perfil, carregar_perfil_bytes, perfil_filename, salvar_romaneio, listar_romaneios, deletar_romaneio, salvar_pedido_pdf, carregar_pedido_pdf, salvar_pedido_excel, carregar_pedido_excel, salvar_geofence, listar_geofences, deletar_geofence, salvar_master, master_existe, carregar_master_bytes, atualizar_status_romaneio, salvar_entrega, carregar_entrega, listar_entregas, deletar_entrega, registrar_desfecho_entrega, salvar_estoque, carregar_estoque
 from perfil import ler_perfil, ler_filiais, buscar_filial, ler_operadores
 from excel_gen import gerar_excel
 from pdf_gen import gerar_pdf, _kg_pdf, gerar_pdf_totais
@@ -431,6 +431,20 @@ def romaneio_pdf(rid):
         return jsonify({'erro': str(e)}), 500
 
 
+@app.route('/romaneio-excel/<rid>')
+def romaneio_excel(rid):
+    """Baixa o Excel da filial associado a um romaneio."""
+    try:
+        b = carregar_pedido_excel(rid)
+        if b is None:
+            return jsonify({'erro': 'Excel não encontrado (pedido antigo, sem Excel salvo)'}), 404
+        return send_file(io.BytesIO(b),
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True, download_name=f'pedido_{rid}.xlsx')
+    except Exception as e:
+        return jsonify({'erro': str(e)}), 500
+
+
 @app.route('/geofences')
 def get_geofences():
     """Lista as zonas (geofences) salvas para o mapa."""
@@ -663,6 +677,12 @@ def processar():
                 salvar_pedido_pdf(rid, pdf_fd)
             except Exception as _e:
                 print(f'[WARN] falha ao salvar PDF do romaneio {rid}: {_e}')
+            # Persistir tambem o Excel da filial junto ao romaneio (best-effort)
+            try:
+                xls_fd = gerar_excel({**dados, 'filiais': [fd]}, empresa_override=override)
+                salvar_pedido_excel(rid, xls_fd)
+            except Exception as _e:
+                print(f'[WARN] falha ao salvar Excel do romaneio {rid}: {_e}')
 
         todos_itens = [i for f in filiais for i in f['itens']]
         return jsonify({
@@ -911,6 +931,12 @@ def processar_manual():
                 salvar_pedido_pdf(rid, pdf_fd)
             except Exception as _e:
                 print(f'[WARN] falha ao salvar PDF do romaneio {rid}: {_e}')
+            # Persistir tambem o Excel da filial junto ao romaneio (best-effort)
+            try:
+                xls_fd = gerar_excel({**dados, 'filiais': [filiais[0]]}, empresa_override=override)
+                salvar_pedido_excel(rid, xls_fd)
+            except Exception as _e:
+                print(f'[WARN] falha ao salvar Excel do romaneio {rid}: {_e}')
         else:
             print(f'[INFO] romaneio não salvo — lat={lat} lng={lng}')
 
@@ -942,4 +968,5 @@ if __name__ == '__main__':
     import os
     port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port)
+
 
