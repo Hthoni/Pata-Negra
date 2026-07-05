@@ -584,6 +584,7 @@ def processar():
         perfil_file = request.files.get('perfil')
         pedido_file = request.files.get('pedido')
         cliente = request.form.get('cliente', 'dom_atacarejo')
+        data_prog = (request.form.get('dataEntregaProgramada') or '').strip() or None
 
         if not pedido_file:
             return jsonify({'erro': 'Envie o pedido'}), 400
@@ -670,6 +671,7 @@ def processar():
                 'kgPlanejados': round(sum(float(i.get('kgPlanejados', 0)) for i in its), 1),
                 'itens': [{'cod': str(i.get('codInterno') or '').strip(), 'nome': str(i.get('nomeProduto') or ''), 'kg': round(_kg_pdf(i), 3)} for i in its],
                 'pedidoNum': fd.get('pedidoNum', ''),
+                'dataEntregaProgramada': data_prog,
             })
             # Persistir o PDF da filial junto ao romaneio (best-effort)
             try:
@@ -784,6 +786,7 @@ def processar_manual():
     é necessário, já que o produto e a filial vêm de seleção direta."""
     try:
         body = request.get_json(force=True) or {}
+        data_prog = (body.get('dataEntregaProgramada') or '') or None
         cliente = body.get('cliente', '')
         operador = body.get('operador', '')
         filial_nome = body.get('filialNome', '')
@@ -921,6 +924,7 @@ def processar_manual():
                 'lng': lng,
                 'dataPedido': agora.strftime('%d/%m/%Y'),
                 'dataGeracao': datetime.datetime.utcnow().isoformat(),
+                'dataEntregaProgramada': data_prog,
                 'kgPlanejados': round(sum(float(i.get('kgPlanejados', 0)) for i in itens), 1),
                 'itens': [{'cod': str(i.get('codInterno') or '').strip(), 'nome': str(i.get('nomeProduto') or ''), 'kg': round(_kg_pdf(i), 3)} for i in itens],
                 'pedidoNum': pedido_num,
