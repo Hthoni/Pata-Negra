@@ -35,10 +35,10 @@
 
     /* Filtro por cliente */
     .filtro-wrap { position:relative; }
-    #btn-filtro, #btn-filtro-cor, #btn-filtro-peso, #btn-filtro-regiao { height:38px; min-width:120px; box-sizing:border-box; -webkit-appearance:none; appearance:none; margin:0; font-family:inherit; display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:0 16px; border-radius:var(--radius); border:1px solid var(--border); background:#fff; font-size:14px; cursor:pointer; line-height:1; }
-    #btn-filtro:hover, #btn-filtro-cor:hover, #btn-filtro-peso:hover, #btn-filtro-regiao:hover { background:var(--bg); }
-    #btn-filtro.filtro-ativo, #btn-filtro-cor.filtro-ativo, #btn-filtro-peso.filtro-ativo, #btn-filtro-regiao.filtro-ativo { background:var(--accent); color:#fff; border:1px solid var(--accent); }
-    #btn-filtro.filtro-ativo:hover, #btn-filtro-cor.filtro-ativo:hover, #btn-filtro-peso.filtro-ativo:hover, #btn-filtro-regiao.filtro-ativo:hover { background:#6F1515; }
+    #btn-filtro, #btn-filtro-cor, #btn-filtro-peso, #btn-filtro-situacao { height:38px; min-width:120px; box-sizing:border-box; -webkit-appearance:none; appearance:none; margin:0; font-family:inherit; display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:0 16px; border-radius:var(--radius); border:1px solid var(--border); background:#fff; font-size:14px; cursor:pointer; line-height:1; }
+    #btn-filtro:hover, #btn-filtro-cor:hover, #btn-filtro-peso:hover, #btn-filtro-situacao:hover { background:var(--bg); }
+    #btn-filtro.filtro-ativo, #btn-filtro-cor.filtro-ativo, #btn-filtro-peso.filtro-ativo, #btn-filtro-situacao.filtro-ativo { background:var(--accent); color:#fff; border:1px solid var(--accent); }
+    #btn-filtro.filtro-ativo:hover, #btn-filtro-cor.filtro-ativo:hover, #btn-filtro-peso.filtro-ativo:hover, #btn-filtro-situacao.filtro-ativo:hover { background:#6F1515; }
     .filtro-dropdown { position:absolute; top:calc(100% + 6px); left:0; background:#fff; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 4px 16px rgba(0,0,0,.12); padding:8px; min-width:200px; max-height:320px; overflow:auto; z-index:600; display:none; }
     .filtro-head { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:2px 8px 8px; border-bottom:1px solid var(--border); margin-bottom:4px; }
     .filtro-head .titulo { font-size:11px; color:#888; font-weight:700; letter-spacing:.04em; }
@@ -66,9 +66,15 @@
     .popup-acoes { display:flex; gap:6px; margin-top:10px; }
     .popup-btn { flex:1; padding:6px 8px; border-radius:6px; border:1px solid var(--border); background:#fff; font-size:11px; font-weight:600; cursor:pointer; }
     .popup-btn-pdf { color:var(--accent); border-color:var(--accent); }
+    .popup-btn-xls { color:var(--accent); border-color:var(--accent); }
+    .popup-btn-xls:hover { background:var(--accent-lt); }
     .popup-btn-pdf:hover { background:var(--accent-lt); }
     .popup-btn-del { color:#c0392b; border-color:#e6b0aa; }
     .popup-btn-del:hover { background:#fdedec; }
+    .popup-btn-entregue { color:#1A6B3C; border-color:#1A6B3C; }
+    .popup-btn-entregue:hover { background:#F0FAF4; }
+    .popup-btn-falhou { color:#c0392b; border-color:#c0392b; }
+    .popup-btn-falhou:hover { background:#fdedec; }
 
     /* Painel de somas por zona */
     #paineis-dir { position:absolute; bottom:18px; right:12px; width:236px; z-index:500; display:flex; flex-direction:column; gap:10px; max-height:calc(100vh - 140px); }
@@ -85,6 +91,7 @@
     .ps-btn { flex:1; padding:7px 6px; border-radius:6px; font-size:11px; font-weight:600; cursor:pointer; border:1px solid var(--border); background:#fff; font-family:inherit; }
     .ps-det { color:var(--accent); border-color:var(--accent); }
     .ps-limpar { color:#666; }
+    .ps-salvar { color:#fff; background:var(--accent); border-color:var(--accent); }
     .popup-btn-sim { color:#2c3e50; border-color:#2c3e50; }
     #painel-zonas { position:relative; bottom:auto; right:auto; width:auto; background:#fff; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 4px 18px rgba(0,0,0,.14); overflow:hidden; }
     .pz-head { background:var(--accent); color:#fff; padding:8px 12px; font-size:12px; font-weight:700; display:flex; justify-content:space-between; align-items:center; cursor:pointer; }
@@ -136,32 +143,33 @@
   <div class="logo">PN</div>
   <h1>Pata Negra — Mapa de Entregas</h1>
   <div class="header-actions">
-    <a href="index.html" class="btn-header">← Voltar</a>
-    <a href="entregas.html" class="btn-header">📋 Gerenciar Entregas</a>
+    <a href="index.html" class="btn-header">Criar Pedido</a>
+    <a href="pedidos.html" class="btn-header">Pedidos</a>
+    <a href="entregas.html" class="btn-header">Entregas</a>
+    <a href="demandas.html" class="btn-header">Demandas</a>
+    <a href="embarque.html" class="btn-header">Embarque</a>
   </div>
 </header>
 
 <div class="toolbar">
-  <h2>Pedidos Pendentes</h2>
   <span class="stat-badge" id="total-badge">0 pedidos</span>
-  <button id="btn-refresh" onclick="carregarRomaneios()">↺ Atualizar</button>
   <div class="filtro-wrap">
-    <button id="btn-filtro" onclick="toggleFiltro(event)">⛃ Clientes</button>
+    <button id="btn-filtro" onclick="toggleFiltro(event)">Clientes</button>
     <div class="filtro-dropdown" id="filtro-dropdown"></div>
   </div>
   <div class="filtro-wrap">
-    <button id="btn-filtro-cor" onclick="toggleFiltroCor(event)">⛃ Cor</button>
+    <button id="btn-filtro-cor" onclick="toggleFiltroCor(event)">Cor</button>
     <div class="filtro-dropdown" id="filtro-cor-dropdown"></div>
   </div>
   <div class="filtro-wrap">
-    <button id="btn-filtro-peso" onclick="toggleFiltroPeso(event)">⛃ Peso</button>
+    <button id="btn-filtro-peso" onclick="toggleFiltroPeso(event)">Peso</button>
     <div class="filtro-dropdown" id="filtro-peso-dropdown"></div>
   </div>
   <div class="filtro-wrap">
-    <button id="btn-filtro-regiao" onclick="toggleFiltroRegiao(event)">⛃ Região</button>
-    <div class="filtro-dropdown" id="filtro-regiao-dropdown"></div>
+    <button id="btn-filtro-situacao" onclick="toggleFiltroSituacao(event)">Situação</button>
+    <div class="filtro-dropdown" id="filtro-situacao-dropdown"></div>
   </div>
-  <button id="btn-editar" onclick="toggleEdicao()">✏️ Editar zonas</button>
+  <button id="btn-editar" onclick="toggleEdicao()">Editar zonas</button>
   <div class="legenda">
     <div class="leg-item"><div class="leg-dot" style="background:#27ae60"></div> &lt; 48h</div>
     <div class="leg-item"><div class="leg-dot" style="background:#f1c40f"></div> 48–96h</div>
@@ -179,7 +187,7 @@
   <div id="paineis-dir">
     <div id="painel-sim">
       <div class="pz-head" style="background:#2c3e50" onclick="togglePainelSim()">
-        <span>🚚 Simulador de entregas</span>
+        <span>Simulador de entregas</span>
         <span class="toggle" id="ps-toggle">▾</span>
       </div>
       <div id="ps-body"></div>
@@ -233,9 +241,13 @@
   var coresDesmarcadas = new Set();   // labels de idade ocultados pelo filtro
   var faixasDesmarcadas = new Set();  // faixas de peso ocultadas pelo filtro
   var regioesDesmarcadas = new Set(); // regiões ocultadas pelo filtro
+  var statusDesmarcados = new Set();  // situações ocultadas (pendente/em_rota)
+  var SITUACOES = [{ key:'pendente', label:'Pendente' }, { key:'em_rota', label:'Em rota' }];
+  function statusKey(rom) { return (rom.status === 'em_rota') ? 'em_rota' : 'pendente'; }
   function regiaoKey(rom) { return (rom.regiao && String(rom.regiao).trim()) || '__sem__'; }
   // Simulador de plano de entregas: ids de romaneio selecionados (persiste no navegador).
   var simIds = new Set(JSON.parse(localStorage.getItem('pn_sim_ids') || '[]'));
+  function romById(id) { for (var i = 0; i < romaneios.length; i++) { if (romaneios[i].id === id) return romaneios[i]; } return null; }
   var spiderLegs = L.layerGroup().addTo(map);  // linhas do "leque" de pinos sobrepostos
   var grupoAberto = null;             // chave do grupo atualmente em leque
   var spiderTimer = null;
@@ -256,8 +268,30 @@
     if (horas < 120) return { cor:'#e67e22', label:'Atrasado', bg:'#fdebd0', txt:'#a04000' };
     return              { cor:'#e74c3c', label:'Crítico',  bg:'#fdedec', txt:'#922b21' };
   }
+  // ── Pedido programado: relógio começa 60h antes da entrega (nasce amarelo,
+  //    fica vermelho na hora da entrega). Antes disso, dormente (cinza). ──
+  function horasAteEntrega(rom) {
+    if (!rom.dataEntregaProgramada) return null;
+    var d = new Date(rom.dataEntregaProgramada);
+    if (isNaN(d)) return null;
+    return (d.getTime() - Date.now()) / 3600000;
+  }
+  function idadeEfetiva(rom) {
+    var ate = horasAteEntrega(rom);
+    if (ate === null) return idadeHoras(rom.dataGeracao);  // pedido normal
+    return 120 - ate;  // programado: 60h antes = 60h de idade; na entrega = 120h
+  }
+  function isDormente(rom) {
+    var ate = horasAteEntrega(rom);
+    return ate !== null && ate > 60;  // ainda faltam +60h: dorme
+  }
+  function corDe(rom) {
+    if (isDormente(rom)) return { cor:'#cfcfcf', label:'Programado', bg:'#f2f2f2', txt:'#8a8a8a' };
+    return corPorIdade(idadeEfetiva(rom));
+  }
 
   var CORES_FILTRO = [
+    { label:'Programado', hex:'#cfcfcf' },
     { label:'Recente',  hex:'#27ae60' },
     { label:'Atenção',  hex:'#f1c40f' },
     { label:'Atrasado', hex:'#e67e22' },
@@ -316,28 +350,37 @@
   function pinoVisivel(rom) {
     if (!rom.lat || !rom.lng) return false;
     if (clientesDesmarcados.has(rom.cliente)) return false;
-    if (coresDesmarcadas.has(corPorIdade(idadeHoras(rom.dataGeracao)).label)) return false;
+    if (coresDesmarcadas.has(corDe(rom).label)) return false;
     if (faixasDesmarcadas.has(faixaDe(rom.kgPlanejados))) return false;
-    if (regioesDesmarcadas.has(regiaoKey(rom))) return false;
+    if (statusDesmarcados.has(statusKey(rom))) return false;
     return true;
   }
 
+  function formatarDataProg(iso) {
+    var d = new Date(iso); if (isNaN(d)) return iso;
+    return d.toLocaleDateString('pt-BR') + ' 08h';
+  }
   function montarPopup(rom, c, horas) {
     return '<div class="popup-content">' +
       '<div class="popup-cliente">' + (rom.clienteNome || rom.cliente) + '</div>' +
       '<div class="popup-filial">' + (rom.filial || '—') + '</div>' +
       '<div class="popup-row"><span class="popup-label">Pedido</span><span class="popup-valor">' + (rom.pedidoNum || '—') + '</span></div>' +
       '<div class="popup-row"><span class="popup-label">Data pedido</span><span class="popup-valor">' + (rom.dataPedido || '—') + '</span></div>' +
+      (rom.dataEntregaProgramada ? '<div class="popup-row"><span class="popup-label">Entrega prog.</span><span class="popup-valor" style="font-weight:700;color:#8B1C1C">' + formatarDataProg(rom.dataEntregaProgramada) + '</span></div>' : '') +
       '<div class="popup-row"><span class="popup-label">Gerado em</span><span class="popup-valor">' + formatarData(rom.dataGeracao) + '</span></div>' +
       '<div class="popup-row"><span class="popup-label">Kg planejados</span><span class="popup-valor">' + (rom.kgPlanejados || '—') + ' kg</span></div>' +
-      '<span class="popup-idade" style="background:' + c.bg + ';color:' + c.txt + '">' + c.label + ' — ' + Math.round(horas) + 'h</span>' +
+      '<span class="popup-idade" style="background:' + c.bg + ';color:' + c.txt + '">' + (isDormente(rom) ? 'Programado' : (c.label + ' — ' + Math.round(horas) + 'h')) + '</span>' +
       '<div class="popup-acoes">' +
-        '<button class="popup-btn popup-btn-pdf" onclick="verPdf(\'' + rom.id + '\')">📄 Ver PDF</button>' +
-        '<button class="popup-btn popup-btn-del" onclick="excluirPino(\'' + rom.id + '\')">🗑 Excluir</button>' +
+        '<button class="popup-btn popup-btn-pdf" onclick="verPdf(\'' + rom.id + '\')">Ver PDF</button>' +
+        '<button class="popup-btn popup-btn-xls" onclick="baixarExcel(\'' + rom.id + '\')">Gerar xlx</button>' +
       '</div>' +
-      '<button class="popup-btn popup-btn-sim" style="width:100%;margin-top:6px" onclick="toggleSim(\'' + rom.id + '\')">' +
-        (simIds.has(rom.id) ? '− Remover da simulação' : '＋ Adicionar à simulação') +
-      '</button>' +
+      (rom.status === 'em_rota'
+        ? '<button class="popup-btn" style="width:100%;margin-top:6px;color:#666;border-color:#aaa;background:#f2f2f2" onclick="toggleSim(\'' + rom.id + '\')">🔒 Em rota: ' + (rom.entregaNome || '') + '</button>'
+        : '<button class="popup-btn popup-btn-sim" style="width:100%;margin-top:6px" onclick="toggleSim(\'' + rom.id + '\')">' + (simIds.has(rom.id) ? '− Remover da simulação' : '＋ Adicionar à simulação') + '</button>') +
+      '<div class="popup-acoes" style="margin-top:6px">' +
+        '<button class="popup-btn popup-btn-falhou" onclick="marcarFalhou(\'' + rom.id + '\')">Falhou entrega</button>' +
+        '<button class="popup-btn popup-btn-entregue" onclick="marcarEntregue(\'' + rom.id + '\')">Entregue</button>' +
+      '</div>' +
       '</div>';
   }
 
@@ -352,15 +395,15 @@
     var grupos = {}; // "lat,lng" -> [marker...]
 
     visiveis.forEach(function(rom) {
-      var horas = idadeHoras(rom.dataGeracao);
-      var c = corPorIdade(horas);
+      var horas = idadeEfetiva(rom);
+      var c = corDe(rom);
       var corBolinha = (ehCentral(rom) || ehKanejo(rom)) ? '#000' : '#fff';
       // pmIgnore: pinos nunca são editáveis pelo Geoman (só as zonas)
       var marker = L.marker([rom.lat, rom.lng], { icon: criarIcone(c.cor, corBolinha), pmIgnore: true });
       marker._rom = rom;
       marker._html = montarPopup(rom, c, horas);
       marker._latlngBase = L.latLng(rom.lat, rom.lng);
-      if (simIds.has(rom.id)) marker.setOpacity(0.35);  // esmaecido: já no simulador
+      if (simIds.has(rom.id) || rom.status === 'em_rota') marker.setOpacity(0.35);  // esmaecido: no simulador ou em rota
       marker.addTo(map);
       markers.push(marker);
       var chave = Number(rom.lat).toFixed(5) + ',' + Number(rom.lng).toFixed(5);
@@ -432,7 +475,7 @@
     document.getElementById('btn-filtro').classList.toggle('filtro-ativo', clientesDesmarcados.size > 0);
     document.getElementById('btn-filtro-cor').classList.toggle('filtro-ativo', coresDesmarcadas.size > 0);
     document.getElementById('btn-filtro-peso').classList.toggle('filtro-ativo', faixasDesmarcadas.size > 0);
-    document.getElementById('btn-filtro-regiao').classList.toggle('filtro-ativo', regioesDesmarcadas.size > 0);
+    document.getElementById('btn-filtro-situacao').classList.toggle('filtro-ativo', statusDesmarcados.size > 0);
   }
 
   // ── Filtro por cliente ──────────────────────────────────────────────
@@ -474,7 +517,7 @@
   }
 
   function fecharDropdowns(exceto) {
-    ['filtro-dropdown','filtro-cor-dropdown','filtro-peso-dropdown','filtro-regiao-dropdown'].forEach(function(id) {
+    ['filtro-dropdown','filtro-cor-dropdown','filtro-peso-dropdown','filtro-situacao-dropdown'].forEach(function(id) {
       if (id !== exceto) { var el = document.getElementById(id); if (el) el.style.display = 'none'; }
     });
   }
@@ -502,6 +545,24 @@
     var dd = document.getElementById('filtro-regiao-dropdown');
     dd.style.display = dd.style.display === 'block' ? 'none' : 'block';
   }
+  function toggleFiltroSituacao(e) {
+    if (e) e.stopPropagation();
+    fecharDropdowns('filtro-situacao-dropdown');
+    var dd = document.getElementById('filtro-situacao-dropdown');
+    dd.style.display = dd.style.display === 'block' ? 'none' : 'block';
+  }
+  function montarFiltroSituacao() {
+    var html = '<div class="filtro-head"><span class="titulo">SITUAÇÃO</span>' +
+      '<span><button onclick="filtroSituacaoTodos(true)">Todos</button><button onclick="filtroSituacaoTodos(false)">Nenhum</button></span></div>';
+    SITUACOES.forEach(function(s) {
+      var checked = statusDesmarcados.has(s.key) ? '' : 'checked';
+      html += '<label><input type="checkbox" value="' + s.key + '" ' + checked + ' onchange="toggleSituacao(this)"> ' + s.label + '</label>';
+    });
+    document.getElementById('filtro-situacao-dropdown').innerHTML = html;
+  }
+  function toggleSituacao(cb) { if (cb.checked) statusDesmarcados.delete(cb.value); else statusDesmarcados.add(cb.value); renderMarkers(false); }
+  function filtroSituacaoTodos(m) { SITUACOES.forEach(function(s) { if (m) statusDesmarcados.delete(s.key); else statusDesmarcados.add(s.key); }); montarFiltroSituacao(); renderMarkers(false); }
+
 
   // ── Filtro por cor (idade) ──────────────────────────────────────────
   function montarFiltroCor() {
@@ -557,7 +618,29 @@
 
   // ── Simulador de plano de entregas ──────────────────────────────────
   function persistSim() { try { localStorage.setItem('pn_sim_ids', JSON.stringify(Array.from(simIds))); } catch (e) {} }
-  function toggleSim(id) { if (simIds.has(id)) simIds.delete(id); else simIds.add(id); persistSim(); map.closePopup(); renderMarkers(false); }
+  function toggleSim(id) {
+    var rom = romById(id);
+    if (rom && rom.status === 'em_rota') { alert('Este pedido já está na entrega: ' + (rom.entregaNome || '?') + '.\nRemova de lá primeiro.'); return; }
+    if (simIds.has(id)) simIds.delete(id); else simIds.add(id); persistSim(); map.closePopup(); renderMarkers(false);
+  }
+  async function salvarEntrega() {
+    var ids = Array.from(simIds);
+    if (!ids.length) { alert('Selecione ao menos um pedido para salvar a entrega.'); return; }
+    var nome = prompt('Nome da entrega (ex.: Caminhão do Juca):');
+    if (!nome || !nome.trim()) return;
+    try {
+      var resp = await fetch(SERVER_URL + '/entregas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: nome.trim(), pedidoIds: ids }) });
+      var d = await resp.json();
+      if (resp.status === 409) {
+        var lista = (d.conflitos || []).map(function(c) { return '• ' + c.cliente + ' (' + c.filial + ') → ' + c.entrega; }).join('\n');
+        alert('Alguns pedidos já estão em outra entrega:\n' + lista + '\n\nResolva o conflito e tente de novo.'); return;
+      }
+      if (!resp.ok || d.erro) { alert('Erro ao salvar a entrega: ' + (d.erro || resp.status)); return; }
+      simIds.clear(); persistSim();
+      alert('Entrega "' + nome.trim() + '" salva com ' + ids.length + ' pedido(s).');
+      carregarRomaneios();
+    } catch (e) { alert('Erro de conexão ao salvar a entrega: ' + e.message); }
+  }
   function limparSim() { if (!simIds.size || confirm('Limpar o simulador? Isso remove todos os pedidos selecionados.')) { simIds.clear(); persistSim(); renderMarkers(false); } }
   function togglePainelSim() {
     var b = document.getElementById('ps-body'), t = document.getElementById('ps-toggle');
@@ -602,8 +685,9 @@
         '</div>';
     });
     html += '<div class="ps-total"><span>Total (' + sel.length + ' ped.)</span><b>' + Math.round(tot) + ' kg</b></div>';
+    html += '<div class="ps-acoes"><button class="ps-btn ps-salvar" onclick="salvarEntrega()">Salvar entrega</button></div>';
     html += '<div class="ps-acoes">' +
-      '<button class="ps-btn ps-det" onclick="detalharTotais()">📄 Detalhar totais</button>' +
+      '<button class="ps-btn ps-det" onclick="detalharTotais()">Detalhar totais</button>' +
       '<button class="ps-btn ps-limpar" onclick="limparSim()">Limpar</button>' +
       '</div>';
     body.innerHTML = html;
@@ -617,14 +701,37 @@
   function verPdf(id) {
     window.open(SERVER_URL + '/romaneio-pdf/' + id, '_blank');
   }
+  function baixarExcel(id) {
+    window.open(SERVER_URL + '/romaneio-excel/' + id, '_blank');
+  }
 
-  function excluirPino(id) {
+  function marcarFalhou(id) {
     var rom = null;
     for (var i = 0; i < romaneios.length; i++) { if (romaneios[i].id === id) { rom = romaneios[i]; break; } }
     var nome = rom ? (rom.filial || rom.clienteNome || rom.cliente) : id;
-    if (!confirm('Excluir o pedido da filial ' + nome + '?')) return;
+    if (!confirm('Marcar FALHA na entrega da filial ' + nome + '?\nO pedido volta para pendentes (mantendo a data original).')) return;
+    fetch(SERVER_URL + '/romaneio/' + id + '/status', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({status:'falhou'}) })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.ok) {
+          for (var i = 0; i < romaneios.length; i++) { if (romaneios[i].id === id) { romaneios[i].status = 'pendente'; delete romaneios[i].entregaId; delete romaneios[i].entregaNome; break; } }
+          map.closePopup();
+          montarFiltro(romaneios);
+          renderMarkers(false);
+        } else {
+          alert('Erro: ' + (data.erro || 'Falha ao registrar'));
+        }
+      })
+      .catch(function(e) { alert('Erro: ' + e.message); });
+  }
 
-    fetch(SERVER_URL + '/romaneio/' + id, { method:'DELETE' })
+  function marcarEntregue(id) {
+    var rom = null;
+    for (var i = 0; i < romaneios.length; i++) { if (romaneios[i].id === id) { rom = romaneios[i]; break; } }
+    var nome = rom ? (rom.filial || rom.clienteNome || rom.cliente) : id;
+    if (!confirm('Marcar como ENTREGUE o pedido da filial ' + nome + '?')) return;
+
+    fetch(SERVER_URL + '/romaneio/' + id + '/status', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({status:'entregue'}) })
       .then(function(r) { return r.json(); })
       .then(function(data) {
         if (data.ok) {
@@ -748,7 +855,7 @@
       });
     } else {
       btn.classList.remove('ativo');
-      btn.textContent = '✏️ Editar zonas';
+      btn.textContent = 'Editar zonas';
       map.pm.disableDraw();
       map.pm.disableGlobalEditMode();
       map.pm.disableGlobalRemovalMode();
@@ -867,7 +974,7 @@
         montarFiltro(romaneios);
         montarFiltroCor();
         montarFiltroPeso();
-        montarFiltroRegiao(romaneios);
+        montarFiltroSituacao();
         renderMarkers(true);
       })
       .catch(function(e) {
