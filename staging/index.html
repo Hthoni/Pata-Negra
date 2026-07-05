@@ -168,7 +168,10 @@ table.itens td.nome-produto{text-align:left}
           <div class="zh" id="zone-p-hint">.xlsx — necessário para primeiro uso</div>
           <div class="zf" id="fn-p"></div>
         </div>
-        <button class="btn-sec" id="btn-upd-perfil" disabled onclick="atualizarPerfil()">📋 &nbsp;Atualizar perfil</button>
+        <div style="display:flex;gap:10px;margin-top:12px">
+          <button class="btn-sec" id="btn-upd-perfil" disabled onclick="atualizarPerfil()" style="flex:1;margin-top:0">📋 &nbsp;Atualizar perfil</button>
+          <button class="btn-proc" id="btn-prog" disabled onclick="programarPedido()" style="flex:1;margin-top:0;background:#4a4a4a">🗓 &nbsp;Programar</button>
+        </div>
       </div>
       <div>
         <div class="ulabel" id="pedido-label">Pedido do cliente <span style="color:var(--accent)">*</span></div>
@@ -183,10 +186,7 @@ table.itens td.nome-produto{text-align:left}
             <div class="zf" id="fn-o"></div>
           </div>
         </div>
-        <div style="display:flex;gap:10px">
-          <button class="btn-proc" id="btn-proc" disabled onclick="acaoPrincipal()" style="flex:1">⚙️ &nbsp;Processar pedido</button>
-          <button class="btn-proc" id="btn-prog" disabled onclick="programarPedido()" style="flex:1;background:#4a4a4a">🗓 &nbsp;Programar pedido</button>
-        </div>
+        <button class="btn-proc" id="btn-proc" disabled onclick="acaoPrincipal()">⚙️ &nbsp;Processar pedido</button>
       </div>
     </div>
   </div>
