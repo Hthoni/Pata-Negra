@@ -126,7 +126,11 @@ table.itens td.nome-produto{text-align:left}
   <div class="logo">PN</div>
   <h1>Pata Negra — Processamento de Pedidos</h1>
   <span id="hdate" style="font-size:12px;opacity:.65;margin-left:auto;margin-right:12px"></span>
-  <a href="mapa.html" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.15);color:#fff;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;">🗺️ Mapa de Entregas</a>
+  <a href="mapa.html" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.15);color:#fff;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;">Mapa</a>
+  <a href="pedidos.html" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.15);color:#fff;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;">Pedidos</a>
+  <a href="entregas.html" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.15);color:#fff;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;">Entregas</a>
+  <a href="demandas.html" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.15);color:#fff;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;">Demandas</a>
+  <a href="embarque.html" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.15);color:#fff;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;">Embarque</a>
 </header>
 <main>
 
@@ -164,7 +168,10 @@ table.itens td.nome-produto{text-align:left}
           <div class="zh" id="zone-p-hint">.xlsx — necessário para primeiro uso</div>
           <div class="zf" id="fn-p"></div>
         </div>
-        <button class="btn-sec" id="btn-upd-perfil" disabled onclick="atualizarPerfil()">📋 &nbsp;Atualizar perfil</button>
+        <div style="display:flex;gap:10px;margin-top:12px">
+          <button class="btn-sec" id="btn-upd-perfil" disabled onclick="atualizarPerfil()" style="flex:1;margin-top:0">📋 &nbsp;Atualizar perfil</button>
+          <button class="btn-proc" id="btn-prog" disabled onclick="programarPedido()" style="flex:1;margin-top:0;background:#4a4a4a">🗓 &nbsp;Programar</button>
+        </div>
       </div>
       <div>
         <div class="ulabel" id="pedido-label">Pedido do cliente <span style="color:var(--accent)">*</span></div>
@@ -210,7 +217,7 @@ table.itens td.nome-produto{text-align:left}
 <script>
 'use strict';
 var SERVER_URL = 'https://pata-negra-784065203515.us-central1.run.app';
-var S = {cliente:null, perfilFile:null, pedidoFile:null, arquivos:[], perfilServidor:{}};
+var S = {cliente:null, perfilFile:null, pedidoFile:null, arquivos:[], perfilServidor:{}, dataProgramada:null};
 
 // ── CLIENTES: carregados dinamicamente do backend via /health ──
 // Não é mais necessário editar este arquivo para adicionar novos clientes.
@@ -378,7 +385,7 @@ function temPerfil() {
 }
 function atualizarBotao() {
   var manual = S.cliente && CLIENTES[S.cliente].manual;
-  document.getElementById('btn-proc').disabled = manual
+  document.getElementById('btn-prog').disabled = document.getElementById('btn-proc').disabled = manual
     ? !(S.cliente && temPerfil())
     : !(S.cliente && S.pedidoFile && temPerfil());
   var bp = document.getElementById('btn-upd-perfil');
@@ -392,6 +399,25 @@ function logErr(m){addLog('✗ '+m,'er');}
 function logInfo(m){addLog('ℹ '+m,'in');}
 function clearLog(){var el=document.getElementById('log');el.innerHTML='';el.style.display='none';}
 function moeda(v){return Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
+
+
+// ── Programar pedido (data de entrega futura) ──
+function programarPedido() {
+  var inp = document.getElementById('inp-data-prog');
+  // default: amanhã
+  var amanha = new Date(Date.now() + 864e5);
+  inp.value = amanha.toISOString().slice(0,10);
+  inp.min = new Date().toISOString().slice(0,10);
+  document.getElementById('modal-data').style.display = 'flex';
+}
+function fecharModalData() { document.getElementById('modal-data').style.display = 'none'; }
+function confirmarDataProg() {
+  var v = document.getElementById('inp-data-prog').value;
+  if (!v) { alert('Escolha a data de entrega.'); return; }
+  S.dataProgramada = v + 'T08:00:00';   // 08h da data escolhida
+  fecharModalData();
+  acaoPrincipal();   // segue o mesmo fluxo (PDF ou manual), agora com a data
+}
 
 // ── Dispatcher do botão principal: fluxo PDF (processar) ou fluxo manual (abrir popup) ──
 function acaoPrincipal() {
@@ -431,6 +457,7 @@ async function atualizarPerfil() {
   } catch(e) {
     logErr('Erro de conexão: '+e.message);
   } finally {
+    S.dataProgramada = null;   // consome a data programada (não reusa no próximo pedido)
     btn.textContent = '📋  Atualizar perfil (sem gerar pedido)';
     atualizarBotao();
   }
@@ -471,6 +498,7 @@ async function processar() {
     if (S.perfilFile) form.append('perfil', S.perfilFile);
     form.append('pedido', S.pedidoFile);
     form.append('cliente', S.cliente);
+    if (S.dataProgramada) form.append('dataEntregaProgramada', S.dataProgramada);
     var resp = await fetch(SERVER_URL+'/processar', {method:'POST', body:form});
     if (!resp.ok) { var err = await resp.json(); logErr('Erro: '+(err.erro||resp.status)); return; }
     var data = await resp.json();
@@ -792,7 +820,7 @@ async function gerarPedido() {
     const resp = await fetch(`${SERVER_URL}/processar-manual`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cliente: _estado.cliente, operador, filialNome, pedidoNum, itens }),
+      body: JSON.stringify({ cliente: _estado.cliente, operador, filialNome, pedidoNum, itens, dataEntregaProgramada: S.dataProgramada || null }),
     });
     const result = await resp.json();
 
@@ -802,6 +830,7 @@ async function gerarPedido() {
 
     fecharPedidoManual();
     mostrarResultados(result);
+    S.dataProgramada = null;   // consome a data programada
   } catch (e) {
     erroMsg.textContent = e.message;
     erroMsg.style.display = 'block';
@@ -810,5 +839,19 @@ async function gerarPedido() {
   }
 }
 </script>
+
+<!-- Modal: programar data de entrega -->
+<div id="modal-data" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;padding:24px;max-width:340px;width:90%;box-shadow:0 10px 40px rgba(0,0,0,.3)">
+    <h3 style="margin:0 0 6px;font-size:17px;color:#2b2b2b">Programar entrega</h3>
+    <p style="margin:0 0 16px;font-size:13px;color:#777">O pedido fica dormente (cinza) e começa a envelhecer 60h antes da data. A entrega é considerada às 08h.</p>
+    <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:5px">Data de entrega</label>
+    <input type="date" id="inp-data-prog" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;font-size:15px;font-family:inherit;margin-bottom:18px">
+    <div style="display:flex;gap:10px">
+      <button onclick="fecharModalData()" style="flex:1;padding:11px;border:1px solid #bbb;background:#fff;color:#777;border-radius:8px;font-weight:600;cursor:pointer;font-family:inherit">Cancelar</button>
+      <button onclick="confirmarDataProg()" style="flex:1;padding:11px;border:none;background:#8B1C1C;color:#fff;border-radius:8px;font-weight:600;cursor:pointer;font-family:inherit">Confirmar</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
