@@ -57,6 +57,7 @@
     .card-entrega.amarelo { border-left-color:#f1c40f; }
     .card-entrega.laranja { border-left-color:#e67e22; }
     .card-entrega.vermelho { border-left-color:#e74c3c; }
+    .card-entrega.dormente { border-left-color:#cfcfcf; }
 
     .entrega-info { flex:1; min-width:0; display:flex; flex-direction:column; justify-content:center; }
     .entrega-titulo { font-weight:700; font-size:22px; line-height:1.1; margin-bottom:2px; }
@@ -245,6 +246,7 @@
   }
 
   var CORES_FILTRO = [
+    { label:'Programado', hex:'#cfcfcf' },
     { label:'Recente',  hex:'#27ae60' },
     { label:'Atenção',  hex:'#f1c40f' },
     { label:'Atrasado', hex:'#e67e22' },
@@ -267,7 +269,7 @@
 
   function pedidoVisivel(rom) {
     if (clientesDesmarcados.has(rom.cliente)) return false;
-    if (coresDesmarcadas.has(classePorIdade(idadeHoras(rom.dataGeracao)).label)) return false;
+    if (coresDesmarcadas.has(classeDe(rom).label)) return false;
     if (faixasDesmarcadas.has(faixaDe(rom.kgPlanejados))) return false;
     if (regioesDesmarcadas.has(regiaoKey(rom))) return false;
     if (statusDesmarcados.has(statusKey(rom))) return false;
@@ -283,6 +285,29 @@
     if (horas < 96)  return { cls:'amarelo', label:'Atenção',  bg:'#fef9e7', txt:'#b7950b' };
     if (horas < 120) return { cls:'laranja', label:'Atrasado', bg:'#fdebd0', txt:'#a04000' };
     return               { cls:'vermelho', label:'Crítico',  bg:'#fdedec', txt:'#922b21' };
+  }
+  function horasAteEntrega(rom) {
+    if (!rom.dataEntregaProgramada) return null;
+    var d = new Date(rom.dataEntregaProgramada);
+    if (isNaN(d)) return null;
+    return (d.getTime() - Date.now()) / 3600000;
+  }
+  function idadeEfetiva(rom) {
+    var ate = horasAteEntrega(rom);
+    if (ate === null) return idadeHoras(rom.dataGeracao);
+    return 120 - ate;
+  }
+  function isDormente(rom) {
+    var ate = horasAteEntrega(rom);
+    return ate !== null && ate > 60;
+  }
+  function classeDe(rom) {
+    if (isDormente(rom)) return { cls:'dormente', label:'Programado', bg:'#f2f2f2', txt:'#8a8a8a' };
+    return classePorIdade(idadeEfetiva(rom));
+  }
+  function formatarDataProg(iso) {
+    var d = new Date(iso); if (isNaN(d)) return iso;
+    return d.toLocaleDateString('pt-BR') + ' 08h';
   }
 
   function formatarData(str) {
@@ -337,8 +362,8 @@
 
     var html = '';
     data.forEach(function(rom) {
-      var horas = idadeHoras(rom.dataGeracao);
-      var c = classePorIdade(horas);
+      var horas = idadeEfetiva(rom);
+      var c = classeDe(rom);
       var noSim = simIds.has(rom.id);
       var emRota = rom.status === 'em_rota';
       var reg = (rom.regiao && String(rom.regiao).trim())
@@ -351,13 +376,14 @@
           '<div class="entrega-meta">' +
             '<div class="meta-item"><span class="meta-label">Pedido: </span><span class="meta-valor">' + (rom.pedidoNum || '—') + '</span></div>' +
             '<div class="meta-item"><span class="meta-label">Data: </span><span class="meta-valor">' + (rom.dataPedido || '—') + '</span></div>' +
+            (rom.dataEntregaProgramada ? '<div class="meta-item"><span class="meta-label">Entrega prog.: </span><span class="meta-valor" style="font-weight:700;color:#8B1C1C">' + formatarDataProg(rom.dataEntregaProgramada) + '</span></div>' : '') +
             '<div class="meta-item"><span class="meta-label">Kg: </span><span class="meta-valor">' + (rom.kgPlanejados || '—') + ' kg</span></div>' +
             '<div class="meta-item"><span class="meta-label">Gerado: </span><span class="meta-valor">' + formatarData(rom.dataGeracao) + '</span></div>' +
           '</div>' +
         '</div>' +
         '<div class="estado-col">' + reg +
           '<div class="badge-idade" style="background:' + c.bg + ';color:' + c.txt + '">' +
-            '<span class="fase">' + c.label + '</span><span class="horas">' + Math.round(horas) + 'h</span>' +
+            '<span class="fase">' + c.label + '</span><span class="horas">' + (isDormente(rom) ? '' : Math.round(horas) + 'h') + '</span>' +
           '</div>' +
         '</div>' +
         '<div class="card-acoes">' +
