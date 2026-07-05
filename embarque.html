@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pata Negra — Gerenciar Entregas</title>
+  <style>
+    :root {
+      --accent:#8B1C1C; --accent-lt:#FDF0F0; --bg:#F7F5F2;
+      --surface:#fff; --border:#E3DED7; --text:#2b2b2b;
+      --green:#1A6B3C; --green-lt:#F0FAF4; --radius:8px;
+    }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:var(--bg); color:var(--text); }
+    header { background:var(--accent); color:#fff; padding:0 24px; height:56px; display:flex; align-items:center; gap:12px; box-shadow:0 2px 8px rgba(139,28,28,.25); }
+    .logo { width:34px; height:34px; border-radius:8px; background:#fff; color:var(--accent); font-weight:800; font-size:14px; display:flex; align-items:center; justify-content:center; }
+    header h1 { font-size:17px; font-weight:700; }
+    .header-actions { margin-left:auto; display:flex; gap:8px; }
+    .btn-header { -webkit-appearance:none; appearance:none; font-family:inherit; box-sizing:border-box; height:34px; min-width:110px; display:inline-flex; align-items:center; justify-content:center; padding:0 14px; border-radius:var(--radius); border:1px solid rgba(255,255,255,.4); background:rgba(255,255,255,.15); color:#fff; font-size:12px; font-weight:600; cursor:pointer; text-decoration:none; transition:background .13s; white-space:nowrap; }
+    .btn-header:hover { background:rgba(255,255,255,.28); }
+
+    main { max-width:1000px; margin:0 auto; padding:20px 16px 60px; }
+
+    .topbar { display:flex; align-items:center; gap:14px; margin-bottom:16px; flex-wrap:wrap; }
+    .stat-badge { background:var(--accent-lt); color:var(--accent); padding:4px 12px; border-radius:20px; font-size:13px; font-weight:600; }
+    .btn-geral { -webkit-appearance:none; appearance:none; font-family:inherit; margin-left:auto; height:38px; padding:0 18px; border-radius:var(--radius); border:1px solid var(--accent); background:var(--accent); color:#fff; font-size:13px; font-weight:600; cursor:pointer; }
+    .btn-geral:hover { background:#6F1515; }
+    .btn-geral:disabled { opacity:.4; cursor:not-allowed; }
+    .btn-hist { -webkit-appearance:none; appearance:none; font-family:inherit; height:38px; padding:0 16px; border-radius:var(--radius); border:1px solid var(--border); background:#fff; color:var(--text); font-size:13px; font-weight:600; cursor:pointer; }
+    .btn-hist:hover { background:#f0ede8; }
+    .btn-hist.ativo { background:var(--accent); color:#fff; border-color:var(--accent); }
+    .pill { display:inline-block; font-size:11px; font-weight:700; padding:2px 8px; border-radius:10px; margin-left:6px; }
+    .pill.ok { background:var(--green-lt); color:var(--green); }
+    .pill.fail { background:#fff0e6; color:#c0651a; }
+
+    #loading, #vazio { text-align:center; color:#999; padding:60px 20px; font-size:15px; }
+
+    .lista { display:flex; flex-direction:column; gap:12px; }
+    .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); border-left:10px solid #ccc; overflow:hidden; transition:box-shadow .13s; }
+    .card:hover { box-shadow:0 2px 12px rgba(0,0,0,.07); }
+    .card.verde   { border-left-color:#27ae60; }
+    .card.laranja { border-left-color:#e67e22; }
+    .card.vermelho{ border-left-color:#e74c3c; }
+
+    .card-topo { display:flex; align-items:stretch; gap:16px; padding:14px 18px; cursor:pointer; }
+    .card-info { flex:1; min-width:0; display:flex; flex-direction:column; justify-content:center; }
+    .card-nome { font-weight:700; font-size:21px; line-height:1.1; margin-bottom:4px; }
+    .card-meta { font-size:13px; color:#666; }
+    .card-meta b { color:var(--text); }
+
+    .card-idade { width:150px; flex-shrink:0; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; border-radius:12px; padding:8px 10px; }
+    .card-idade .fase { display:block; font-size:12px; font-weight:700; }
+    .card-idade .horas { display:block; font-size:24px; font-weight:800; line-height:1.1; }
+
+    .card-acoes { display:flex; flex-direction:column; justify-content:center; gap:5px; flex-shrink:0; }
+    .card-acoes button { -webkit-appearance:none; appearance:none; font-family:inherit; height:28px; padding:0 16px; border-radius:var(--radius); font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; }
+    .b-det { border:1px solid var(--accent); background:#fff; color:var(--accent); }
+    .b-det:hover { background:var(--accent-lt); }
+    .b-excluir { border:1px solid #bbb; background:#fff; color:#777; }
+    .b-excluir:hover { background:#f2f2f2; }
+    .caret { align-self:center; color:#aaa; font-size:18px; width:22px; text-align:center; flex-shrink:0; user-select:none; }
+
+    .card-corpo { border-top:1px solid var(--border); background:#FBFAF8; padding:6px 18px 12px; display:none; }
+    .card.aberto .card-corpo { display:block; }
+    .ped-row { display:flex; align-items:center; gap:12px; padding:9px 0; border-bottom:1px solid var(--border); }
+    .ped-row:last-child { border-bottom:none; }
+    .ped-nome { flex:1; min-width:0; font-size:14px; }
+    .ped-nome b { font-weight:700; }
+    .ped-nome em { color:#888; font-style:normal; font-size:12px; }
+    .ped-kg { font-size:13px; font-weight:600; width:80px; text-align:right; }
+    .ped-idade { font-size:12px; font-weight:700; width:56px; text-align:center; border-radius:8px; padding:3px 0; }
+    .ped-acoes { display:flex; gap:5px; }
+    .ped-acoes button { -webkit-appearance:none; appearance:none; font-family:inherit; height:26px; padding:0 12px; border-radius:6px; font-size:11px; font-weight:600; cursor:pointer; }
+    .b-entregue { border:none; background:var(--green); color:#fff; }
+    .b-entregue:hover { background:#145230; }
+    .b-xls { border:1px solid var(--accent); background:#fff; color:var(--accent); }
+    .b-xls:hover { background:var(--accent-lt); }
+    .b-falhou { border:1px solid #e67e22; background:#fff; color:#e67e22; }
+    .b-falhou:hover { background:#fff5ec; }
+  </style>
+</head>
+<body>
+<header>
+  <div class="logo">PN</div>
+  <h1>Pata Negra — Gerenciar Entregas</h1>
+  <div class="header-actions">
+    <a href="index.html" class="btn-header">Criar Pedido</a>
+    <a href="mapa.html" class="btn-header">Mapa</a>
+    <a href="pedidos.html" class="btn-header">Pedidos</a>
+    <a href="demandas.html" class="btn-header">Demandas</a>
+    <a href="embarque.html" class="btn-header">Embarque</a>
+  </div>
+</header>
+
+<main>
+  <div class="topbar">
+    <span class="stat-badge" id="total-badge">—</span>
+    <button class="btn-hist" id="btn-hist" onclick="toggleHistorico()">Entregas Finalizadas</button>
+    <button class="btn-geral" id="btn-geral" onclick="detalharGeral()">Detalhar totais (todas as entregas)</button>
+  </div>
+  <div id="loading">Carregando entregas…</div>
+  <div id="vazio" style="display:none">Nenhuma entrega em andamento.<br>Monte uma simulação no Mapa ou em Pedidos e clique em "Salvar entrega".</div>
+  <div class="lista" id="lista"></div>
+</main>
+
+<script>
+  var SERVER_URL = 'https://pata-negra-784065203515.us-central1.run.app';
+
+  var entregas = [];
+  var pedidosPorId = {};
+  var abertos = {};
+  var modo = 'ativas';   // 'ativas' | 'historico'
+  function isAberto(id) { return abertos[id] !== false; }  // expandido por padrão
+
+  function horasDe(iso) {
+    if (!iso) return 0;
+    var d = new Date(iso);
+    if (isNaN(d)) return 0;
+    return (Date.now() - d.getTime()) / 36e5;
+  }
+  function classeRota(horas) {
+    if (horas <= 24) return { cls:'verde',    label:'No prazo', bg:'#eafaf0', txt:'#1A6B3C' };
+    if (horas <= 48) return { cls:'laranja',  label:'Atenção',  bg:'#fdf0e3', txt:'#a85a1a' };
+    return { cls:'vermelho', label:'Atrasada', bg:'#fdecea', txt:'#b03024' };
+  }
+  function classePedido(horas) {
+    if (horas <= 48) return { bg:'#eafaf0', txt:'#1A6B3C' };
+    if (horas <= 96) return { bg:'#fef9e7', txt:'#8a6d1a' };
+    if (horas <= 120) return { bg:'#fdf0e3', txt:'#a85a1a' };
+    return { bg:'#fdecea', txt:'#b03024' };
+  }
+  function fmtKg(v) { return (Math.round((Number(v) || 0))).toLocaleString('pt-BR') + ' kg'; }
+
+  function pedidosDaEntrega(ent) {
+    return (ent.pedidoIds || []).map(function(id) { return pedidosPorId[id]; }).filter(Boolean);
+  }
+  function pesoEntrega(ent) {
+    return pedidosDaEntrega(ent).reduce(function(s, r) { return s + (Number(r.kgPlanejados) || 0); }, 0);
+  }
+
+  function render() {
+    var lista = document.getElementById('lista');
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('vazio').style.display = entregas.length ? 'none' : 'block';
+    document.getElementById('btn-geral').disabled = !entregas.length;
+    document.getElementById('total-badge').textContent =
+      entregas.length + ' entrega' + (entregas.length !== 1 ? 's' : '') + ' em andamento';
+
+    var ord = entregas.slice().sort(function(a, b) { return horasDe(b.criadaEm) - horasDe(a.criadaEm); });
+
+    var html = '';
+    ord.forEach(function(ent) {
+      var peds = pedidosDaEntrega(ent);
+      var h = horasDe(ent.criadaEm);
+      var c = classeRota(h);
+      var aberto = isAberto(ent.id) ? ' aberto' : '';
+      var caret = isAberto(ent.id) ? '&#9662;' : '&#9656;';
+
+      html += '<div class="card ' + c.cls + aberto + '" id="ent-' + ent.id + '">';
+      html += '<div class="card-topo" onclick="toggleAberto(\'' + ent.id + '\')">' +
+        '<span class="caret">' + caret + '</span>' +
+        '<div class="card-info">' +
+          '<div class="card-nome">' + escapeHtml(ent.nome) + '</div>' +
+          '<div class="card-meta"><b>' + peds.length + '</b> pedido' + (peds.length !== 1 ? 's' : '') +
+            ' &nbsp;&middot;&nbsp; <b>' + fmtKg(pesoEntrega(ent)) + '</b></div>' +
+        '</div>' +
+        '<div class="card-idade" style="background:' + c.bg + ';color:' + c.txt + '">' +
+          '<span class="fase">' + c.label + '</span><span class="horas">' + Math.round(h) + 'h</span>' +
+        '</div>' +
+        '<div class="card-acoes" onclick="event.stopPropagation()">' +
+          '<button class="b-det" onclick="detalharEntrega(\'' + ent.id + '\')">Detalhar totais</button>' +
+          '<button class="b-excluir" onclick="excluirEntrega(\'' + ent.id + '\',\'' + escapeAttr(ent.nome) + '\')">Excluir</button>' +
+        '</div>' +
+      '</div>';
+
+      html += '<div class="card-corpo">';
+      if (!peds.length) {
+        html += '<div style="padding:10px 0;color:#999;font-size:13px">Sem pedidos ativos nesta entrega.</div>';
+      } else {
+        peds.forEach(function(r) {
+          var hp = horasDe(r.dataGeracao);
+          var cp = classePedido(hp);
+          html += '<div class="ped-row">' +
+            '<div class="ped-nome"><b>' + escapeHtml(r.clienteNome || r.cliente || '\u2014') + '</b> <em>' + escapeHtml(r.filial || '') + '</em></div>' +
+            '<div class="ped-kg">' + fmtKg(r.kgPlanejados) + '</div>' +
+            '<div class="ped-idade" style="background:' + cp.bg + ';color:' + cp.txt + '">' + Math.round(hp) + 'h</div>' +
+            '<div class="ped-acoes">' +
+              '<button class="b-xls" onclick="baixarExcel(\'' + r.id + '\')">Gerar xlx</button>' +
+              '<button class="b-entregue" onclick="marcarPedido(\'' + r.id + '\',\'entregue\',\'' + escapeAttr(r.clienteNome || r.cliente || '') + '\')">Entregue</button>' +
+              '<button class="b-falhou" onclick="marcarPedido(\'' + r.id + '\',\'falhou\',\'' + escapeAttr(r.clienteNome || r.cliente || '') + '\')">Falhou entrega</button>' +
+            '</div>' +
+          '</div>';
+        });
+      }
+      html += '</div>';
+      html += '</div>';
+    });
+    lista.innerHTML = html;
+  }
+
+  function toggleAberto(id) { abertos[id] = !isAberto(id); render(); }
+
+  function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function(m) { return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' })[m]; }); }
+  function escapeAttr(s) { return String(s == null ? '' : s).replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+
+  // ── Ações ──────────────────────────────────────────────────────────
+  function baixarExcel(id) { window.open(SERVER_URL + '/romaneio-excel/' + id, '_blank'); }
+
+  async function marcarPedido(id, desfecho, nome) {
+    var msg = (desfecho === 'entregue')
+      ? 'Confirmar ENTREGA do pedido de ' + nome + '?'
+      : 'Marcar FALHA na entrega de ' + nome + '?\nO pedido volta para a lista de pendentes (mantendo a data original).';
+    if (!confirm(msg)) return;
+    try {
+      var resp = await fetch(SERVER_URL + '/romaneio/' + id + '/status', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: desfecho })
+      });
+      var d = await resp.json();
+      if (!resp.ok || d.erro) { alert('Erro: ' + (d.erro || resp.status)); return; }
+      carregar();
+    } catch (e) { alert('Erro de conexão: ' + e.message); }
+  }
+
+  async function excluirEntrega(id, nome) {
+    if (!confirm('Excluir a entrega "' + nome + '"?\nOs pedidos dela voltam para a lista de pendentes.')) return;
+    try {
+      var resp = await fetch(SERVER_URL + '/entregas/' + id, { method: 'DELETE' });
+      var d = await resp.json();
+      if (!resp.ok || d.erro) { alert('Erro: ' + (d.erro || resp.status)); return; }
+      carregar();
+    } catch (e) { alert('Erro de conexão: ' + e.message); }
+  }
+
+  async function abrirTotais(ids) {
+    if (!ids.length) { alert('Nenhum pedido para detalhar.'); return; }
+    try {
+      var resp = await fetch(SERVER_URL + '/simular-totais', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: ids })
+      });
+      if (!resp.ok) { var e = {}; try { e = await resp.json(); } catch (x) {} alert('Erro ao gerar totais: ' + (e.erro || resp.status)); return; }
+      var blob = await resp.blob();
+      window.open(URL.createObjectURL(blob), '_blank');
+    } catch (e) { alert('Erro de conexão: ' + e.message); }
+  }
+  function detalharEntrega(id) {
+    var ent = entregas.filter(function(e) { return e.id === id; })[0];
+    abrirTotais(ent ? (ent.pedidoIds || []) : []);
+  }
+  function detalharGeral() {
+    var ids = [];
+    entregas.forEach(function(e) { (e.pedidoIds || []).forEach(function(p) { ids.push(p); }); });
+    abrirTotais(ids);
+  }
+
+  // ── Histórico (entregas finalizadas) ───────────────────────────────
+  function toggleHistorico() {
+    modo = (modo === 'ativas') ? 'historico' : 'ativas';
+    document.getElementById('btn-hist').classList.toggle('ativo', modo === 'historico');
+    document.getElementById('btn-hist').textContent = (modo === 'historico') ? 'Voltar às ativas' : 'Entregas Finalizadas';
+    document.getElementById('btn-geral').style.display = (modo === 'historico') ? 'none' : '';
+    carregar();
+  }
+
+  function renderHistorico() {
+    var lista = document.getElementById('lista');
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('vazio').style.display = entregas.length ? 'none' : 'block';
+    document.getElementById('vazio').innerHTML = 'Nenhuma entrega finalizada nos últimos 20 dias.';
+    document.getElementById('total-badge').textContent = entregas.length + ' finalizada' + (entregas.length !== 1 ? 's' : '') + ' (20 dias)';
+
+    var html = '';
+    entregas.forEach(function(ent) {
+      var res = ent.resolvidos || [];
+      var nOk = res.filter(function(r) { return r.desfecho === 'entregue'; }).length;
+      var nFail = res.filter(function(r) { return r.desfecho === 'falhou'; }).length;
+      var aberto = isAberto(ent.id) ? ' aberto' : '';
+      var caret = isAberto(ent.id) ? '&#9662;' : '&#9656;';
+      html += '<div class="card verde' + aberto + '">';
+      html += '<div class="card-topo" onclick="toggleAberto(\'' + ent.id + '\')">' +
+        '<span class="caret">' + caret + '</span>' +
+        '<div class="card-info">' +
+          '<div class="card-nome">' + escapeHtml(ent.nome) + '</div>' +
+          '<div class="card-meta">Finalizada em <b>' + fmtData(ent.finalizadaEm) + '</b>' +
+            '<span class="pill ok">' + nOk + ' entregue' + (nOk !== 1 ? 's' : '') + '</span>' +
+            (nFail ? '<span class="pill fail">' + nFail + ' falhou</span>' : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="card-acoes" onclick="event.stopPropagation()">' +
+          '<button class="b-det" onclick="abrirTotais((' + JSON.stringify(res.map(function(r){return r.pedidoId;})) + '))">Detalhar totais</button>' +
+        '</div>' +
+      '</div>';
+      html += '<div class="card-corpo">';
+      res.forEach(function(r) {
+        var tag = (r.desfecho === 'entregue') ? '<span class="pill ok">Entregue</span>' : '<span class="pill fail">Falhou entrega</span>';
+        html += '<div class="ped-row">' +
+          '<div class="ped-nome"><b>' + escapeHtml(r.cliente || '—') + '</b> <em>' + escapeHtml(r.filial || '') + '</em></div>' +
+          '<div class="ped-kg">' + fmtKg(r.kg) + '</div>' +
+          '<div style="width:150px;text-align:right">' + tag + '</div>' +
+        '</div>';
+      });
+      html += '</div></div>';
+    });
+    lista.innerHTML = html;
+  }
+
+  function fmtData(iso) {
+    if (!iso) return '—';
+    var d = new Date(iso); if (isNaN(d)) return '—';
+    return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  // ── Carregar (conforme o modo) ─────────────────────────────────────
+  async function carregar() {
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('loading').textContent = 'Carregando…';
+    try {
+      if (modo === 'historico') {
+        var h = await fetch(SERVER_URL + '/entregas?status=finalizada').then(function(r) { return r.json(); });
+        entregas = Array.isArray(h) ? h : [];
+        renderHistorico();
+        return;
+      }
+      var res = await Promise.all([
+        fetch(SERVER_URL + '/entregas').then(function(r) { return r.json(); }),
+        fetch(SERVER_URL + '/romaneios?status=em_rota').then(function(r) { return r.json(); })
+      ]);
+      entregas = Array.isArray(res[0]) ? res[0] : [];
+      pedidosPorId = {};
+      (Array.isArray(res[1]) ? res[1] : []).forEach(function(r) { pedidosPorId[r.id] = r; });
+      render();
+    } catch (e) {
+      document.getElementById('loading').textContent = 'Erro ao carregar: ' + e.message;
+    }
+  }
+
+  carregar();
+</script>
+</body>
+</html>
