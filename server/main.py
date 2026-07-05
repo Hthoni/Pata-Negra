@@ -579,6 +579,19 @@ def logo(cliente):
 
 
 @app.route('/processar', methods=['POST'])
+def _fmt_data_prog(iso):
+    """Converte '2026-07-10T08:00:00' -> '10/07/2026' para o campo Data Entrega."""
+    if not iso:
+        return ''
+    try:
+        return datetime.datetime.fromisoformat(iso).strftime('%d/%m/%Y')
+    except Exception:
+        try:
+            return datetime.fromisoformat(iso).strftime('%d/%m/%Y')
+        except Exception:
+            return ''
+
+
 def processar():
     try:
         perfil_file = request.files.get('perfil')
@@ -673,6 +686,9 @@ def processar():
                 'pedidoNum': fd.get('pedidoNum', ''),
                 'dataEntregaProgramada': data_prog,
             })
+            # Se o pedido foi programado, usa a data programada no campo Data Entrega
+            if data_prog:
+                fd['dataEntrega'] = _fmt_data_prog(data_prog)
             # Persistir o PDF da filial junto ao romaneio (best-effort)
             try:
                 pdf_fd = gerar_pdf({**dados, 'filiais': [fd]}, logo_bytes=logo_bytes)
@@ -930,6 +946,8 @@ def processar_manual():
                 'pedidoNum': pedido_num,
             })
             # Persistir o PDF da filial única junto ao romaneio (best-effort)
+            if data_prog:
+                filiais[0]['dataEntrega'] = _fmt_data_prog(data_prog)
             try:
                 pdf_fd = gerar_pdf({**dados, 'filiais': [filiais[0]]}, logo_bytes=logo_bytes)
                 salvar_pedido_pdf(rid, pdf_fd)
