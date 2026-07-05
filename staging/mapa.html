@@ -268,8 +268,30 @@
     if (horas < 120) return { cor:'#e67e22', label:'Atrasado', bg:'#fdebd0', txt:'#a04000' };
     return              { cor:'#e74c3c', label:'Crítico',  bg:'#fdedec', txt:'#922b21' };
   }
+  // ── Pedido programado: relógio começa 60h antes da entrega (nasce amarelo,
+  //    fica vermelho na hora da entrega). Antes disso, dormente (cinza). ──
+  function horasAteEntrega(rom) {
+    if (!rom.dataEntregaProgramada) return null;
+    var d = new Date(rom.dataEntregaProgramada);
+    if (isNaN(d)) return null;
+    return (d.getTime() - Date.now()) / 3600000;
+  }
+  function idadeEfetiva(rom) {
+    var ate = horasAteEntrega(rom);
+    if (ate === null) return idadeHoras(rom.dataGeracao);  // pedido normal
+    return 120 - ate;  // programado: 60h antes = 60h de idade; na entrega = 120h
+  }
+  function isDormente(rom) {
+    var ate = horasAteEntrega(rom);
+    return ate !== null && ate > 60;  // ainda faltam +60h: dorme
+  }
+  function corDe(rom) {
+    if (isDormente(rom)) return { cor:'#cfcfcf', label:'Programado', bg:'#f2f2f2', txt:'#8a8a8a' };
+    return corPorIdade(idadeEfetiva(rom));
+  }
 
   var CORES_FILTRO = [
+    { label:'Programado', hex:'#cfcfcf' },
     { label:'Recente',  hex:'#27ae60' },
     { label:'Atenção',  hex:'#f1c40f' },
     { label:'Atrasado', hex:'#e67e22' },
@@ -328,21 +350,26 @@
   function pinoVisivel(rom) {
     if (!rom.lat || !rom.lng) return false;
     if (clientesDesmarcados.has(rom.cliente)) return false;
-    if (coresDesmarcadas.has(corPorIdade(idadeHoras(rom.dataGeracao)).label)) return false;
+    if (coresDesmarcadas.has(corDe(rom).label)) return false;
     if (faixasDesmarcadas.has(faixaDe(rom.kgPlanejados))) return false;
     if (statusDesmarcados.has(statusKey(rom))) return false;
     return true;
   }
 
+  function formatarDataProg(iso) {
+    var d = new Date(iso); if (isNaN(d)) return iso;
+    return d.toLocaleDateString('pt-BR') + ' 08h';
+  }
   function montarPopup(rom, c, horas) {
     return '<div class="popup-content">' +
       '<div class="popup-cliente">' + (rom.clienteNome || rom.cliente) + '</div>' +
       '<div class="popup-filial">' + (rom.filial || '—') + '</div>' +
       '<div class="popup-row"><span class="popup-label">Pedido</span><span class="popup-valor">' + (rom.pedidoNum || '—') + '</span></div>' +
       '<div class="popup-row"><span class="popup-label">Data pedido</span><span class="popup-valor">' + (rom.dataPedido || '—') + '</span></div>' +
+      (rom.dataEntregaProgramada ? '<div class="popup-row"><span class="popup-label">Entrega prog.</span><span class="popup-valor" style="font-weight:700;color:#8B1C1C">' + formatarDataProg(rom.dataEntregaProgramada) + '</span></div>' : '') +
       '<div class="popup-row"><span class="popup-label">Gerado em</span><span class="popup-valor">' + formatarData(rom.dataGeracao) + '</span></div>' +
       '<div class="popup-row"><span class="popup-label">Kg planejados</span><span class="popup-valor">' + (rom.kgPlanejados || '—') + ' kg</span></div>' +
-      '<span class="popup-idade" style="background:' + c.bg + ';color:' + c.txt + '">' + c.label + ' — ' + Math.round(horas) + 'h</span>' +
+      '<span class="popup-idade" style="background:' + c.bg + ';color:' + c.txt + '">' + (isDormente(rom) ? 'Programado' : (c.label + ' — ' + Math.round(horas) + 'h')) + '</span>' +
       '<div class="popup-acoes">' +
         '<button class="popup-btn popup-btn-pdf" onclick="verPdf(\'' + rom.id + '\')">Ver PDF</button>' +
         '<button class="popup-btn popup-btn-xls" onclick="baixarExcel(\'' + rom.id + '\')">Gerar xlx</button>' +
@@ -368,8 +395,8 @@
     var grupos = {}; // "lat,lng" -> [marker...]
 
     visiveis.forEach(function(rom) {
-      var horas = idadeHoras(rom.dataGeracao);
-      var c = corPorIdade(horas);
+      var horas = idadeEfetiva(rom);
+      var c = corDe(rom);
       var corBolinha = (ehCentral(rom) || ehKanejo(rom)) ? '#000' : '#fff';
       // pmIgnore: pinos nunca são editáveis pelo Geoman (só as zonas)
       var marker = L.marker([rom.lat, rom.lng], { icon: criarIcone(c.cor, corBolinha), pmIgnore: true });
