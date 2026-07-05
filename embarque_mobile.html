@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Embarque — Produção</title>
+<style>
+  :root { --accent:#8B1C1C; --accent-lt:#FDF0F0; --bg:#F7F5F2; --surface:#fff; --border:#E3DED7; --text:#2b2b2b; --radius:8px; }
+  * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  html, body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; }
+  body { padding-bottom:76px; }  /* espaço p/ a barra fixa */
+
+  .topo { position:sticky; top:0; z-index:20; background:var(--accent); color:#fff; padding:10px 12px; box-shadow:0 2px 6px rgba(139,28,28,.3); }
+  .topo h1 { font-size:15px; font-weight:700; display:flex; align-items:center; gap:8px; }
+  .topo .logo { width:26px;height:26px;border-radius:6px;background:#fff;color:var(--accent);font-weight:800;font-size:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0; }
+  .topo .sub { font-size:11px; opacity:.85; margin-top:2px; }
+
+  table { width:100%; border-collapse:collapse; background:var(--surface); }
+  thead th { position:sticky; top:56px; z-index:10; background:var(--accent); color:#fff; font-size:10px; font-weight:700; padding:7px 6px; text-align:right; }
+  thead th.prod { text-align:left; }
+  tbody td { padding:6px; font-size:12px; border-bottom:1px solid #f0ece6; text-align:right; vertical-align:middle; }
+  tbody td.nome { text-align:left; font-weight:500; line-height:1.15; font-size:11.5px; }
+  .c-estoque { background:#faf7f2; font-weight:600; width:74px; }
+  .c-emrota { font-weight:600; width:58px; color:#555; }
+  .c-falta { font-weight:800; font-size:14px; width:60px; }
+  .c-falta.pos { color:var(--accent); }
+  .c-falta.zero { color:#d0d0d0; }
+  .c-estoque input { width:66px; text-align:right; font-family:inherit; font-size:13px; font-weight:600; padding:5px 4px; border:1px solid var(--accent); border-radius:5px; background:#fff; -moz-appearance:textfield; }
+  .c-estoque input::-webkit-outer-spin-button, .c-estoque input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+  tbody.editando .c-estoque { background:var(--accent-lt); }
+
+  /* barra fixa no rodapé */
+  .barra { position:fixed; bottom:0; left:0; right:0; z-index:30; background:#fff; border-top:1px solid var(--border); box-shadow:0 -2px 10px rgba(0,0,0,.08); padding:10px 12px; display:flex; align-items:center; gap:10px; }
+  .barra .info { flex:1; min-width:0; }
+  .barra .info .falta { font-size:12px; color:#666; }
+  .barra .info .falta b { color:var(--accent); font-size:16px; }
+  .barra .info .ult { font-size:10px; color:#999; margin-top:1px; }
+  .barra button { font-family:inherit; height:44px; padding:0 20px; border-radius:var(--radius); font-size:14px; font-weight:700; cursor:pointer; border:none; }
+  .b-edit { background:var(--accent); color:#fff; }
+  .b-cancel { background:#fff; color:#777; border:1px solid #bbb !important; display:none; }
+  #loading { text-align:center; color:#999; padding:50px 20px; }
+</style>
+</head>
+<body>
+<div class="topo">
+  <h1><span class="logo">PN</span> Embarque — Produção</h1>
+  <div class="sub">estoque × entregas em rota · quanto falta produzir</div>
+</div>
+
+<div id="loading">Carregando…</div>
+<table id="tabela" style="display:none">
+  <thead><tr>
+    <th class="prod">Produto</th>
+    <th>Estoque</th>
+    <th>Em rota</th>
+    <th>Falta</th>
+  </tr></thead>
+  <tbody id="corpo"></tbody>
+</table>
+
+<div class="barra">
+  <div class="info">
+    <div class="falta">falta produzir: <b id="tot">—</b></div>
+    <div class="ult">estoque atualizado: <span id="ult">—</span></div>
+  </div>
+  <button class="b-cancel" id="b-cancel" onclick="cancelar()">Cancelar</button>
+  <button class="b-edit" id="b-edit" onclick="toggle()">Editar estoque</button>
+</div>
+
+<script>
+  var SERVER_URL = 'https://pata-negra-784065203515.us-central1.run.app';
+  var linhas = [], editando = false, backup = null, atualizadoEm = null;
+
+  function fmt(v){ return v ? Number(v).toLocaleString('pt-BR') : ''; }
+  function fmtT(v){ return v ? Number(v).toLocaleString('pt-BR') : '0'; }
+  function fmtData(iso){ if(!iso) return '—'; var d=new Date(iso); if(isNaN(d)) return '—';
+    return d.toLocaleDateString('pt-BR')+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}); }
+  function faltaDe(l){ var f=(l.emRota||0)-(l.estoque||0); return f>0?f:0; }
+
+  function render(){
+    document.getElementById('loading').style.display='none';
+    document.getElementById('tabela').style.display='';
+    var corpo=document.getElementById('corpo'), html='', total=0;
+    linhas.forEach(function(l,idx){
+      var f=faltaDe(l); total+=f;
+      var cell = editando
+        ? '<input type="number" inputmode="numeric" min="0" step="1" value="'+(l.estoque||'')+'" data-i="'+idx+'" onchange="setEstoque(this)">'
+        : fmt(l.estoque);
+      html += '<tr>'+
+        '<td class="nome">'+l.nome+'</td>'+
+        '<td class="c-estoque">'+cell+'</td>'+
+        '<td class="c-emrota">'+fmt(l.emRota)+'</td>'+
+        '<td class="c-falta '+(f>0?'pos':'zero')+'">'+(f>0?fmt(f):'—')+'</td>'+
+      '</tr>';
+    });
+    corpo.innerHTML=html; corpo.className = editando?'editando':'';
+    document.getElementById('tot').textContent = fmtT(total)+' kg';
+    document.getElementById('ult').textContent = fmtData(atualizadoEm);
+  }
+  function setEstoque(inp){ linhas[+inp.dataset.i].estoque = Number(inp.value)||0; render(); }
+
+  function toggle(){
+    var bEdit=document.getElementById('b-edit'), bCancel=document.getElementById('b-cancel');
+    if(!editando){
+      editando=true; backup=linhas.map(function(l){return l.estoque;});
+      bEdit.textContent='Salvar'; bCancel.style.display='';
+      render(); window.scrollTo({top:0,behavior:'smooth'});
+    } else { salvar(); }
+  }
+  async function salvar(){
+    var itens={}; linhas.forEach(function(l){ if(l.estoque) itens[l.nome]=l.estoque; });
+    var b=document.getElementById('b-edit'); b.textContent='Salvando…'; b.disabled=true;
+    try{
+      var resp=await fetch(SERVER_URL+'/estoque',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({itens:itens})});
+      var d=await resp.json();
+      if(!resp.ok||d.erro){ alert('Erro ao salvar: '+(d.erro||resp.status)); b.disabled=false; b.textContent='Salvar'; return; }
+      atualizadoEm=d.atualizadoEm; editando=false; b.disabled=false; b.textContent='Editar estoque';
+      document.getElementById('b-cancel').style.display='none'; render();
+    }catch(e){ alert('Erro de conexão: '+e.message); b.disabled=false; b.textContent='Salvar'; }
+  }
+  function cancelar(){
+    if(backup) linhas.forEach(function(l,i){ l.estoque=backup[i]; });
+    editando=false;
+    document.getElementById('b-edit').textContent='Editar estoque';
+    document.getElementById('b-cancel').style.display='none'; render();
+  }
+  async function carregar(){
+    try{
+      var d=await fetch(SERVER_URL+'/embarque').then(function(r){return r.json();});
+      linhas=d.linhas||[]; atualizadoEm=d.atualizadoEm; render();
+    }catch(e){ document.getElementById('loading').textContent='Erro ao carregar: '+e.message; }
+  }
+  carregar();
+</script>
+</body>
+</html>
