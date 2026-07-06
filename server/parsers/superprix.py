@@ -1,13 +1,25 @@
 """
-Parser Superprix — formato texto corrido próprio (não-TOTVS),
-uma linha por item.
+Parser Superprix — formato SuasVendas (mesmo layout do Zona Sul / Adonai /
+Princesa). O cliente migrou do formato antigo (ERP próprio) para o SuasVendas.
+
+CNPJ da loja no cabeçalho ("CNPJ/CPF:"); o main.py casa contra a tabela de
+filiais (M:T) do Perfil para enriquecer nome/região/lat/lng.
+
+Código do produto é MISTO: a maioria sem dígito verificador (3425, 48315,
+044391) e alguns com (6580-3, 5116-0). Regex: (\\d+(?:-\\d+)?).
+
+Unidade por item: MISTURA unidades — a maioria em kg, mas alguns (linguiça,
+feijoada) vêm em CAIXAS, apesar de o PDF rotular "Kg". emb_tipo é decidido
+item a item pelo Perfil: unidFat='cx' -> 'CX' (qtde = nº de caixas ->
+kg = qtde x kgCx); senão 'KG' (qtde já em kg).
 """
+
+__cliente_nome__ = "Superprix"
+
 import io
 import re
 import pdfplumber
-from perfil import processar_item
-
-CNPJ_INDUSTRIA = '10.171.633'
+from perfil import processar_item, match_perfil
 
 
 def parse(pdf_bytes, produtos):
@@ -19,40 +31,31 @@ def parse(pdf_bytes, produtos):
         m = re.search(pat, txt, re.I)
         return m.group(1).strip() if m else ''
 
-    pedidoNum = fm(r'Pedido:\s*(\d+-\d+)')
-    dataPedido = fm(r'Emis:\s*([\d/]+)')
-    dataEntrega = fm(r'Entrega\s*:\s*([\d/]+)')
-    condPgto = fm(r'PGTO\s+(\d+)\s+DIAS')
-    if condPgto:
-        condPgto += ' dias'
-    cnpj = fm(r'CNPJ\s*:\s*([\d./\-]+)\s+INSC')
-    cnpj_forn = fm(r'CNPJ\s*:\s*[\d./\-]+.*?CNPJ\s*:\s*([\d./\-]+)')
-    empresa = 1 if CNPJ_INDUSTRIA.replace('.', '') in cnpj_forn.replace('.', '').replace('-', '') else 2
-
-    filial_m = re.search(r'Bairro\s*:\s*([A-Z][A-Z\s]+?)\s+Cidade', txt)
-    filial = filial_m.group(1).strip() if filial_m else 'SUPERPRIX'
-    end_m = re.search(r'Endereço\s*:\s*([^\n]+)', txt)
+    pedidoNum = fm(r'Informações sobre PEDIDO.*?Nº\s*(\d+)')
+    dataPedido = fm(r'Data da Venda:\s*([\d/]+)')
+    cnpj = fm(r'CNPJ/CPF:\s*([\d./\-]+)')
+    razao = fm(r'Razão Social:\s*(.+?)\s+E-?mail')
+    end_m = re.search(r'Endereço:\s*(.+?)CEP', txt)
     endereco = end_m.group(1).strip() if end_m else ''
 
-    # itens: Nome  Emb  Cod  Qtde  Preco  ...  Total
+    # itens: Seq  Cód(-DV opcional)  Nome  Qtde  IPI%  Peso  R$ Preço/Kg  Total
     reItem = re.compile(
-        r'^([A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇ][^\n]+?)\s+(KG/\d+|CX/\d+)\s+\S+\s+(\d+)\s+([\d,.]+)\s+[\d,.]+\s+([\d,.]+)',
+        r'(\d+)\s+(\d+(?:-\d+)?)\s+([A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇ][^\n]+?)\s+(\d+)\s+[\d,.]+\s+[\d,.]+\s+R\$\s*([\d,.]+)\s+([\d,.]+)',
         re.M
     )
     itens = []
     for m in reItem.finditer(txt):
-        nome = m.group(1).strip()
-        emb_raw = m.group(2)
-        emb_tipo = 'CX' if emb_raw.startswith('CX') else 'KG'
-        qtde_emb = int(emb_raw.split('/')[1]) if '/' in emb_raw else 1
-        qtde_ped = float(m.group(3).replace('.', '').replace(',', '.'))
-        preco = float(m.group(4).replace('.', '').replace(',', '.'))
-        total = float(m.group(5).replace('.', '').replace(',', '.'))
-        it = processar_item('', nome, emb_tipo, qtde_emb, qtde_ped, preco, total, produtos)
+        nome = m.group(3).strip()
+        qtde_ped = float(m.group(4).replace('.', '').replace(',', '.'))
+        preco = float(m.group(5).replace('.', '').replace(',', '.'))
+        total = float(m.group(6).replace('.', '').replace(',', '.'))
+        pf = match_perfil(nome, produtos)
+        emb_tipo = 'CX' if (pf and str(pf.get('unidFat', '')).lower() == 'cx') else 'KG'
+        it = processar_item(m.group(2), nome, emb_tipo, 1, qtde_ped, preco, total, produtos)
         itens.append(it)
 
     if itens:
-        filiais.append({'filial': filial, 'pedidoNum': pedidoNum, 'cnpj': cnpj,
-                         'endereco': endereco, 'dataPedido': dataPedido, 'dataEntrega': dataEntrega,
-                         'condPgto': condPgto, 'empresa': empresa, 'itens': itens})
+        filiais.append({'filial': razao or 'SUPERPRIX', 'pedidoNum': pedidoNum, 'cnpj': cnpj,
+                        'endereco': endereco, 'dataPedido': dataPedido, 'dataEntrega': '',
+                        'condPgto': '', 'empresa': 2, 'itens': itens})
     return filiais
