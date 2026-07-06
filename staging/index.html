@@ -186,7 +186,10 @@ table.itens td.nome-produto{text-align:left}
             <div class="zf" id="fn-o"></div>
           </div>
         </div>
-        <button class="btn-proc" id="btn-proc" disabled onclick="acaoPrincipal()">⚙️ &nbsp;Processar pedido</button>
+        <div style="display:flex;gap:10px">
+          <button class="btn-proc" id="btn-proc" disabled onclick="acaoPrincipal()" style="flex:1">⚙️ &nbsp;Processar pedido</button>
+          <button class="btn-proc" id="btn-manual" disabled onclick="iniciarPedidoManual()" style="flex:1;background:#4a4a4a">📝 &nbsp;Pedido manual</button>
+        </div>
       </div>
     </div>
   </div>
@@ -322,6 +325,7 @@ function selCliente(id, btn) {
   document.getElementById('pedido-label').style.visibility = 'visible';
   document.getElementById('btn-proc').classList.toggle('as-zone', manual);
   document.getElementById('btn-proc').textContent = manual ? '📝  Abrir pedido manual' : '⚙️  Processar pedido';
+  document.getElementById('btn-manual').style.display = manual ? 'none' : '';
 
   // restaurar logos que possam ter sumido (cold start do servidor)
   CLIENTES_LISTA.forEach(function(c) {
@@ -390,6 +394,8 @@ function atualizarBotao() {
     : !(S.cliente && S.pedidoFile && temPerfil());
   var bp = document.getElementById('btn-upd-perfil');
   if (bp) bp.disabled = !(S.cliente && S.perfilFile);
+  var bm = document.getElementById('btn-manual');
+  if (bm) bm.disabled = !(S.cliente && temPerfil());
 }
 
 function addLog(msg,cls){var el=document.getElementById('log');el.style.display='block';var d=document.createElement('div');if(cls)d.className=cls;d.textContent='['+new Date().toLocaleTimeString('pt-BR')+'] '+msg;el.appendChild(d);el.scrollTop=el.scrollHeight;}
@@ -464,7 +470,9 @@ async function atualizarPerfil() {
 }
 
 async function iniciarPedidoManual() {
-  var btn = document.getElementById('btn-proc');
+  var isManualClient = S.cliente && CLIENTES[S.cliente].manual;
+  var btn = document.getElementById(isManualClient ? 'btn-proc' : 'btn-manual');
+  var labelOriginal = isManualClient ? '📝  Abrir pedido manual' : '📝 \u00a0Pedido manual';
   btn.disabled = true; btn.textContent = '⏳  Carregando…';
   clearLog();
   try {
@@ -483,7 +491,7 @@ async function iniciarPedidoManual() {
   } catch(e) {
     logErr('Erro de conexão: '+e.message);
   } finally {
-    btn.disabled = false; btn.textContent = '📝  Abrir pedido manual';
+    btn.disabled = false; btn.textContent = labelOriginal;
   }
 }
 
