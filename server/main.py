@@ -70,6 +70,17 @@ CLIENTES_MANUAIS = {
 }
 
 
+def _cliente_meta(cliente):
+    """Meta do cliente para o fluxo manual, aceitando tanto clientes só-manuais
+    quanto clientes com parser (que agora tambem podem lancar pedido manual).
+    Parser assume multiFilial=True (tem varias lojas no Perfil)."""
+    if cliente in CLIENTES_MANUAIS:
+        return CLIENTES_MANUAIS[cliente]
+    if cliente in CLIENTES:
+        return {'nome': CLIENTES[cliente]['nome'], 'multiFilial': True}
+    return None
+
+
 def _gerar_arquivos_por_empresa(dados, filiais, logo_bytes=None):
     """Detecta split por empresa (produtos de Indústria e Distribuidora no
     mesmo pedido) e gera os pares Excel+PDF correspondentes. Compartilhado
@@ -730,8 +741,8 @@ def processar():
 def operadores_cliente(cliente):
     """Lista os operadores cadastrados no Perfil de um cliente do fluxo
     manual, pra alimentar o dropdown de quem está lançando o pedido."""
-    if cliente not in CLIENTES_MANUAIS:
-        return jsonify({'erro': f'Cliente {cliente} não usa fluxo manual'}), 400
+    if cliente not in CLIENTES_MANUAIS and cliente not in CLIENTES:
+        return jsonify({'erro': f'Cliente {cliente} não encontrado'}), 400
     if not perfil_existe(cliente):
         return jsonify({'erro': 'Perfil não encontrado'}), 404
     perfil_bytes = carregar_perfil_bytes(cliente)
@@ -746,12 +757,12 @@ def filiais_cliente(cliente):
     devolve uma única filial sintetizada a partir do cabeçalho do Perfil
     (CNPJ/Filial/Endereço únicos), pra manter o mesmo formato de resposta
     e o frontend não precisar de um caminho de código totalmente separado."""
-    if cliente not in CLIENTES_MANUAIS:
-        return jsonify({'erro': f'Cliente {cliente} não usa fluxo manual'}), 400
+    if cliente not in CLIENTES_MANUAIS and cliente not in CLIENTES:
+        return jsonify({'erro': f'Cliente {cliente} não encontrado'}), 400
     if not perfil_existe(cliente):
         return jsonify({'erro': 'Perfil não encontrado'}), 404
     perfil_bytes = carregar_perfil_bytes(cliente)
-    if CLIENTES_MANUAIS[cliente].get('multiFilial', True):
+    if _cliente_meta(cliente).get('multiFilial', True):
         filiais_map = ler_filiais(perfil_bytes)
         lista = [{'cnpj': cnpj, 'nome': info['nome'], 'numero': info['numero'],
                   'endereco': info['endereco'], 'cidade': info['cidade']}
@@ -760,13 +771,13 @@ def filiais_cliente(cliente):
         meta, _ = ler_perfil(perfil_bytes)
         lista = [{
             'cnpj': _normaliza_cnpj(meta.get('cnpjPerfil', '')),
-            'nome': meta.get('filialPerfil') or meta.get('clienteNomePerfil') or CLIENTES_MANUAIS[cliente]['nome'],
+            'nome': meta.get('filialPerfil') or meta.get('clienteNomePerfil') or _cliente_meta(cliente)['nome'],
             'numero': None,
             'endereco': meta.get('enderecoPerfil', ''),
             'cidade': '',
         }]
     lista.sort(key=lambda f: f['nome'])
-    return jsonify({'filiais': lista, 'multiFilial': CLIENTES_MANUAIS[cliente].get('multiFilial', True)})
+    return jsonify({'filiais': lista, 'multiFilial': _cliente_meta(cliente).get('multiFilial', True)})
 
 
 @app.route('/produtos/<cliente>')
@@ -774,8 +785,8 @@ def produtos_cliente(cliente):
     """Lista os produtos cadastrados no Perfil de um cliente do fluxo
     manual, pra pré-popular as linhas do popup (nome, formato, embalagem
     e a unidade em que a quantidade deve ser digitada — cx ou kg)."""
-    if cliente not in CLIENTES_MANUAIS:
-        return jsonify({'erro': f'Cliente {cliente} não usa fluxo manual'}), 400
+    if cliente not in CLIENTES_MANUAIS and cliente not in CLIENTES:
+        return jsonify({'erro': f'Cliente {cliente} não encontrado'}), 400
     if not perfil_existe(cliente):
         return jsonify({'erro': 'Perfil não encontrado'}), 404
     perfil_bytes = carregar_perfil_bytes(cliente)
@@ -808,14 +819,14 @@ def processar_manual():
         filial_nome = body.get('filialNome', '')
         itens_form = body.get('itens', [])
 
-        if cliente not in CLIENTES_MANUAIS:
-            return jsonify({'erro': f'Cliente {cliente} não usa fluxo manual'}), 400
+        if cliente not in CLIENTES_MANUAIS and cliente not in CLIENTES:
+            return jsonify({'erro': f'Cliente {cliente} não encontrado'}), 400
         if not perfil_existe(cliente):
             return jsonify({'erro': f'Nenhum perfil disponível para {cliente}'}), 400
         if not operador:
             return jsonify({'erro': 'Selecione o operador'}), 400
 
-        multi_filial = CLIENTES_MANUAIS[cliente].get('multiFilial', True)
+        multi_filial = _cliente_meta(cliente).get('multiFilial', True)
         if multi_filial and not filial_nome:
             return jsonify({'erro': 'Selecione a filial'}), 400
 
@@ -841,7 +852,7 @@ def processar_manual():
             cnpj_sel = _normaliza_cnpj(meta.get('cnpjPerfil', ''))
             _central = ler_filiais(perfil_bytes).get(cnpj_sel, {})
             filial_info = {
-                'nome': meta.get('filialPerfil') or meta.get('clienteNomePerfil') or CLIENTES_MANUAIS[cliente]['nome'],
+                'nome': meta.get('filialPerfil') or meta.get('clienteNomePerfil') or _cliente_meta(cliente)['nome'],
                 'numero': _central.get('numero'),
                 'endereco': meta.get('enderecoPerfil', ''),
                 'lat': _central.get('lat'),
@@ -908,7 +919,7 @@ def processar_manual():
             'lng': lng,
         }]
 
-        dados = {**meta, 'filiais': filiais, 'clienteNome': CLIENTES_MANUAIS[cliente]['nome']}
+        dados = {**meta, 'filiais': filiais, 'clienteNome': _cliente_meta(cliente)['nome']}
 
         # Extrair logo do perfil para o PDF (antes de salvar o romaneio, pois o
         # PDF do romaneio também precisa da logo)
@@ -931,7 +942,7 @@ def processar_manual():
             salvar_romaneio(rid, {
                 'id': rid,
                 'cliente': cliente,
-                'clienteNome': CLIENTES_MANUAIS[cliente]['nome'],
+                'clienteNome': _cliente_meta(cliente)['nome'],
                 'filial': filial_info['nome'],
                 'numero': filial_info.get('numero'),
                 'regiao': filial_info.get('regiao', ''),
