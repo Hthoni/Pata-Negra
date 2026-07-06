@@ -58,7 +58,7 @@
     /* Popup customizado */
     .popup-content { min-width:200px; }
     .popup-cliente { font-weight:700; font-size:14px; margin-bottom:2px; }
-    .popup-filial { font-size:12px; color:#666; margin-bottom:8px; }
+    .popup-filial { font-size:13px; color:#1a1a1a; font-weight:600; margin-bottom:8px; }
     .popup-row { display:flex; justify-content:space-between; font-size:12px; padding:3px 0; border-top:1px solid #eee; }
     .popup-label { color:#888; }
     .popup-valor { font-weight:600; }
@@ -93,6 +93,11 @@
     .ps-limpar { color:#666; }
     .ps-salvar { color:#fff; background:var(--accent); border-color:var(--accent); }
     .popup-btn-sim { color:#2c3e50; border-color:#2c3e50; }
+    .dd-entrega-mapa { position:absolute; background:#fff; border:1px solid #ddd; border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.2); min-width:170px; z-index:1000; overflow:hidden; }
+    .dd-entrega-mapa .it { padding:9px 13px; font-size:13px; cursor:pointer; border-top:1px solid #f4f4f4; font-weight:500; text-align:left; color:#333; }
+    .dd-entrega-mapa .it:first-child { border-top:none; }
+    .dd-entrega-mapa .it.sim { font-weight:700; color:var(--accent); }
+    .dd-entrega-mapa .it:hover { background:#FDF0F0; }
     #painel-zonas { position:relative; bottom:auto; right:auto; width:auto; background:#fff; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 4px 18px rgba(0,0,0,.14); overflow:hidden; }
     .pz-head { background:var(--accent); color:#fff; padding:8px 12px; font-size:12px; font-weight:700; display:flex; justify-content:space-between; align-items:center; cursor:pointer; }
     .pz-head .toggle { font-size:11px; opacity:.85; }
@@ -363,7 +368,7 @@
   function montarPopup(rom, c, horas) {
     return '<div class="popup-content">' +
       '<div class="popup-cliente">' + (rom.clienteNome || rom.cliente) + '</div>' +
-      '<div class="popup-filial">' + (rom.filial || '—') + '</div>' +
+      '<div class="popup-filial">' + (rom.filial || '—') + (rom.numero ? '  -  <b style="color:#1a1a1a">' + rom.numero + '</b>' : '') + '</div>' +
       '<div class="popup-row"><span class="popup-label">Pedido</span><span class="popup-valor">' + (rom.pedidoNum || '—') + '</span></div>' +
       '<div class="popup-row"><span class="popup-label">Data pedido</span><span class="popup-valor">' + (rom.dataPedido || '—') + '</span></div>' +
       (rom.dataEntregaProgramada ? '<div class="popup-row"><span class="popup-label">Entrega prog.</span><span class="popup-valor" style="font-weight:700;color:#8B1C1C">' + formatarDataProg(rom.dataEntregaProgramada) + '</span></div>' : '') +
@@ -375,8 +380,10 @@
         '<button class="popup-btn popup-btn-xls" onclick="baixarExcel(\'' + rom.id + '\')">Gerar xlx</button>' +
       '</div>' +
       (rom.status === 'em_rota'
-        ? '<button class="popup-btn" style="width:100%;margin-top:6px;color:#666;border-color:#aaa;background:#f2f2f2" onclick="toggleSim(\'' + rom.id + '\')">🔒 Em rota: ' + (rom.entregaNome || '') + '</button>'
-        : '<button class="popup-btn popup-btn-sim" style="width:100%;margin-top:6px" onclick="toggleSim(\'' + rom.id + '\')">' + (simIds.has(rom.id) ? '− Remover da simulação' : '＋ Adicionar à simulação') + '</button>') +
+        ? '<button class="popup-btn" style="width:100%;margin-top:6px;color:#555;border-color:#aaa;background:#f2f2f2" onclick="menuRetirarMapa(event,\'' + rom.id + '\')">🔒 ' + (rom.entregaNome || 'Em rota') + '</button>'
+        : (simIds.has(rom.id)
+          ? '<button class="popup-btn" style="width:100%;margin-top:6px;color:#555;border-color:#aaa;background:#f2f2f2" onclick="menuRetirarMapa(event,\'' + rom.id + '\')">🔒 Simulação</button>'
+          : '<button class="popup-btn popup-btn-sim" style="width:100%;margin-top:6px" onclick="abrirDDEntregaMapa(event,\'' + rom.id + '\')">＋ Entrega</button>')) +
       '<div class="popup-acoes" style="margin-top:6px">' +
         '<button class="popup-btn popup-btn-falhou" onclick="marcarFalhou(\'' + rom.id + '\')">Falhou entrega</button>' +
         '<button class="popup-btn popup-btn-entregue" onclick="marcarEntregue(\'' + rom.id + '\')">Entregue</button>' +
@@ -618,6 +625,75 @@
 
   // ── Simulador de plano de entregas ──────────────────────────────────
   function persistSim() { try { localStorage.setItem('pn_sim_ids', JSON.stringify(Array.from(simIds))); } catch (e) {} }
+  // ── Entregas ativas + dropdown "＋ Entrega" no popup ──
+  var entregasAtivasMapa = [];
+  async function carregarEntregasAtivasMapa() {
+    try {
+      var d = await fetch(SERVER_URL + '/entregas').then(function(r){ return r.json(); });
+      var lista = (d.entregas || d || []);
+      entregasAtivasMapa = lista.filter(function(e){ return e.status !== 'finalizada'; })
+        .sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||''); });
+    } catch(e) { entregasAtivasMapa = []; }
+  }
+  function fecharPopupsMapa() { document.querySelectorAll('.dd-entrega-mapa').forEach(function(el){ el.remove(); }); }
+
+  function abrirDDEntregaMapa(ev, id) {
+    ev.stopPropagation();
+    fecharPopupsMapa();
+    var btn = ev.currentTarget;
+    var dd = document.createElement('div');
+    dd.className = 'dd-entrega-mapa';
+    var html = '<div class="it sim" onclick="addSimulacaoMapa(\'' + id + '\')">Simulação</div>';
+    entregasAtivasMapa.forEach(function(e){
+      html += '<div class="it" onclick="addNaEntregaMapa(\'' + e.id + '\',\'' + id + '\')">' + (e.nome || e.id) + '</div>';
+    });
+    dd.innerHTML = html;
+    var r = btn.getBoundingClientRect();
+    dd.style.left = r.left + 'px'; dd.style.top = (r.bottom + 4) + 'px'; dd.style.width = r.width + 'px';
+    document.body.appendChild(dd);
+  }
+  function menuRetirarMapa(ev, id) {
+    ev.stopPropagation();
+    fecharPopupsMapa();
+    var btn = ev.currentTarget;
+    var rom = null; for (var i=0;i<romaneios.length;i++){ if(romaneios[i].id===id){rom=romaneios[i];break;} }
+    var txt = (rom && rom.status === 'em_rota') ? '↩︎ Retirar desta entrega' : '↩︎ Retirar da simulação';
+    var dd = document.createElement('div');
+    dd.className = 'dd-entrega-mapa';
+    dd.innerHTML = '<div class="it" style="color:#8B1C1C" onclick="retirarMapa(\'' + id + '\')">' + txt + '</div>';
+    var r = btn.getBoundingClientRect();
+    dd.style.left = r.left + 'px'; dd.style.top = (r.bottom + 4) + 'px'; dd.style.minWidth = r.width + 'px';
+    document.body.appendChild(dd);
+  }
+  function addSimulacaoMapa(id) { fecharPopupsMapa(); simIds.add(id); persistSim(); map.closePopup(); renderMarkers(false); }
+  async function addNaEntregaMapa(entregaId, pedidoId) {
+    fecharPopupsMapa();
+    try {
+      var resp = await fetch(SERVER_URL + '/entregas/' + entregaId + '/adicionar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ pedidoId: pedidoId }) });
+      var d = await resp.json();
+      if (!resp.ok || d.erro) { alert('Erro: ' + (d.erro || resp.status) + (d.entrega ? ' (' + d.entrega + ')' : '')); return; }
+      for (var i=0;i<romaneios.length;i++){ if(romaneios[i].id===pedidoId){ romaneios[i].status='em_rota'; romaneios[i].entregaId=entregaId; romaneios[i].entregaNome=d.entregaNome||''; break; } }
+      simIds.delete(pedidoId); persistSim(); map.closePopup(); montarFiltro(romaneios); renderMarkers(false);
+    } catch(e) { alert('Erro de conexão: ' + e.message); }
+  }
+  async function retirarMapa(id) {
+    fecharPopupsMapa();
+    var rom = null; for (var i=0;i<romaneios.length;i++){ if(romaneios[i].id===id){rom=romaneios[i];break;} }
+    if (rom && rom.status === 'em_rota') {
+      try {
+        var resp = await fetch(SERVER_URL + '/entregas/' + rom.entregaId + '/remover', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ pedidoId: id }) });
+        var d = await resp.json();
+        if (!resp.ok || d.erro) { alert('Erro: ' + (d.erro || resp.status)); return; }
+        rom.status='pendente'; delete rom.entregaId; delete rom.entregaNome;
+        if (d.entregaVazia) { await carregarEntregasAtivasMapa(); }
+        map.closePopup(); montarFiltro(romaneios); renderMarkers(false);
+      } catch(e) { alert('Erro de conexão: ' + e.message); }
+    } else {
+      simIds.delete(id); persistSim(); map.closePopup(); renderMarkers(false);
+    }
+  }
+  document.addEventListener('click', fecharPopupsMapa);
+
   function toggleSim(id) {
     var rom = romById(id);
     if (rom && rom.status === 'em_rota') { alert('Este pedido já está na entrega: ' + (rom.entregaNome || '?') + '.\nRemova de lá primeiro.'); return; }
@@ -976,6 +1052,7 @@
         montarFiltroPeso();
         montarFiltroSituacao();
         renderMarkers(true);
+        carregarEntregasAtivasMapa();   // popula o dropdown "＋ Entrega" do pino
       })
       .catch(function(e) {
         document.getElementById('loading').style.display = 'none';
