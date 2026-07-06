@@ -51,7 +51,7 @@
 
     .lista { display:flex; flex-direction:column; gap:10px; }
 
-    .card-entrega { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:12px 20px; display:flex; align-items:stretch; gap:18px; border-left:10px solid #ccc; transition:box-shadow .13s; }
+    .card-entrega { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:12px 20px; display:flex; align-items:stretch; gap:7px; border-left:10px solid #ccc; transition:box-shadow .13s; }
     .card-entrega:hover { box-shadow:0 2px 12px rgba(0,0,0,.08); }
     .card-entrega.verde  { border-left-color:#27ae60; }
     .card-entrega.amarelo { border-left-color:#f1c40f; }
@@ -59,29 +59,41 @@
     .card-entrega.vermelho { border-left-color:#e74c3c; }
     .card-entrega.dormente { border-left-color:#cfcfcf; }
 
-    .entrega-info { flex:1; min-width:0; display:flex; flex-direction:column; justify-content:center; }
+    .entrega-info { flex:1; min-width:0; display:flex; flex-direction:column; justify-content:flex-start; }
     .entrega-titulo { font-weight:700; font-size:22px; line-height:1.1; margin-bottom:2px; }
-    .entrega-sub { font-size:12px; color:#666; margin-bottom:7px; }
-    .entrega-meta { display:flex; gap:16px; flex-wrap:wrap; }
+    .entrega-sub { font-size:13px; color:#1a1a1a; font-weight:600; margin-bottom:7px; }
+    .entrega-sub .num { color:#1a1a1a; font-weight:700; }
+    .entrega-sub .num.vazio { color:transparent; }
+    .entrega-meta { display:flex; gap:16px; flex-wrap:nowrap; white-space:nowrap; }
     .meta-item { font-size:12px; }
     .meta-label { color:#888; }
     .meta-valor { font-weight:600; }
 
-    .estado-col { display:flex; flex-direction:column; justify-content:flex-end; gap:6px; width:170px; flex-shrink:0; }
-    .entrega-regiao { font-size:17px; font-weight:600; color:var(--accent); text-align:center; line-height:1.15; white-space:nowrap; }
+    .estado-col { display:flex; flex-direction:row; align-items:stretch; justify-content:flex-end; gap:14px; flex-shrink:0; }
+    .entrega-regiao { font-size:18px; font-weight:700; color:var(--accent); text-align:right; line-height:1.1; white-space:nowrap; align-self:flex-start; margin-top:4px; }
     .entrega-regiao.sem { color:#bbb; font-weight:500; font-style:italic; }
 
     .card-entrega.no-sim { opacity:.5; }
 
-    .badge-idade { text-align:center; border-radius:12px; padding:8px 14px; width:100%; box-sizing:border-box; }
-    .badge-idade .fase { display:block; font-size:12px; font-weight:700; }
-    .badge-idade .horas { display:block; font-size:24px; font-weight:800; line-height:1.1; }
+    .badge-idade { text-align:center; border-radius:10px; padding:5px 14px; min-width:86px; box-sizing:border-box; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+    .badge-idade .fase { display:block; font-size:11px; font-weight:700; }
+    .badge-idade .horas { display:block; font-size:20px; font-weight:800; line-height:1.1; }
 
-    .card-acoes { display:flex; flex-direction:column; justify-content:flex-end; gap:5px; flex-shrink:0; }
-    .btn-sim { height:28px; padding:0 20px; border-radius:var(--radius); border:1px solid var(--accent); background:#fff; color:var(--accent); font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; transition:background .13s; }
+    .card-acoes { display:grid; grid-template-columns:1fr 1fr; grid-auto-rows:30px; gap:7px; flex-shrink:0; width:250px; position:relative; align-content:center; }
+    .card-acoes button { height:30px; width:100%; border:1px solid var(--accent); border-radius:var(--radius); font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; font-family:inherit; transition:background .13s; display:flex; align-items:center; justify-content:center; gap:4px; padding:0 8px; overflow:hidden; text-overflow:ellipsis; }
+    .btn-sim { border-color:var(--accent); background:#fff; color:var(--accent); }
     .btn-sim:hover { background:var(--accent-lt); }
-    .btn-sim.ativo { background:var(--accent); color:#fff; }
-    .btn-sim.em-rota { border-color:#aaa; color:#666; background:#f2f2f2; max-width:150px; overflow:hidden; text-overflow:ellipsis; }
+    .btn-sim.lock { border-color:#aaa; color:#555; background:#f2f2f2; }
+    .btn-sim.lock:hover { background:#ebebeb; border-color:#888; }
+    /* dropdown + Entrega */
+    .dd-entrega { position:absolute; top:37px; right:0; background:#fff; border:1px solid #ddd; border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.15); min-width:180px; z-index:20; overflow:hidden; }
+    .dd-entrega .it { padding:9px 13px; font-size:13px; cursor:pointer; border-top:1px solid #f4f4f4; font-weight:500; text-align:left; color:#333; }
+    .dd-entrega .it:first-child { border-top:none; }
+    .dd-entrega .it.sim { font-weight:700; color:var(--accent); }
+    .dd-entrega .it:hover { background:var(--accent-lt); }
+    .menu-retirar { position:absolute; top:37px; right:0; background:#fff; border:1px solid #ddd; border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.15); z-index:20; }
+    .menu-retirar .it { padding:10px 14px; font-size:13px; cursor:pointer; color:var(--accent); font-weight:600; white-space:nowrap; }
+    .menu-retirar .it:hover { background:var(--accent-lt); }
 
     /* Painel simulador flutuante à direita */
     #painel-sim { position:fixed; top:72px; right:16px; width:248px; z-index:500; background:#fff; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 4px 18px rgba(0,0,0,.14); overflow:hidden; max-height:calc(100vh - 90px); display:flex; flex-direction:column; }
@@ -106,11 +118,13 @@
       main { padding:0 16px; }
       #painel-sim { position:static; width:auto; max-width:900px; margin:0 auto 16px; max-height:none; }
     }
-    .btn-pdf { height:28px; padding:0 20px; border-radius:var(--radius); border:1px solid var(--accent); background:#fff; color:var(--accent); font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; transition:background .13s; }
+    .btn-pdf { border-color:var(--accent); background:#fff; color:var(--accent); }
     .btn-pdf:hover { background:var(--accent-lt); }
-    .btn-xls { height:28px; padding:0 20px; border-radius:var(--radius); border:1px solid var(--accent); background:#fff; color:var(--accent); font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; transition:background .13s; }
     .btn-xls:hover { background:var(--accent-lt); }
-    .btn-entregar { height:28px; padding:0 20px; border-radius:var(--radius); border:none; background:var(--green); color:#fff; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; transition:background .13s; }
+    .btn-entregar:hover { background:#155a31; border-color:#155a31; }
+    .btn-xls { border-color:var(--accent); background:#fff; color:var(--accent); }
+    .btn-xls:hover { background:var(--accent-lt); }
+    .btn-entregar { border-color:var(--green); background:var(--green); color:#fff; }
     .btn-entregar:hover { background:#145230; }
     .btn-entregar:disabled { background:#aaa; cursor:not-allowed; }
 
@@ -334,6 +348,7 @@
         montarFiltroRegiao(romaneios);
         montarFiltroSituacao();
         renderLista();
+        carregarEntregasAtivas();   // popula o dropdown "＋ Entrega"
       })
       .catch(function(e) {
         document.getElementById('loading').style.display = 'none';
@@ -372,7 +387,7 @@
       html += '<div class="card-entrega ' + c.cls + ((noSim || emRota) ? ' no-sim' : '') + '" id="card-' + rom.id + '">' +
         '<div class="entrega-info">' +
           '<div class="entrega-titulo">' + (rom.clienteNome || rom.cliente) + '</div>' +
-          '<div class="entrega-sub">' + (rom.filial || '—') + '</div>' +
+          '<div class="entrega-sub">' + (rom.filial || '—') + '  -  <span class="num' + (rom.numero ? '' : ' vazio') + '">' + (rom.numero || '00') + '</span></div>' +
           '<div class="entrega-meta">' +
             '<div class="meta-item"><span class="meta-label">Pedido: </span><span class="meta-valor">' + (rom.pedidoNum || '—') + '</span></div>' +
             '<div class="meta-item"><span class="meta-label">Data: </span><span class="meta-valor">' + (rom.dataPedido || '—') + '</span></div>' +
@@ -388,10 +403,12 @@
         '</div>' +
         '<div class="card-acoes">' +
           '<button class="btn-pdf" onclick="verPdf(\'' + rom.id + '\')">PDF</button>' +
-          '<button class="btn-xls" onclick="baixarExcel(\'' + rom.id + '\')">Gerar xlx</button>' +
           (emRota
-            ? '<button class="btn-sim em-rota" title="' + (rom.entregaNome || '') + '" onclick="toggleSim(\'' + rom.id + '\')">🔒 ' + (rom.entregaNome || 'Em rota') + '</button>'
-            : '<button class="btn-sim' + (noSim ? ' ativo' : '') + '" onclick="toggleSim(\'' + rom.id + '\')">' + (noSim ? '− Simulação' : '＋ Simulação') + '</button>') +
+            ? '<button class="btn-sim lock" title="' + (rom.entregaNome || '') + '" onclick="menuRetirar(event,\'' + rom.id + '\')">🔒 ' + (rom.entregaNome || 'Em rota') + '</button>'
+            : (noSim
+              ? '<button class="btn-sim lock" onclick="menuRetirar(event,\'' + rom.id + '\')">🔒 Simulação</button>'
+              : '<button class="btn-sim" onclick="abrirDDEntrega(event,\'' + rom.id + '\')">＋ Entrega</button>')) +
+          '<button class="btn-xls" onclick="baixarExcel(\'' + rom.id + '\')">Gerar xlx</button>' +
           '<button class="btn-entregar" onclick="confirmarEntrega(\'' + rom.id + '\',\'' + (rom.clienteNome||rom.cliente) + '\',\'' + (rom.filial||'') + '\')">Entregue</button>' +
         '</div>' +
       '</div>';
@@ -556,6 +573,92 @@
 
   // ── Simulador de entregas (seleção compartilhada com o mapa) ─────────
   function persistSim() { try { localStorage.setItem('pn_sim_ids', JSON.stringify(Array.from(simIds))); } catch (e) {} }
+  // ── Entregas ativas (para o dropdown "＋ Entrega") ──
+  var entregasAtivas = [];
+  async function carregarEntregasAtivas() {
+    try {
+      var d = await fetch(SERVER_URL + '/entregas').then(function(r){ return r.json(); });
+      var lista = (d.entregas || d || []);
+      entregasAtivas = lista.filter(function(e){ return e.status !== 'finalizada'; })
+        .sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||''); });
+    } catch(e) { entregasAtivas = []; }
+  }
+
+  function fecharPopups() {
+    document.querySelectorAll('.dd-entrega, .menu-retirar').forEach(function(el){ el.remove(); });
+  }
+
+  function abrirDDEntrega(ev, id) {
+    ev.stopPropagation();
+    fecharPopups();
+    var btn = ev.currentTarget;
+    var dd = document.createElement('div');
+    dd.className = 'dd-entrega';
+    var html = '<div class="it sim" onclick="addSimulacao(\'' + id + '\')">Simulação</div>';
+    entregasAtivas.forEach(function(e){
+      html += '<div class="it" onclick="addNaEntrega(\'' + e.id + '\',\'' + id + '\')">' + (e.nome || e.id) + '</div>';
+    });
+    dd.innerHTML = html;
+    btn.parentElement.appendChild(dd);
+  }
+
+  function menuRetirar(ev, id) {
+    ev.stopPropagation();
+    fecharPopups();
+    var btn = ev.currentTarget;
+    var rom = romById(id);
+    var m = document.createElement('div');
+    m.className = 'menu-retirar';
+    var txt = (rom && rom.status === 'em_rota') ? '↩︎ Retirar desta entrega' : '↩︎ Retirar da simulação';
+    m.innerHTML = '<div class="it" onclick="retirar(\'' + id + '\')">' + txt + '</div>';
+    btn.parentElement.appendChild(m);
+  }
+
+  function addSimulacao(id) {
+    fecharPopups();
+    simIds.add(id); persistSim(); renderLista();
+  }
+
+  async function addNaEntrega(entregaId, pedidoId) {
+    fecharPopups();
+    try {
+      var resp = await fetch(SERVER_URL + '/entregas/' + entregaId + '/adicionar', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ pedidoId: pedidoId })
+      });
+      var d = await resp.json();
+      if (!resp.ok || d.erro) { alert('Erro: ' + (d.erro || resp.status) + (d.entrega ? ' (' + d.entrega + ')' : '')); return; }
+      var rom = romById(pedidoId);
+      if (rom) { rom.status = 'em_rota'; rom.entregaId = entregaId; rom.entregaNome = d.entregaNome || ''; }
+      simIds.delete(pedidoId); persistSim();
+      renderLista();
+    } catch(e) { alert('Erro de conexão: ' + e.message); }
+  }
+
+  async function retirar(id) {
+    fecharPopups();
+    var rom = romById(id);
+    if (rom && rom.status === 'em_rota') {
+      // retira de uma entrega salva (backend)
+      try {
+        var resp = await fetch(SERVER_URL + '/entregas/' + rom.entregaId + '/remover', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ pedidoId: id })
+        });
+        var d = await resp.json();
+        if (!resp.ok || d.erro) { alert('Erro: ' + (d.erro || resp.status)); return; }
+        rom.status = 'pendente'; delete rom.entregaId; delete rom.entregaNome;
+        if (d.entregaVazia) { await carregarEntregasAtivas(); }
+        renderLista();
+      } catch(e) { alert('Erro de conexão: ' + e.message); }
+    } else {
+      // retira da simulação (local)
+      simIds.delete(id); persistSim(); renderLista();
+    }
+  }
+
+  document.addEventListener('click', fecharPopups);
+
   function toggleSim(id) {
     var rom = romById(id);
     if (rom && rom.status === 'em_rota') { alert('Este pedido já está na entrega: ' + (rom.entregaNome || '?') + '.\nRemova de lá primeiro.'); return; }
