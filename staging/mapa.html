@@ -3,42 +3,38 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pata Negra — Mapa de Entregas</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@geoman-io/leaflet-geoman-free@2.18.0/dist/leaflet-geoman.css"/>
-  <script src="https://cdn.jsdelivr.net/npm/@geoman-io/leaflet-geoman-free@2.18.0/dist/leaflet-geoman.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@7/turf.min.js"></script>
+  <title>Pata Negra — Gerenciar Pedidos</title>
   <style>
     :root {
       --accent:#8B1C1C; --accent-lt:#FDF0F0; --bg:#F7F5F2;
       --surface:#fff; --border:#E2DDD8; --text:#1A1714;
-      --radius:8px;
+      --green:#1A6B3C; --green-lt:#F0FAF4; --radius:8px;
     }
     * { box-sizing:border-box; margin:0; padding:0; }
-    body { font-family: system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text); height:100vh; display:flex; flex-direction:column; }
-    header { background:var(--accent); color:#fff; padding:0 24px; height:56px; display:flex; align-items:center; gap:12px; box-shadow:0 2px 8px rgba(139,28,28,.25); flex-shrink:0; }
+    body { font-family:system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+    header { background:var(--accent); color:#fff; padding:0 24px; height:56px; display:flex; align-items:center; gap:12px; box-shadow:0 2px 8px rgba(139,28,28,.25); }
     .logo { width:30px; height:30px; background:rgba(255,255,255,.18); border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:11px; }
     header h1 { font-size:15px; font-weight:600; }
-    .header-actions { margin-left:auto; display:flex; gap:8px; align-items:center; }
-    .btn-header { padding:6px 14px; border-radius:var(--radius); border:1px solid rgba(255,255,255,.4); background:rgba(255,255,255,.15); color:#fff; font-size:12px; font-weight:600; cursor:pointer; text-decoration:none; transition:background .13s; }
+    .header-actions { margin-left:auto; display:flex; gap:8px; }
+    .btn-header { -webkit-appearance:none; appearance:none; font-family:inherit; box-sizing:border-box; height:34px; min-width:110px; display:inline-flex; align-items:center; justify-content:center; padding:0 14px; border-radius:var(--radius); border:1px solid rgba(255,255,255,.4); background:rgba(255,255,255,.15); color:#fff; font-size:12px; font-weight:600; cursor:pointer; text-decoration:none; transition:background .13s; white-space:nowrap; }
     .btn-header:hover { background:rgba(255,255,255,.28); }
 
-    .toolbar { background:var(--surface); border-bottom:1px solid var(--border); padding:10px 20px; display:flex; align-items:center; gap:16px; flex-shrink:0; flex-wrap:wrap; }
-    .toolbar h2 { font-size:14px; font-weight:600; }
-    .legenda { display:flex; gap:12px; margin-left:auto; flex-wrap:wrap; }
-    .leg-item { display:flex; align-items:center; gap:5px; font-size:12px; color:#555; }
-    .leg-dot { width:12px; height:12px; border-radius:50%; border:2px solid rgba(0,0,0,.2); }
-    .stat-badge { background:var(--accent-lt); color:var(--accent); padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600; }
-    #btn-refresh { padding:6px 12px; border-radius:var(--radius); border:1px solid var(--border); background:#fff; font-size:12px; cursor:pointer; }
-    #btn-refresh:hover { background:var(--bg); }
+    main { max-width:1180px; margin:28px auto; padding:0 280px 0 16px; }
 
-    /* Filtro por cliente */
+    .toolbar { position:sticky; top:0; z-index:50; background:var(--bg); display:flex; align-items:center; gap:10px; margin:0 0 12px; padding:12px 0; flex-wrap:wrap; box-shadow:0 6px 10px -6px rgba(0,0,0,.12); }
+    .toolbar h2 { font-size:16px; font-weight:600; }
+    .stat-badge { background:var(--accent-lt); color:var(--accent); padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600; }
+
+    /* Filtros (cliente, cor, peso, região) */
     .filtro-wrap { position:relative; }
-    #btn-filtro, #btn-filtro-cor, #btn-filtro-peso, #btn-filtro-situacao { height:38px; min-width:120px; box-sizing:border-box; -webkit-appearance:none; appearance:none; margin:0; font-family:inherit; display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:0 16px; border-radius:var(--radius); border:1px solid var(--border); background:#fff; font-size:14px; cursor:pointer; line-height:1; }
-    #btn-filtro:hover, #btn-filtro-cor:hover, #btn-filtro-peso:hover, #btn-filtro-situacao:hover { background:var(--bg); }
-    #btn-filtro.filtro-ativo, #btn-filtro-cor.filtro-ativo, #btn-filtro-peso.filtro-ativo, #btn-filtro-situacao.filtro-ativo { background:var(--accent); color:#fff; border:1px solid var(--accent); }
-    #btn-filtro.filtro-ativo:hover, #btn-filtro-cor.filtro-ativo:hover, #btn-filtro-peso.filtro-ativo:hover, #btn-filtro-situacao.filtro-ativo:hover { background:#6F1515; }
+    #btn-filtro, #btn-filtro-cor, #btn-filtro-peso, #btn-filtro-regiao, #btn-filtro-situacao { height:38px; min-width:120px; box-sizing:border-box; -webkit-appearance:none; appearance:none; margin:0; font-family:inherit; display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:0 16px; border-radius:var(--radius); border:1px solid var(--border); background:#fff; font-size:14px; cursor:pointer; line-height:1; }
+    #btn-filtro:hover, #btn-filtro-cor:hover, #btn-filtro-peso:hover, #btn-filtro-regiao:hover, #btn-filtro-situacao:hover { background:var(--bg); }
+    #btn-filtro.filtro-ativo, #btn-filtro-cor.filtro-ativo, #btn-filtro-peso.filtro-ativo, #btn-filtro-regiao.filtro-ativo, #btn-filtro-situacao.filtro-ativo { background:var(--accent); color:#fff; border:1px solid var(--accent); }
+    #btn-filtro.filtro-ativo:hover, #btn-filtro-cor.filtro-ativo:hover, #btn-filtro-peso.filtro-ativo:hover, #btn-filtro-regiao.filtro-ativo:hover, #btn-filtro-situacao.filtro-ativo:hover { background:#6F1515; }
+    .btn-master { height:38px; box-sizing:border-box; -webkit-appearance:none; appearance:none; margin-left:auto; padding:0 16px; border-radius:var(--radius); border:1px solid var(--accent); background:#fff; color:var(--accent); font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; }
+    .btn-master:hover { background:var(--accent-lt); }
+    .btn-refresh { height:38px; box-sizing:border-box; -webkit-appearance:none; appearance:none; padding:0 14px; border-radius:var(--radius); border:1px solid var(--border); background:#fff; font-size:13px; cursor:pointer; font-family:inherit; }
+    .btn-refresh:hover { background:var(--bg); }
     .filtro-dropdown { position:absolute; top:calc(100% + 6px); left:0; background:#fff; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 4px 16px rgba(0,0,0,.12); padding:8px; min-width:200px; max-height:320px; overflow:auto; z-index:600; display:none; }
     .filtro-head { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:2px 8px 8px; border-bottom:1px solid var(--border); margin-bottom:4px; }
     .filtro-head .titulo { font-size:11px; color:#888; font-weight:700; letter-spacing:.04em; }
@@ -46,40 +42,64 @@
     .filtro-head button:hover { text-decoration:underline; }
     .filtro-dropdown label { display:flex; align-items:center; gap:8px; padding:6px 8px; font-size:13px; cursor:pointer; border-radius:6px; }
     .filtro-dropdown label:hover { background:var(--bg); }
+    .filtro-sort { padding:2px 4px 8px; border-bottom:1px solid var(--border); margin-bottom:6px; }
+    .filtro-sort .rot { font-size:10px; color:#aaa; font-weight:700; letter-spacing:.05em; display:block; padding:0 4px 4px; }
+    .filtro-sort button { display:block; width:100%; text-align:left; background:none; border:none; padding:5px 8px; font-size:12px; color:var(--text); cursor:pointer; border-radius:6px; font-family:inherit; }
+    .filtro-sort button:hover { background:var(--bg); }
+    .filtro-sort button.sort-on { background:var(--accent-lt); color:var(--accent); font-weight:700; }
     .filtro-vazio { padding:8px; font-size:12px; color:#888; }
 
-    /* Botão editar zonas (só aparece com a flag de edição) */
-    #btn-editar { padding:6px 12px; border-radius:var(--radius); border:1px solid var(--accent); background:#fff; color:var(--accent); font-size:12px; font-weight:600; cursor:pointer; display:none; }
-    #btn-editar:hover { background:var(--accent-lt); }
-    #btn-editar.ativo { background:var(--accent); color:#fff; }
+    .lista { display:flex; flex-direction:column; gap:10px; }
 
-    #map { flex:1; }
+    .card-entrega { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:12px 20px; display:flex; align-items:stretch; gap:7px; border-left:10px solid #ccc; transition:box-shadow .13s; }
+    .card-entrega:hover { box-shadow:0 2px 12px rgba(0,0,0,.08); }
+    .card-entrega.verde  { border-left-color:#27ae60; }
+    .card-entrega.amarelo { border-left-color:#f1c40f; }
+    .card-entrega.laranja { border-left-color:#e67e22; }
+    .card-entrega.vermelho { border-left-color:#e74c3c; }
+    .card-entrega.dormente { border-left-color:#cfcfcf; }
 
-    /* Popup customizado */
-    .popup-content { min-width:200px; }
-    .popup-cliente { font-weight:700; font-size:14px; margin-bottom:2px; }
-    .popup-filial { font-size:12px; color:#666; margin-bottom:8px; }
-    .popup-row { display:flex; justify-content:space-between; font-size:12px; padding:3px 0; border-top:1px solid #eee; }
-    .popup-label { color:#888; }
-    .popup-valor { font-weight:600; }
-    .popup-idade { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; margin-top:6px; }
-    .popup-acoes { display:flex; gap:6px; margin-top:10px; }
-    .popup-btn { flex:1; padding:6px 8px; border-radius:6px; border:1px solid var(--border); background:#fff; font-size:11px; font-weight:600; cursor:pointer; }
-    .popup-btn-pdf { color:var(--accent); border-color:var(--accent); }
-    .popup-btn-xls { color:var(--accent); border-color:var(--accent); }
-    .popup-btn-xls:hover { background:var(--accent-lt); }
-    .popup-btn-pdf:hover { background:var(--accent-lt); }
-    .popup-btn-del { color:#c0392b; border-color:#e6b0aa; }
-    .popup-btn-del:hover { background:#fdedec; }
-    .popup-btn-entregue { color:#1A6B3C; border-color:#1A6B3C; }
-    .popup-btn-entregue:hover { background:#F0FAF4; }
-    .popup-btn-falhou { color:#c0392b; border-color:#c0392b; }
-    .popup-btn-falhou:hover { background:#fdedec; }
+    .entrega-info { flex:1; min-width:0; display:flex; flex-direction:column; justify-content:flex-start; }
+    .entrega-titulo { font-weight:700; font-size:22px; line-height:1.1; margin-bottom:2px; }
+    .entrega-sub { font-size:13px; color:#1a1a1a; font-weight:600; margin-bottom:7px; }
+    .entrega-sub .num { color:#1a1a1a; font-weight:700; }
+    .entrega-sub .num.vazio { color:transparent; }
+    .entrega-meta { display:flex; gap:16px; flex-wrap:nowrap; white-space:nowrap; }
+    .meta-item { font-size:12px; }
+    .meta-label { color:#888; }
+    .meta-valor { font-weight:600; }
 
-    /* Painel de somas por zona */
-    #paineis-dir { position:absolute; bottom:18px; right:12px; width:236px; z-index:500; display:flex; flex-direction:column; gap:10px; max-height:calc(100vh - 140px); }
-    #painel-sim { background:#fff; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 4px 18px rgba(0,0,0,.14); overflow:hidden; flex-shrink:0; }
-    #ps-body { max-height:32vh; overflow:auto; }
+    .estado-col { display:flex; flex-direction:row; align-items:stretch; justify-content:flex-end; gap:14px; flex-shrink:0; }
+    .entrega-regiao { font-size:18px; font-weight:700; color:var(--accent); text-align:right; line-height:1.1; white-space:nowrap; align-self:flex-start; margin-top:4px; }
+    .entrega-regiao.sem { color:#bbb; font-weight:500; font-style:italic; }
+
+    .card-entrega.no-sim { opacity:.5; }
+
+    .badge-idade { text-align:center; border-radius:10px; padding:5px 14px; min-width:86px; box-sizing:border-box; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+    .badge-idade .fase { display:block; font-size:11px; font-weight:700; }
+    .badge-idade .horas { display:block; font-size:20px; font-weight:800; line-height:1.1; }
+
+    .card-acoes { display:grid; grid-template-columns:1fr 1fr; grid-auto-rows:30px; gap:7px; flex-shrink:0; width:250px; position:relative; align-content:center; }
+    .card-acoes button { height:30px; width:100%; border:1px solid var(--accent); border-radius:var(--radius); font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; font-family:inherit; transition:background .13s; display:flex; align-items:center; justify-content:center; gap:4px; padding:0 8px; overflow:hidden; text-overflow:ellipsis; }
+    .btn-sim { border-color:var(--accent); background:#fff; color:var(--accent); }
+    .btn-sim:hover { background:var(--accent-lt); }
+    .btn-sim.lock { border-color:#aaa; color:#555; background:#f2f2f2; }
+    .btn-sim.lock:hover { background:#ebebeb; border-color:#888; }
+    /* dropdown + Entrega */
+    .dd-entrega { position:absolute; top:37px; right:0; background:#fff; border:1px solid #ddd; border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.15); min-width:180px; z-index:20; overflow:hidden; }
+    .dd-entrega .it { padding:9px 13px; font-size:13px; cursor:pointer; border-top:1px solid #f4f4f4; font-weight:500; text-align:left; color:#333; }
+    .dd-entrega .it:first-child { border-top:none; }
+    .dd-entrega .it.sim { font-weight:700; color:var(--accent); }
+    .dd-entrega .it:hover { background:var(--accent-lt); }
+    .menu-retirar { position:absolute; top:37px; right:0; background:#fff; border:1px solid #ddd; border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.15); z-index:20; }
+    .menu-retirar .it { padding:10px 14px; font-size:13px; cursor:pointer; color:var(--accent); font-weight:600; white-space:nowrap; }
+    .menu-retirar .it:hover { background:var(--accent-lt); }
+
+    /* Painel simulador flutuante à direita */
+    #painel-sim { position:fixed; top:72px; right:16px; width:248px; z-index:500; background:#fff; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 4px 18px rgba(0,0,0,.14); overflow:hidden; max-height:calc(100vh - 90px); display:flex; flex-direction:column; }
+    .ps-head { background:#2c3e50; color:#fff; padding:8px 12px; font-size:12px; font-weight:700; display:flex; justify-content:space-between; align-items:center; cursor:pointer; flex-shrink:0; }
+    .ps-head .toggle { font-size:11px; opacity:.85; }
+    #ps-body { overflow:auto; }
     .ps-row { display:flex; align-items:center; gap:6px; padding:6px 10px; border-top:1px solid #f0ece8; font-size:12px; }
     .ps-row:first-child { border-top:none; }
     .ps-nome { flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:600; }
@@ -92,202 +112,151 @@
     .ps-det { color:var(--accent); border-color:var(--accent); }
     .ps-limpar { color:#666; }
     .ps-salvar { color:#fff; background:var(--accent); border-color:var(--accent); }
-    .popup-btn-sim { color:#2c3e50; border-color:#2c3e50; }
-    #painel-zonas { position:relative; bottom:auto; right:auto; width:auto; background:#fff; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 4px 18px rgba(0,0,0,.14); overflow:hidden; }
-    .pz-head { background:var(--accent); color:#fff; padding:8px 12px; font-size:12px; font-weight:700; display:flex; justify-content:space-between; align-items:center; cursor:pointer; }
-    .pz-head .toggle { font-size:11px; opacity:.85; }
-    #pz-body { max-height:46vh; overflow:auto; }
-    .pz-row { display:flex; align-items:center; gap:8px; padding:8px 12px; border-top:1px solid #f0ece8; font-size:12px; }
-    .pz-row:first-child { border-top:none; }
-    .pz-swatch { width:11px; height:11px; border-radius:3px; flex-shrink:0; border:1px solid rgba(0,0,0,.15); }
-    .pz-nome { flex:1; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .pz-nums { text-align:right; color:#555; white-space:nowrap; }
-    .pz-nums b { color:var(--text); }
-    .pz-fora .pz-nome { color:#999; font-style:italic; font-weight:600; }
-    .pz-total { background:var(--bg); font-weight:700; }
-    .pz-vazio { padding:12px; font-size:12px; color:#999; text-align:center; }
+    .ps-vazio { padding:12px; font-size:12px; color:#999; text-align:center; }
 
-    /* Mini-modal nome+cor da zona */
-    .zmodal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; align-items:center; justify-content:center; z-index:1200; }
-    .zmodal { background:#fff; border-radius:var(--radius); padding:22px; width:300px; max-width:90%; }
-    .zmodal h3 { font-size:15px; margin-bottom:14px; }
-    .zmodal label { display:block; font-size:12px; color:#666; margin-bottom:4px; }
-    .zmodal input[type=text] { width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; margin-bottom:14px; }
-    .zmodal .cor-row { display:flex; align-items:center; gap:10px; margin-bottom:18px; }
-    .zmodal input[type=color] { width:42px; height:32px; border:1px solid var(--border); border-radius:6px; background:#fff; cursor:pointer; }
-    .zmodal-actions { display:flex; gap:10px; justify-content:flex-end; }
-    .zmodal-actions button { padding:8px 16px; border-radius:6px; font-size:13px; cursor:pointer; }
-    .zbtn-cancel { border:1px solid var(--border); background:#fff; }
-    .zbtn-ok { border:none; background:var(--accent); color:#fff; font-weight:600; }
+    @media (max-width: 760px) {
+      main { padding:0 16px; }
+      #painel-sim { position:static; width:auto; max-width:900px; margin:0 auto 16px; max-height:none; }
+    }
+    .btn-pdf { border-color:var(--accent); background:#fff; color:var(--accent); }
+    .btn-pdf:hover { background:var(--accent-lt); }
+    .btn-xls:hover { background:var(--accent-lt); }
+    .btn-entregar:hover { background:#155a31; border-color:#155a31; }
+    .btn-xls { border-color:var(--accent); background:#fff; color:var(--accent); }
+    .btn-xls:hover { background:var(--accent-lt); }
+    .btn-entregar { border-color:var(--green); background:var(--green); color:#fff; }
+    .btn-entregar:hover { background:#145230; }
+    .btn-entregar:disabled { background:#aaa; cursor:not-allowed; }
 
-    /* Loading */
-    #loading { position:fixed; inset:0; background:rgba(255,255,255,.85); display:flex; align-items:center; justify-content:center; flex-direction:column; gap:12px; z-index:9999; }
-    .spinner { width:40px; height:40px; border:4px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite; }
+    .sem-dados { text-align:center; padding:60px 20px; }
+    .sem-dados h3 { font-size:18px; margin-bottom:8px; }
+    .sem-dados p { color:#888; font-size:14px; }
+
+    #loading { text-align:center; padding:60px 20px; color:#888; }
+    .spinner { width:36px; height:36px; border:4px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite; margin:0 auto 12px; }
     @keyframes spin { to { transform:rotate(360deg); } }
-    #loading p { font-size:14px; color:#666; }
 
-    /* Sem dados */
-    #sem-dados { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; padding:32px; border-radius:var(--radius); box-shadow:0 4px 24px rgba(0,0,0,.1); text-align:center; z-index:500; display:none; }
-    #sem-dados h3 { font-size:16px; margin-bottom:8px; }
-    #sem-dados p { font-size:13px; color:#888; }
+    /* Modal confirmação */
+    .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; z-index:999; display:none; }
+    .modal { background:#fff; border-radius:var(--radius); padding:28px; max-width:380px; width:90%; }
+    .modal h3 { font-size:16px; margin-bottom:8px; }
+    .modal p { font-size:13px; color:#555; margin-bottom:20px; }
+    .modal-actions { display:flex; gap:10px; justify-content:flex-end; }
+    .btn-cancelar { padding:8px 16px; border-radius:var(--radius); border:1px solid var(--border); background:#fff; font-size:13px; cursor:pointer; }
+    .btn-confirmar { padding:8px 16px; border-radius:var(--radius); border:none; background:var(--green); color:#fff; font-size:13px; font-weight:600; cursor:pointer; }
+    .btn-confirmar:hover { background:#145230; }
   </style>
 </head>
 <body>
 
-<div id="loading">
-  <div class="spinner"></div>
-  <p>Carregando romaneios...</p>
-</div>
-
 <header>
   <div class="logo">PN</div>
-  <h1>Pata Negra — Mapa de Entregas</h1>
+  <h1>Pata Negra — Gerenciar Pedidos</h1>
   <div class="header-actions">
     <a href="index.html" class="btn-header">Criar Pedido</a>
-    <a href="pedidos.html" class="btn-header">Pedidos</a>
+    <a href="mapa.html" class="btn-header">Mapa</a>
     <a href="entregas.html" class="btn-header">Entregas</a>
     <a href="demandas.html" class="btn-header">Demandas</a>
     <a href="embarque.html" class="btn-header">Embarque</a>
+    <button class="btn-header" onclick="document.getElementById('inp-master').click()">Subir Master</button>
+    <input type="file" id="inp-master" accept=".xlsx" style="display:none" onchange="uploadMaster(this)">
   </div>
 </header>
 
-<div class="toolbar">
-  <span class="stat-badge" id="total-badge">0 pedidos</span>
-  <div class="filtro-wrap">
-    <button id="btn-filtro" onclick="toggleFiltro(event)">Clientes</button>
-    <div class="filtro-dropdown" id="filtro-dropdown"></div>
+<main>
+  <div class="toolbar">
+    <span class="stat-badge" id="total-badge">—</span>
+    <div class="filtro-wrap">
+      <button id="btn-filtro" onclick="toggleFiltro(event)">Clientes</button>
+      <div class="filtro-dropdown" id="filtro-dropdown"></div>
+    </div>
+    <div class="filtro-wrap">
+      <button id="btn-filtro-cor" onclick="toggleFiltroCor(event)">Cor</button>
+      <div class="filtro-dropdown" id="filtro-cor-dropdown"></div>
+    </div>
+    <div class="filtro-wrap">
+      <button id="btn-filtro-peso" onclick="toggleFiltroPeso(event)">Peso</button>
+      <div class="filtro-dropdown" id="filtro-peso-dropdown"></div>
+    </div>
+    <div class="filtro-wrap">
+      <button id="btn-filtro-regiao" onclick="toggleFiltroRegiao(event)">Região</button>
+      <div class="filtro-dropdown" id="filtro-regiao-dropdown"></div>
+    </div>
+    <div class="filtro-wrap">
+      <button id="btn-filtro-situacao" onclick="toggleFiltroSituacao(event)">Situação</button>
+      <div class="filtro-dropdown" id="filtro-situacao-dropdown"></div>
+    </div>
   </div>
-  <div class="filtro-wrap">
-    <button id="btn-filtro-cor" onclick="toggleFiltroCor(event)">Cor</button>
-    <div class="filtro-dropdown" id="filtro-cor-dropdown"></div>
+
+  <div id="loading">
+    <div class="spinner"></div>
+    <p>Carregando...</p>
   </div>
-  <div class="filtro-wrap">
-    <button id="btn-filtro-peso" onclick="toggleFiltroPeso(event)">Peso</button>
-    <div class="filtro-dropdown" id="filtro-peso-dropdown"></div>
+  <div class="lista" id="lista"></div>
+</main>
+
+<!-- Simulador de entregas (compartilha a seleção com o mapa via localStorage) -->
+<div id="painel-sim">
+  <div class="ps-head" onclick="togglePainelSim()">
+    <span>Simulador de entregas</span>
+    <span class="toggle" id="ps-toggle">▾</span>
   </div>
-  <div class="filtro-wrap">
-    <button id="btn-filtro-situacao" onclick="toggleFiltroSituacao(event)">Situação</button>
-    <div class="filtro-dropdown" id="filtro-situacao-dropdown"></div>
-  </div>
-  <button id="btn-editar" onclick="toggleEdicao()">Editar zonas</button>
-  <div class="legenda">
-    <div class="leg-item"><div class="leg-dot" style="background:#27ae60"></div> &lt; 48h</div>
-    <div class="leg-item"><div class="leg-dot" style="background:#f1c40f"></div> 48–96h</div>
-    <div class="leg-item"><div class="leg-dot" style="background:#e67e22"></div> 96–120h</div>
-    <div class="leg-item"><div class="leg-dot" style="background:#e74c3c"></div> &gt; 120h</div>
-  </div>
+  <div id="ps-body"></div>
 </div>
 
-<div id="map" style="position:relative;">
-  <div id="sem-dados">
-    <h3>Nenhum pedido pendente</h3>
-    <p>Todos os romaneios foram entregues!</p>
-  </div>
-
-  <div id="paineis-dir">
-    <div id="painel-sim">
-      <div class="pz-head" style="background:#2c3e50" onclick="togglePainelSim()">
-        <span>Simulador de entregas</span>
-        <span class="toggle" id="ps-toggle">▾</span>
-      </div>
-      <div id="ps-body"></div>
-    </div>
-    <div id="painel-zonas">
-      <div class="pz-head" onclick="togglePainel()">
-        <span>Resumo por zona</span>
-        <span class="toggle" id="pz-toggle">▾</span>
-      </div>
-      <div id="pz-body"></div>
-    </div>
-  </div>
-</div>
-
-<!-- Mini-modal nome + cor da zona -->
-<div class="zmodal-overlay" id="zmodal">
-  <div class="zmodal">
-    <h3 id="zmodal-titulo">Nova zona</h3>
-    <label for="zmodal-nome">Nome da zona</label>
-    <input type="text" id="zmodal-nome" placeholder="Ex: Zona Sul, Niterói, Centro..." autocomplete="off">
-    <div class="cor-row">
-      <input type="color" id="zmodal-cor" value="#8B1C1C">
-      <label style="margin:0;">Cor no mapa</label>
-    </div>
-    <div class="zmodal-actions">
-      <button class="zbtn-cancel" onclick="zmodalCancelar()">Cancelar</button>
-      <button class="zbtn-ok" onclick="zmodalConfirmar()">Salvar</button>
+<!-- Modal confirmação -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h3>Confirmar entrega</h3>
+    <p id="modal-texto">Marcar este pedido como entregue?</p>
+    <div class="modal-actions">
+      <button class="btn-cancelar" onclick="fecharModal()">Cancelar</button>
+      <button class="btn-confirmar" id="modal-confirmar">✓ Confirmar</button>
     </div>
   </div>
 </div>
 
 <script>
   var SERVER_URL = 'https://pata-negra-staging-784065203515.us-central1.run.app';
-
-  // Modo de edição: só liga quando a URL traz ?edit=editor_PN (obscuridade — protege
-  // contra uso acidental, NÃO é segurança; os endpoints de escrita seguem abertos).
-  var EDIT_KEY = 'editor_PN';
-  var EDIT_MODE_ALLOWED = (new URLSearchParams(window.location.search).get('edit') === EDIT_KEY);
-
-  // Cor única de TODAS as zonas (equalizadas com a cor da "Zona sul"). Troca o hex aqui.
-  var COR_ZONA = '#e9d8d8';
-
-  var map = L.map('map').setView([-22.95, -43.35], 11);
-  var markers = [];
-  var romaneios = [];                 // todos os romaneios carregados
+  var romaneios = [];
+  var pendingId = null;
   var clientesDesmarcados = new Set(); // clientes ocultados pelo filtro
-  var zonas = [];                     // [{id, nome, cor, geojson}]
-  var zonasLayer = L.layerGroup().addTo(map); // polígonos das zonas (sob os pinos)
-  var zonaLayerById = {};             // id -> layer leaflet, p/ editar/remover
-  var edicaoAtiva = false;
-  var coresDesmarcadas = new Set();   // labels de idade ocultados pelo filtro
-  var faixasDesmarcadas = new Set();  // faixas de peso ocultadas pelo filtro
-  var regioesDesmarcadas = new Set(); // regiões ocultadas pelo filtro
-  var statusDesmarcados = new Set();  // situações ocultadas (pendente/em_rota)
+  var coresDesmarcadas = new Set();    // idades ocultadas
+  var faixasDesmarcadas = new Set();   // faixas de peso ocultadas
+  var regioesDesmarcadas = new Set();  // regiões ocultadas
+  var statusDesmarcados = new Set();   // situações ocultadas (pendente/em_rota)
   var SITUACOES = [{ key:'pendente', label:'Pendente' }, { key:'em_rota', label:'Em rota' }];
   function statusKey(rom) { return (rom.status === 'em_rota') ? 'em_rota' : 'pendente'; }
-  function regiaoKey(rom) { return (rom.regiao && String(rom.regiao).trim()) || '__sem__'; }
-  // Simulador de plano de entregas: ids de romaneio selecionados (persiste no navegador).
+  // Simulador: mesma chave do mapa -> seleção compartilhada entre as páginas.
   var simIds = new Set(JSON.parse(localStorage.getItem('pn_sim_ids') || '[]'));
   function romById(id) { for (var i = 0; i < romaneios.length; i++) { if (romaneios[i].id === id) return romaneios[i]; } return null; }
-  var spiderLegs = L.layerGroup().addTo(map);  // linhas do "leque" de pinos sobrepostos
-  var grupoAberto = null;             // chave do grupo atualmente em leque
-  var spiderTimer = null;
 
-  L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
-    attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, tiles by <a href="https://hot.openstreetmap.org/">HOT</a>',
-    maxZoom:19
-  }).addTo(map);
-
-  function idadeHoras(dataGeracao) {
-    var d = new Date(dataGeracao);
-    return (Date.now() - d.getTime()) / 3600000;
+  // Ordenação da lista (uma por vez). Padrão: idade, mais antigo primeiro.
+  var sortField = 'idade';
+  var sortDir = 'asc';
+  function compararPedidos(a, b) {
+    var dir = sortDir === 'asc' ? 1 : -1;
+    if (sortField === 'cliente') return dir * String(a.clienteNome || a.cliente || '').localeCompare(String(b.clienteNome || b.cliente || ''));
+    if (sortField === 'peso') return dir * ((Number(a.kgPlanejados) || 0) - (Number(b.kgPlanejados) || 0));
+    if (sortField === 'regiao') {
+      var ra = (a.regiao && String(a.regiao).trim()) || '\uffff';
+      var rb = (b.regiao && String(b.regiao).trim()) || '\uffff';
+      return dir * ra.localeCompare(rb);
+    }
+    return dir * (new Date(a.dataGeracao) - new Date(b.dataGeracao)); // idade
   }
-
-  function corPorIdade(horas) {
-    if (horas < 48)  return { cor:'#27ae60', label:'Recente', bg:'#d5f5e3', txt:'#1e8449' };
-    if (horas < 96)  return { cor:'#f1c40f', label:'Atenção', bg:'#fef9e7', txt:'#b7950b' };
-    if (horas < 120) return { cor:'#e67e22', label:'Atrasado', bg:'#fdebd0', txt:'#a04000' };
-    return              { cor:'#e74c3c', label:'Crítico',  bg:'#fdedec', txt:'#922b21' };
+  function setSort(field, dir) {
+    sortField = field; sortDir = dir;
+    renderLista();
+    montarFiltro(romaneios); montarFiltroCor(); montarFiltroPeso(); montarFiltroRegiao(romaneios);
   }
-  // ── Pedido programado: relógio começa 60h antes da entrega (nasce amarelo,
-  //    fica vermelho na hora da entrega). Antes disso, dormente (cinza). ──
-  function horasAteEntrega(rom) {
-    if (!rom.dataEntregaProgramada) return null;
-    var d = new Date(rom.dataEntregaProgramada);
-    if (isNaN(d)) return null;
-    return (d.getTime() - Date.now()) / 3600000;
-  }
-  function idadeEfetiva(rom) {
-    var ate = horasAteEntrega(rom);
-    if (ate === null) return idadeHoras(rom.dataGeracao);  // pedido normal
-    return 120 - ate;  // programado: 60h antes = 60h de idade; na entrega = 120h
-  }
-  function isDormente(rom) {
-    var ate = horasAteEntrega(rom);
-    return ate !== null && ate > 60;  // ainda faltam +60h: dorme
-  }
-  function corDe(rom) {
-    if (isDormente(rom)) return { cor:'#cfcfcf', label:'Programado', bg:'#f2f2f2', txt:'#8a8a8a' };
-    return corPorIdade(idadeEfetiva(rom));
+  function sortRow(field, labelAsc, labelDesc) {
+    var a = (sortField === field && sortDir === 'asc') ? ' sort-on' : '';
+    var d = (sortField === field && sortDir === 'desc') ? ' sort-on' : '';
+    return '<div class="filtro-sort"><span class="rot">CLASSIFICAR</span>' +
+      '<button class="' + a.trim() + '" onclick="setSort(\'' + field + '\',\'asc\')">' + labelAsc + '</button>' +
+      '<button class="' + d.trim() + '" onclick="setSort(\'' + field + '\',\'desc\')">' + labelDesc + '</button>' +
+      '</div>';
   }
 
   var CORES_FILTRO = [
@@ -310,172 +279,172 @@
     if (kg <= 1800) return '601-1800';
     return '1801+';
   }
+  function regiaoKey(rom) { return (rom.regiao && String(rom.regiao).trim()) || '__sem__'; }
 
-  // Tipo do pedido vem da coluna O do Perfil: filiais têm número; central traz o texto "Central".
-  function ehCentral(rom) {
-    return String((rom && rom.numero) || '').trim().toLowerCase() === 'central';
+  function pedidoVisivel(rom) {
+    if (clientesDesmarcados.has(rom.cliente)) return false;
+    if (coresDesmarcadas.has(classeDe(rom).label)) return false;
+    if (faixasDesmarcadas.has(faixaDe(rom.kgPlanejados))) return false;
+    if (regioesDesmarcadas.has(regiaoKey(rom))) return false;
+    if (statusDesmarcados.has(statusKey(rom))) return false;
+    return true;
   }
 
-  // Miolo preto também para pedidos da região KANEJO (regiao = coluna R do perfil).
-  function ehKanejo(rom) {
-    return String((rom && rom.regiao) || '').trim().toUpperCase() === 'KANEJO';
+  function idadeHoras(dataGeracao) {
+    return (Date.now() - new Date(dataGeracao).getTime()) / 3600000;
   }
 
-  function criarIcone(cor, corBolinha) {
-    corBolinha = corBolinha || '#fff';
-    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="38" viewBox="0 0 28 38">' +
-      '<path d="M14 0C6.27 0 0 6.27 0 14c0 9.25 14 24 14 24S28 23.25 28 14C28 6.27 21.73 0 14 0z" fill="' + cor + '" stroke="#fff" stroke-width="2"/>' +
-      '<circle cx="14" cy="14" r="6" fill="' + corBolinha + '" fill-opacity="0.9"/>' +
-      '</svg>';
-    return L.divIcon({
-      className: '',
-      html: svg,
-      iconSize: [28, 38],
-      iconAnchor: [14, 38],
-      popupAnchor: [0, -40]
-    });
+  function classePorIdade(horas) {
+    if (horas < 48)  return { cls:'verde',   label:'Recente',  bg:'#d5f5e3', txt:'#1e8449' };
+    if (horas < 96)  return { cls:'amarelo', label:'Atenção',  bg:'#fef9e7', txt:'#b7950b' };
+    if (horas < 120) return { cls:'laranja', label:'Atrasado', bg:'#fdebd0', txt:'#a04000' };
+    return               { cls:'vermelho', label:'Crítico',  bg:'#fdedec', txt:'#922b21' };
+  }
+  function horasAteEntrega(rom) {
+    if (!rom.dataEntregaProgramada) return null;
+    var d = new Date(rom.dataEntregaProgramada);
+    if (isNaN(d)) return null;
+    return (d.getTime() - Date.now()) / 3600000;
+  }
+  function idadeEfetiva(rom) {
+    var ate = horasAteEntrega(rom);
+    if (ate === null) return idadeHoras(rom.dataGeracao);
+    return 120 - ate;
+  }
+  function isDormente(rom) {
+    var ate = horasAteEntrega(rom);
+    return ate !== null && ate > 60;
+  }
+  function classeDe(rom) {
+    if (isDormente(rom)) return { cls:'dormente', label:'Programado', bg:'#f2f2f2', txt:'#8a8a8a' };
+    return classePorIdade(idadeEfetiva(rom));
+  }
+  function formatarDataProg(iso) {
+    var d = new Date(iso); if (isNaN(d)) return iso;
+    return d.toLocaleDateString('pt-BR') + ' 08h';
   }
 
   function formatarData(str) {
     if (!str) return '—';
     if (str.includes('T')) {
       var d = new Date(str);
-      return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+      return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
     }
     return str;
   }
 
-  // Predicado ÚNICO de visibilidade — todo filtro presente e futuro passa por aqui.
-  // Pinos e somas por zona derivam ambos deste mesmo conjunto.
-  function pinoVisivel(rom) {
-    if (!rom.lat || !rom.lng) return false;
-    if (clientesDesmarcados.has(rom.cliente)) return false;
-    if (coresDesmarcadas.has(corDe(rom).label)) return false;
-    if (faixasDesmarcadas.has(faixaDe(rom.kgPlanejados))) return false;
-    if (statusDesmarcados.has(statusKey(rom))) return false;
-    return true;
-  }
+  function carregar() {
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('lista').innerHTML = '';
 
-  function formatarDataProg(iso) {
-    var d = new Date(iso); if (isNaN(d)) return iso;
-    return d.toLocaleDateString('pt-BR') + ' 08h';
-  }
-  function montarPopup(rom, c, horas) {
-    return '<div class="popup-content">' +
-      '<div class="popup-cliente">' + (rom.clienteNome || rom.cliente) + '</div>' +
-      '<div class="popup-filial">' + (rom.filial || '—') + '</div>' +
-      '<div class="popup-row"><span class="popup-label">Pedido</span><span class="popup-valor">' + (rom.pedidoNum || '—') + '</span></div>' +
-      '<div class="popup-row"><span class="popup-label">Data pedido</span><span class="popup-valor">' + (rom.dataPedido || '—') + '</span></div>' +
-      (rom.dataEntregaProgramada ? '<div class="popup-row"><span class="popup-label">Entrega prog.</span><span class="popup-valor" style="font-weight:700;color:#8B1C1C">' + formatarDataProg(rom.dataEntregaProgramada) + '</span></div>' : '') +
-      '<div class="popup-row"><span class="popup-label">Gerado em</span><span class="popup-valor">' + formatarData(rom.dataGeracao) + '</span></div>' +
-      '<div class="popup-row"><span class="popup-label">Kg planejados</span><span class="popup-valor">' + (rom.kgPlanejados || '—') + ' kg</span></div>' +
-      '<span class="popup-idade" style="background:' + c.bg + ';color:' + c.txt + '">' + (isDormente(rom) ? 'Programado' : (c.label + ' — ' + Math.round(horas) + 'h')) + '</span>' +
-      '<div class="popup-acoes">' +
-        '<button class="popup-btn popup-btn-pdf" onclick="verPdf(\'' + rom.id + '\')">Ver PDF</button>' +
-        '<button class="popup-btn popup-btn-xls" onclick="baixarExcel(\'' + rom.id + '\')">Gerar xlx</button>' +
-      '</div>' +
-      (rom.status === 'em_rota'
-        ? '<button class="popup-btn" style="width:100%;margin-top:6px;color:#666;border-color:#aaa;background:#f2f2f2" onclick="toggleSim(\'' + rom.id + '\')">🔒 Em rota: ' + (rom.entregaNome || '') + '</button>'
-        : '<button class="popup-btn popup-btn-sim" style="width:100%;margin-top:6px" onclick="toggleSim(\'' + rom.id + '\')">' + (simIds.has(rom.id) ? '− Remover da simulação' : '＋ Adicionar à simulação') + '</button>') +
-      '<div class="popup-acoes" style="margin-top:6px">' +
-        '<button class="popup-btn popup-btn-falhou" onclick="marcarFalhou(\'' + rom.id + '\')">Falhou entrega</button>' +
-        '<button class="popup-btn popup-btn-entregue" onclick="marcarEntregue(\'' + rom.id + '\')">Entregue</button>' +
-      '</div>' +
-      '</div>';
-  }
-
-  // Desenha os marcadores respeitando o filtro. ajustarZoom só no carregamento.
-  function renderMarkers(ajustarZoom) {
-    markers.forEach(function(m) { map.removeLayer(m); });
-    markers = [];
-    spiderLegs.clearLayers();
-    grupoAberto = null;
-
-    var visiveis = romaneios.filter(pinoVisivel);
-    var grupos = {}; // "lat,lng" -> [marker...]
-
-    visiveis.forEach(function(rom) {
-      var horas = idadeEfetiva(rom);
-      var c = corDe(rom);
-      var corBolinha = (ehCentral(rom) || ehKanejo(rom)) ? '#000' : '#fff';
-      // pmIgnore: pinos nunca são editáveis pelo Geoman (só as zonas)
-      var marker = L.marker([rom.lat, rom.lng], { icon: criarIcone(c.cor, corBolinha), pmIgnore: true });
-      marker._rom = rom;
-      marker._html = montarPopup(rom, c, horas);
-      marker._latlngBase = L.latLng(rom.lat, rom.lng);
-      if (simIds.has(rom.id) || rom.status === 'em_rota') marker.setOpacity(0.35);  // esmaecido: no simulador ou em rota
-      marker.addTo(map);
-      markers.push(marker);
-      var chave = Number(rom.lat).toFixed(5) + ',' + Number(rom.lng).toFixed(5);
-      marker._chave = chave;
-      (grupos[chave] = grupos[chave] || []).push(marker);
-    });
-
-    // Pino isolado: clique abre o popup. Pinos sobrepostos: 1º clique abre o
-    // leque (fixo); clique em cada pino do leque abre o popup dele.
-    Object.keys(grupos).forEach(function(chave) {
-      var g = grupos[chave];
-      if (g.length === 1) { g[0].bindPopup(g[0]._html); return; }
-      g.forEach(function(mk) {
-        mk.on('click', function(e) {
-          L.DomEvent.stopPropagation(e);   // não chega ao mapa (que fecharia o leque)
-          if (grupoAberto === chave) abrirPopupSolto(mk);
-          else abrirLeque(chave, g);
-        });
+    fetch(SERVER_URL + '/romaneios')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        document.getElementById('loading').style.display = 'none';
+        romaneios = data || [];
+        montarFiltro(romaneios);
+        montarFiltroCor();
+        montarFiltroPeso();
+        montarFiltroRegiao(romaneios);
+        montarFiltroSituacao();
+        renderLista();
+        carregarEntregasAtivas();   // popula o dropdown "＋ Entrega"
+      })
+      .catch(function(e) {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('lista').innerHTML = '<div class="sem-dados"><p>Erro ao carregar: ' + e.message + '</p></div>';
       });
-    });
+  }
 
-    document.getElementById('total-badge').textContent = visiveis.length + ' pedido' + (visiveis.length !== 1 ? 's' : '');
-    document.getElementById('sem-dados').style.display = romaneios.length === 0 ? 'block' : 'none';
+  function renderLista() {
+    var data = romaneios.filter(pedidoVisivel);
 
-    if (ajustarZoom && markers.length > 0) {
-      var group = L.featureGroup(markers);
-      map.fitBounds(group.getBounds().pad(0.1));
+    // Ordenar por idade (mais antigo primeiro)
+    data.sort(compararPedidos);
+
+    document.getElementById('total-badge').textContent = data.length + ' pedido' + (data.length !== 1 ? 's' : '');
+
+    if (romaneios.length === 0) {
+      document.getElementById('lista').innerHTML = '<div class="sem-dados"><h3>🎉 Tudo entregue!</h3><p>Nenhum pedido pendente no momento.</p></div>';
+      atualizarPainelSim(); atualizarBotoesFiltro();
+      return;
+    }
+    if (data.length === 0) {
+      document.getElementById('lista').innerHTML = '<div class="sem-dados"><p>Nenhum pedido para os filtros selecionados.</p></div>';
+      atualizarPainelSim(); atualizarBotoesFiltro();
+      return;
     }
 
-    atualizarPainelZonas();
+    var html = '';
+    data.forEach(function(rom) {
+      var horas = idadeEfetiva(rom);
+      var c = classeDe(rom);
+      var noSim = simIds.has(rom.id);
+      var emRota = rom.status === 'em_rota';
+      var reg = (rom.regiao && String(rom.regiao).trim())
+        ? '<div class="entrega-regiao">' + rom.regiao + '</div>'
+        : '<div class="entrega-regiao sem">sem região</div>';
+      html += '<div class="card-entrega ' + c.cls + ((noSim || emRota) ? ' no-sim' : '') + '" id="card-' + rom.id + '">' +
+        '<div class="entrega-info">' +
+          '<div class="entrega-titulo">' + (rom.clienteNome || rom.cliente) + '</div>' +
+          '<div class="entrega-sub">' + (rom.filial || '—') + '  -  <span class="num' + (rom.numero ? '' : ' vazio') + '">' + (rom.numero || '00') + '</span></div>' +
+          '<div class="entrega-meta">' +
+            '<div class="meta-item"><span class="meta-label">Pedido: </span><span class="meta-valor">' + (rom.pedidoNum || '—') + '</span></div>' +
+            '<div class="meta-item"><span class="meta-label">Data: </span><span class="meta-valor">' + (rom.dataPedido || '—') + '</span></div>' +
+            (rom.dataEntregaProgramada ? '<div class="meta-item"><span class="meta-label">Entrega prog.: </span><span class="meta-valor" style="font-weight:700;color:#8B1C1C">' + formatarDataProg(rom.dataEntregaProgramada) + '</span></div>' : '') +
+            '<div class="meta-item"><span class="meta-label">Kg: </span><span class="meta-valor">' + (rom.kgPlanejados || '—') + ' kg</span></div>' +
+            '<div class="meta-item"><span class="meta-label">Gerado: </span><span class="meta-valor">' + formatarData(rom.dataGeracao) + '</span></div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="estado-col">' + reg +
+          '<div class="badge-idade" style="background:' + c.bg + ';color:' + c.txt + '">' +
+            '<span class="fase">' + c.label + '</span><span class="horas">' + (isDormente(rom) ? '' : Math.round(horas) + 'h') + '</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="card-acoes">' +
+          '<button class="btn-pdf" onclick="verPdf(\'' + rom.id + '\')">PDF</button>' +
+          (emRota
+            ? '<button class="btn-sim lock" title="' + (rom.entregaNome || '') + '" onclick="menuRetirar(event,\'' + rom.id + '\')">🔒 ' + (rom.entregaNome || 'Em rota') + '</button>'
+            : (noSim
+              ? '<button class="btn-sim lock" onclick="menuRetirar(event,\'' + rom.id + '\')">🔒 Simulação</button>'
+              : '<button class="btn-sim" onclick="abrirDDEntrega(event,\'' + rom.id + '\')">＋ Entrega</button>')) +
+          '<button class="btn-xls" onclick="baixarExcel(\'' + rom.id + '\')">Gerar xlx</button>' +
+          '<button class="btn-entregar" onclick="confirmarEntrega(\'' + rom.id + '\',\'' + (rom.clienteNome||rom.cliente) + '\',\'' + (rom.filial||'') + '\')">Entregue</button>' +
+        '</div>' +
+      '</div>';
+    });
+    document.getElementById('lista').innerHTML = html;
     atualizarPainelSim();
     atualizarBotoesFiltro();
   }
 
-  // ── Leque de pinos sobrepostos (clique abre; fixo até clicar no mapa) ─
-  function abrirLeque(chave, g) {
-    fecharLeque();
-    map.closePopup();
-    grupoAberto = chave;
-    var centro = g[0]._latlngBase;
-    var cp = map.latLngToLayerPoint(centro);
-    var n = g.length;
-    var raio = 26 + n * 8;
-    g.forEach(function(mk, i) {
-      var ang = (2 * Math.PI * i / n) - Math.PI / 2;
-      var ll = map.layerPointToLatLng(L.point(cp.x + raio * Math.cos(ang), cp.y + raio * Math.sin(ang)));
-      mk.setLatLng(ll);
-      mk.setZIndexOffset(1000);
-      spiderLegs.addLayer(L.polyline([centro, ll], { color:'#8B1C1C', weight:1.5, opacity:0.55, interactive:false }));
-    });
+  function verPdf(id) {
+    window.open(SERVER_URL + '/romaneio-pdf/' + id, '_blank');
   }
-  // popup avulso (autoPan desligado p/ o leque não colapsar ao abrir)
-  function abrirPopupSolto(mk) {
-    L.popup({ autoPan:false, offset:[0,-34] }).setLatLng(mk.getLatLng()).setContent(mk._html).openOn(map);
+  function baixarExcel(id) {
+    window.open(SERVER_URL + '/romaneio-excel/' + id, '_blank');
   }
-  function fecharLeque() {
-    if (!grupoAberto) return;
-    markers.forEach(function(mk) {
-      if (mk._chave === grupoAberto && mk._latlngBase) { mk.setLatLng(mk._latlngBase); mk.setZIndexOffset(0); }
-    });
-    spiderLegs.clearLayers();
-    grupoAberto = null;
-  }
-  map.on('click', fecharLeque);
-  map.on('zoomstart', fecharLeque);
 
-  // Realce nos botões de filtro quando há algo filtrado (sem precisar abrir).
-  function atualizarBotoesFiltro() {
-    document.getElementById('btn-filtro').classList.toggle('filtro-ativo', clientesDesmarcados.size > 0);
-    document.getElementById('btn-filtro-cor').classList.toggle('filtro-ativo', coresDesmarcadas.size > 0);
-    document.getElementById('btn-filtro-peso').classList.toggle('filtro-ativo', faixasDesmarcadas.size > 0);
-    document.getElementById('btn-filtro-situacao').classList.toggle('filtro-ativo', statusDesmarcados.size > 0);
+  async function uploadMaster(inp) {
+    var f = inp.files[0];
+    if (!f) return;
+    inp.value = '';
+    var btn = inp.previousElementSibling || document.querySelector('.btn-header[onclick*="inp-master"]');
+    var txt = btn ? btn.textContent : '';
+    if (btn) btn.textContent = 'Enviando…';
+    try {
+      var form = new FormData();
+      form.append('master', f);
+      var resp = await fetch(SERVER_URL + '/master', { method: 'POST', body: form });
+      if (resp.status === 404) { alert('A rota /master ainda não está no ar (deploy do backend do staging pendente). Aguarde o deploy terminar e tente de novo.'); return; }
+      var d = await resp.json();
+      if (!resp.ok || d.erro) { alert('Erro ao subir a tabela mestra: ' + (d.erro || resp.status)); return; }
+      alert('Tabela mestra atualizada: ' + (d.codigos || 0) + ' códigos mapeados.');
+    } catch (e) {
+      alert('Erro de conexão ao subir a tabela mestra: ' + e.message);
+    } finally {
+      if (btn) btn.textContent = txt;
+    }
   }
 
   // ── Filtro por cliente ──────────────────────────────────────────────
@@ -491,7 +460,8 @@
       dd.innerHTML = '<div class="filtro-vazio">Nenhum cliente com pedido</div>';
       return;
     }
-    var html = '<div class="filtro-head"><span class="titulo">CLIENTES</span>' +
+    var html = sortRow('cliente', 'A → Z', 'Z → A') +
+      '<div class="filtro-head"><span class="titulo">CLIENTES</span>' +
       '<span><button onclick="filtroTodos(true)">Todos</button><button onclick="filtroTodos(false)">Nenhum</button></span></div>';
     ids.forEach(function(cid) {
       var checked = clientesDesmarcados.has(cid) ? '' : 'checked';
@@ -503,7 +473,7 @@
   function toggleCliente(cb) {
     if (cb.checked) clientesDesmarcados.delete(cb.value);
     else clientesDesmarcados.add(cb.value);
-    renderMarkers(false);
+    renderLista();
   }
 
   function filtroTodos(marcar) {
@@ -513,44 +483,20 @@
       if (marcar) clientesDesmarcados.delete(cb.value);
       else clientesDesmarcados.add(cb.value);
     });
-    renderMarkers(false);
+    renderLista();
   }
 
   function fecharDropdowns(exceto) {
-    ['filtro-dropdown','filtro-cor-dropdown','filtro-peso-dropdown','filtro-situacao-dropdown'].forEach(function(id) {
+    ['filtro-dropdown','filtro-cor-dropdown','filtro-peso-dropdown','filtro-regiao-dropdown','filtro-situacao-dropdown'].forEach(function(id) {
       if (id !== exceto) { var el = document.getElementById(id); if (el) el.style.display = 'none'; }
     });
   }
-  function toggleFiltro(e) {
-    if (e) e.stopPropagation();
-    fecharDropdowns('filtro-dropdown');
-    var dd = document.getElementById('filtro-dropdown');
-    dd.style.display = dd.style.display === 'block' ? 'none' : 'block';
-  }
-  function toggleFiltroCor(e) {
-    if (e) e.stopPropagation();
-    fecharDropdowns('filtro-cor-dropdown');
-    var dd = document.getElementById('filtro-cor-dropdown');
-    dd.style.display = dd.style.display === 'block' ? 'none' : 'block';
-  }
-  function toggleFiltroPeso(e) {
-    if (e) e.stopPropagation();
-    fecharDropdowns('filtro-peso-dropdown');
-    var dd = document.getElementById('filtro-peso-dropdown');
-    dd.style.display = dd.style.display === 'block' ? 'none' : 'block';
-  }
-  function toggleFiltroRegiao(e) {
-    if (e) e.stopPropagation();
-    fecharDropdowns('filtro-regiao-dropdown');
-    var dd = document.getElementById('filtro-regiao-dropdown');
-    dd.style.display = dd.style.display === 'block' ? 'none' : 'block';
-  }
-  function toggleFiltroSituacao(e) {
-    if (e) e.stopPropagation();
-    fecharDropdowns('filtro-situacao-dropdown');
-    var dd = document.getElementById('filtro-situacao-dropdown');
-    dd.style.display = dd.style.display === 'block' ? 'none' : 'block';
-  }
+  function abreDropdown(id, exceto) { fecharDropdowns(exceto); var dd = document.getElementById(id); dd.style.display = dd.style.display === 'block' ? 'none' : 'block'; }
+  function toggleFiltro(e) { if (e) e.stopPropagation(); abreDropdown('filtro-dropdown', 'filtro-dropdown'); }
+  function toggleFiltroCor(e) { if (e) e.stopPropagation(); abreDropdown('filtro-cor-dropdown', 'filtro-cor-dropdown'); }
+  function toggleFiltroPeso(e) { if (e) e.stopPropagation(); abreDropdown('filtro-peso-dropdown', 'filtro-peso-dropdown'); }
+  function toggleFiltroRegiao(e) { if (e) e.stopPropagation(); abreDropdown('filtro-regiao-dropdown', 'filtro-regiao-dropdown'); }
+  function toggleFiltroSituacao(e) { if (e) e.stopPropagation(); abreDropdown('filtro-situacao-dropdown', 'filtro-situacao-dropdown'); }
   function montarFiltroSituacao() {
     var html = '<div class="filtro-head"><span class="titulo">SITUAÇÃO</span>' +
       '<span><button onclick="filtroSituacaoTodos(true)">Todos</button><button onclick="filtroSituacaoTodos(false)">Nenhum</button></span></div>';
@@ -560,47 +506,48 @@
     });
     document.getElementById('filtro-situacao-dropdown').innerHTML = html;
   }
-  function toggleSituacao(cb) { if (cb.checked) statusDesmarcados.delete(cb.value); else statusDesmarcados.add(cb.value); renderMarkers(false); }
-  function filtroSituacaoTodos(m) { SITUACOES.forEach(function(s) { if (m) statusDesmarcados.delete(s.key); else statusDesmarcados.add(s.key); }); montarFiltroSituacao(); renderMarkers(false); }
-
+  function toggleSituacao(cb) { if (cb.checked) statusDesmarcados.delete(cb.value); else statusDesmarcados.add(cb.value); renderLista(); }
+  function filtroSituacaoTodos(m) { SITUACOES.forEach(function(s) { if (m) statusDesmarcados.delete(s.key); else statusDesmarcados.add(s.key); }); montarFiltroSituacao(); renderLista(); }
 
   // ── Filtro por cor (idade) ──────────────────────────────────────────
   function montarFiltroCor() {
-    var dd = document.getElementById('filtro-cor-dropdown');
-    var html = '<div class="filtro-head"><span class="titulo">COR (IDADE)</span>' +
+    var html = sortRow('idade', 'Mais antigo primeiro', 'Mais novo primeiro') +
+      '<div class="filtro-head"><span class="titulo">COR (IDADE)</span>' +
       '<span><button onclick="filtroCorTodos(true)">Todos</button><button onclick="filtroCorTodos(false)">Nenhum</button></span></div>';
     CORES_FILTRO.forEach(function(c) {
       var checked = coresDesmarcadas.has(c.label) ? '' : 'checked';
       html += '<label><input type="checkbox" value="' + c.label + '" ' + checked + ' onchange="toggleCor(this)">' +
-        '<span class="leg-dot" style="background:' + c.hex + ';width:12px;height:12px"></span> ' + c.label + '</label>';
+        '<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:' + c.hex + '"></span> ' + c.label + '</label>';
     });
-    dd.innerHTML = html;
+    document.getElementById('filtro-cor-dropdown').innerHTML = html;
   }
-  function toggleCor(cb) { if (cb.checked) coresDesmarcadas.delete(cb.value); else coresDesmarcadas.add(cb.value); renderMarkers(false); }
-  function filtroCorTodos(m) { CORES_FILTRO.forEach(function(c) { if (m) coresDesmarcadas.delete(c.label); else coresDesmarcadas.add(c.label); }); montarFiltroCor(); renderMarkers(false); }
+  function toggleCor(cb) { if (cb.checked) coresDesmarcadas.delete(cb.value); else coresDesmarcadas.add(cb.value); renderLista(); }
+  function filtroCorTodos(m) { CORES_FILTRO.forEach(function(c) { if (m) coresDesmarcadas.delete(c.label); else coresDesmarcadas.add(c.label); }); montarFiltroCor(); renderLista(); }
 
   // ── Filtro por faixa de peso ────────────────────────────────────────
   function montarFiltroPeso() {
-    var dd = document.getElementById('filtro-peso-dropdown');
-    var html = '<div class="filtro-head"><span class="titulo">FAIXA DE PESO</span>' +
+    var html = sortRow('peso', 'Menor → maior', 'Maior → menor') +
+      '<div class="filtro-head"><span class="titulo">FAIXA DE PESO</span>' +
       '<span><button onclick="filtroPesoTodos(true)">Todos</button><button onclick="filtroPesoTodos(false)">Nenhum</button></span></div>';
     FAIXAS.forEach(function(f) {
       var checked = faixasDesmarcadas.has(f.key) ? '' : 'checked';
       html += '<label><input type="checkbox" value="' + f.key + '" ' + checked + ' onchange="togglePeso(this)"> ' + f.label + '</label>';
     });
-    dd.innerHTML = html;
+    document.getElementById('filtro-peso-dropdown').innerHTML = html;
   }
-  function togglePeso(cb) { if (cb.checked) faixasDesmarcadas.delete(cb.value); else faixasDesmarcadas.add(cb.value); renderMarkers(false); }
-  function filtroPesoTodos(m) { FAIXAS.forEach(function(f) { if (m) faixasDesmarcadas.delete(f.key); else faixasDesmarcadas.add(f.key); }); montarFiltroPeso(); renderMarkers(false); }
+  function togglePeso(cb) { if (cb.checked) faixasDesmarcadas.delete(cb.value); else faixasDesmarcadas.add(cb.value); renderLista(); }
+  function filtroPesoTodos(m) { FAIXAS.forEach(function(f) { if (m) faixasDesmarcadas.delete(f.key); else faixasDesmarcadas.add(f.key); }); montarFiltroPeso(); renderLista(); }
 
+  // ── Filtro por região ───────────────────────────────────────────────
   function montarFiltroRegiao(data) {
     var vistos = {};
-    (data || []).forEach(function(r) { var k = regiaoKey(r); vistos[k] = (k === '__sem__') ? 'Sem região' : k; });
+    data.forEach(function(r) { var k = regiaoKey(r); vistos[k] = (k === '__sem__') ? 'Sem região' : k; });
     var keys = Object.keys(vistos).sort(function(a, b) { if (a === '__sem__') return 1; if (b === '__sem__') return -1; return vistos[a].localeCompare(vistos[b]); });
     regioesDesmarcadas.forEach(function(k) { if (!vistos[k]) regioesDesmarcadas.delete(k); });
     var dd = document.getElementById('filtro-regiao-dropdown');
     if (keys.length === 0) { dd.innerHTML = '<div class="filtro-vazio">Nenhuma região</div>'; return; }
-    var html = '<div class="filtro-head"><span class="titulo">REGIÃO</span>' +
+    var html = sortRow('regiao', 'A → Z', 'Z → A') +
+      '<div class="filtro-head"><span class="titulo">REGIÃO</span>' +
       '<span><button onclick="filtroRegiaoTodos(true)">Todos</button><button onclick="filtroRegiaoTodos(false)">Nenhum</button></span></div>';
     keys.forEach(function(k) {
       var checked = regioesDesmarcadas.has(k) ? '' : 'checked';
@@ -608,20 +555,114 @@
     });
     dd.innerHTML = html;
   }
-  function toggleRegiao(cb) { if (cb.checked) regioesDesmarcadas.delete(cb.value); else regioesDesmarcadas.add(cb.value); renderMarkers(false); }
+  function toggleRegiao(cb) { if (cb.checked) regioesDesmarcadas.delete(cb.value); else regioesDesmarcadas.add(cb.value); renderLista(); }
   function filtroRegiaoTodos(m) {
     document.getElementById('filtro-regiao-dropdown').querySelectorAll('input[type=checkbox]').forEach(function(cb) {
       cb.checked = m; if (m) regioesDesmarcadas.delete(cb.value); else regioesDesmarcadas.add(cb.value);
     });
-    renderMarkers(false);
+    renderLista();
   }
 
-  // ── Simulador de plano de entregas ──────────────────────────────────
+  function atualizarBotoesFiltro() {
+    document.getElementById('btn-filtro').classList.toggle('filtro-ativo', clientesDesmarcados.size > 0);
+    document.getElementById('btn-filtro-cor').classList.toggle('filtro-ativo', coresDesmarcadas.size > 0);
+    document.getElementById('btn-filtro-peso').classList.toggle('filtro-ativo', faixasDesmarcadas.size > 0);
+    document.getElementById('btn-filtro-regiao').classList.toggle('filtro-ativo', regioesDesmarcadas.size > 0);
+    document.getElementById('btn-filtro-situacao').classList.toggle('filtro-ativo', statusDesmarcados.size > 0);
+  }
+
+  // ── Simulador de entregas (seleção compartilhada com o mapa) ─────────
   function persistSim() { try { localStorage.setItem('pn_sim_ids', JSON.stringify(Array.from(simIds))); } catch (e) {} }
+  // ── Entregas ativas (para o dropdown "＋ Entrega") ──
+  var entregasAtivas = [];
+  async function carregarEntregasAtivas() {
+    try {
+      var d = await fetch(SERVER_URL + '/entregas').then(function(r){ return r.json(); });
+      var lista = (d.entregas || d || []);
+      entregasAtivas = lista.filter(function(e){ return e.status !== 'finalizada'; })
+        .sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||''); });
+    } catch(e) { entregasAtivas = []; }
+  }
+
+  function fecharPopups() {
+    document.querySelectorAll('.dd-entrega, .menu-retirar').forEach(function(el){ el.remove(); });
+  }
+
+  function abrirDDEntrega(ev, id) {
+    ev.stopPropagation();
+    fecharPopups();
+    var btn = ev.currentTarget;
+    var dd = document.createElement('div');
+    dd.className = 'dd-entrega';
+    var html = '<div class="it sim" onclick="addSimulacao(\'' + id + '\')">Simulação</div>';
+    entregasAtivas.forEach(function(e){
+      html += '<div class="it" onclick="addNaEntrega(\'' + e.id + '\',\'' + id + '\')">' + (e.nome || e.id) + '</div>';
+    });
+    dd.innerHTML = html;
+    btn.parentElement.appendChild(dd);
+  }
+
+  function menuRetirar(ev, id) {
+    ev.stopPropagation();
+    fecharPopups();
+    var btn = ev.currentTarget;
+    var rom = romById(id);
+    var m = document.createElement('div');
+    m.className = 'menu-retirar';
+    var txt = (rom && rom.status === 'em_rota') ? '↩︎ Retirar desta entrega' : '↩︎ Retirar da simulação';
+    m.innerHTML = '<div class="it" onclick="retirar(\'' + id + '\')">' + txt + '</div>';
+    btn.parentElement.appendChild(m);
+  }
+
+  function addSimulacao(id) {
+    fecharPopups();
+    simIds.add(id); persistSim(); renderLista();
+  }
+
+  async function addNaEntrega(entregaId, pedidoId) {
+    fecharPopups();
+    try {
+      var resp = await fetch(SERVER_URL + '/entregas/' + entregaId + '/adicionar', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ pedidoId: pedidoId })
+      });
+      var d = await resp.json();
+      if (!resp.ok || d.erro) { alert('Erro: ' + (d.erro || resp.status) + (d.entrega ? ' (' + d.entrega + ')' : '')); return; }
+      var rom = romById(pedidoId);
+      if (rom) { rom.status = 'em_rota'; rom.entregaId = entregaId; rom.entregaNome = d.entregaNome || ''; }
+      simIds.delete(pedidoId); persistSim();
+      renderLista();
+    } catch(e) { alert('Erro de conexão: ' + e.message); }
+  }
+
+  async function retirar(id) {
+    fecharPopups();
+    var rom = romById(id);
+    if (rom && rom.status === 'em_rota') {
+      // retira de uma entrega salva (backend)
+      try {
+        var resp = await fetch(SERVER_URL + '/entregas/' + rom.entregaId + '/remover', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ pedidoId: id })
+        });
+        var d = await resp.json();
+        if (!resp.ok || d.erro) { alert('Erro: ' + (d.erro || resp.status)); return; }
+        rom.status = 'pendente'; delete rom.entregaId; delete rom.entregaNome;
+        if (d.entregaVazia) { await carregarEntregasAtivas(); }
+        renderLista();
+      } catch(e) { alert('Erro de conexão: ' + e.message); }
+    } else {
+      // retira da simulação (local)
+      simIds.delete(id); persistSim(); renderLista();
+    }
+  }
+
+  document.addEventListener('click', fecharPopups);
+
   function toggleSim(id) {
     var rom = romById(id);
     if (rom && rom.status === 'em_rota') { alert('Este pedido já está na entrega: ' + (rom.entregaNome || '?') + '.\nRemova de lá primeiro.'); return; }
-    if (simIds.has(id)) simIds.delete(id); else simIds.add(id); persistSim(); map.closePopup(); renderMarkers(false);
+    if (simIds.has(id)) simIds.delete(id); else simIds.add(id); persistSim(); renderLista();
   }
   async function salvarEntrega() {
     var ids = Array.from(simIds);
@@ -638,14 +679,11 @@
       if (!resp.ok || d.erro) { alert('Erro ao salvar a entrega: ' + (d.erro || resp.status)); return; }
       simIds.clear(); persistSim();
       alert('Entrega "' + nome.trim() + '" salva com ' + ids.length + ' pedido(s).');
-      carregarRomaneios();
+      carregar();
     } catch (e) { alert('Erro de conexão ao salvar a entrega: ' + e.message); }
   }
-  function limparSim() { if (!simIds.size || confirm('Limpar o simulador? Isso remove todos os pedidos selecionados.')) { simIds.clear(); persistSim(); renderMarkers(false); } }
-  function togglePainelSim() {
-    var b = document.getElementById('ps-body'), t = document.getElementById('ps-toggle');
-    var h = b.style.display === 'none'; b.style.display = h ? 'block' : 'none'; t.textContent = h ? '▾' : '▸';
-  }
+  function limparSim() { if (!simIds.size || confirm('Limpar o simulador? Isso remove todos os pedidos selecionados.')) { simIds.clear(); persistSim(); renderLista(); } }
+  function togglePainelSim() { var b = document.getElementById('ps-body'), t = document.getElementById('ps-toggle'); var h = b.style.display === 'none'; b.style.display = h ? 'block' : 'none'; t.textContent = h ? '▾' : '▸'; }
   async function detalharTotais() {
     var ids = Array.from(simIds);
     if (!ids.length) { alert('Selecione ao menos um pedido para detalhar.'); return; }
@@ -665,331 +703,85 @@
       alert('Erro de conexao ao gerar os totais: ' + err.message);
     }
   }
+
   function atualizarPainelSim() {
     var body = document.getElementById('ps-body');
-    // remove do simulador ids de pedidos que não existem mais
     simIds.forEach(function(id) { if (!romaneios.some(function(r) { return r.id === id; })) simIds.delete(id); });
     persistSim();
     var sel = romaneios.filter(function(r) { return simIds.has(r.id); });
     if (sel.length === 0) {
-      body.innerHTML = '<div class="pz-vazio">Nenhum pedido selecionado.<br>Use “＋ Adicionar à simulação” no pino.</div>';
+      body.innerHTML = '<div class="ps-vazio">Nenhum pedido selecionado.<br>Use \u201c\uFF0B Simula\u00e7\u00e3o\u201d no pedido (aqui ou no mapa).</div>';
       return;
     }
     var html = '', tot = 0;
     sel.sort(function(a, b) { return (a.clienteNome || '').localeCompare(b.clienteNome || ''); }).forEach(function(r) {
       var kg = Number(r.kgPlanejados) || 0; tot += kg;
       html += '<div class="ps-row">' +
-        '<span class="ps-nome" title="' + (r.clienteNome || '') + ' · ' + (r.filial || '') + '">' + (r.clienteNome || r.cliente) + ' <em>' + (r.filial || '') + '</em></span>' +
+        '<span class="ps-nome" title="' + (r.clienteNome || '') + ' \u00b7 ' + (r.filial || '') + '">' + (r.clienteNome || r.cliente) + ' <em>' + (r.filial || '') + '</em></span>' +
         '<span class="ps-kg">' + Math.round(kg) + ' kg</span>' +
-        '<button class="ps-x" title="remover" onclick="toggleSim(\'' + r.id + '\')">×</button>' +
+        '<button class="ps-x" title="remover" onclick="toggleSim(\'' + r.id + '\')">\u00d7</button>' +
         '</div>';
     });
     html += '<div class="ps-total"><span>Total (' + sel.length + ' ped.)</span><b>' + Math.round(tot) + ' kg</b></div>';
     html += '<div class="ps-acoes"><button class="ps-btn ps-salvar" onclick="salvarEntrega()">Salvar entrega</button></div>';
-    html += '<div class="ps-acoes">' +
-      '<button class="ps-btn ps-det" onclick="detalharTotais()">Detalhar totais</button>' +
-      '<button class="ps-btn ps-limpar" onclick="limparSim()">Limpar</button>' +
-      '</div>';
+    html += '<div class="ps-acoes"><button class="ps-btn ps-det" onclick="detalharTotais()">Detalhar totais</button><button class="ps-btn ps-limpar" onclick="limparSim()">Limpar</button></div>';
     body.innerHTML = html;
   }
+
+  // sincroniza ao vivo quando a seleção muda em outra aba (ex: o mapa)
+  window.addEventListener('storage', function(e) {
+    if (e.key === 'pn_sim_ids') { simIds = new Set(JSON.parse(e.newValue || '[]')); renderLista(); }
+  });
 
   document.addEventListener('click', function(e) {
     if (!e.target.closest('.filtro-wrap')) fecharDropdowns();
   });
 
-  // ── Ações do popup ──────────────────────────────────────────────────
-  function verPdf(id) {
-    window.open(SERVER_URL + '/romaneio-pdf/' + id, '_blank');
-  }
-  function baixarExcel(id) {
-    window.open(SERVER_URL + '/romaneio-excel/' + id, '_blank');
-  }
-
-  function marcarFalhou(id) {
-    var rom = null;
-    for (var i = 0; i < romaneios.length; i++) { if (romaneios[i].id === id) { rom = romaneios[i]; break; } }
-    var nome = rom ? (rom.filial || rom.clienteNome || rom.cliente) : id;
-    if (!confirm('Marcar FALHA na entrega da filial ' + nome + '?\nO pedido volta para pendentes (mantendo a data original).')) return;
-    fetch(SERVER_URL + '/romaneio/' + id + '/status', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({status:'falhou'}) })
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        if (data.ok) {
-          for (var i = 0; i < romaneios.length; i++) { if (romaneios[i].id === id) { romaneios[i].status = 'pendente'; delete romaneios[i].entregaId; delete romaneios[i].entregaNome; break; } }
-          map.closePopup();
-          montarFiltro(romaneios);
-          renderMarkers(false);
-        } else {
-          alert('Erro: ' + (data.erro || 'Falha ao registrar'));
-        }
-      })
-      .catch(function(e) { alert('Erro: ' + e.message); });
+  // ── Confirmar entrega (DELETE) ──────────────────────────────────────
+  function confirmarEntrega(id, cliente, filial) {
+    pendingId = id;
+    document.getElementById('modal-texto').textContent = 'Marcar entrega de ' + cliente + ' — ' + filial + ' como concluída?';
+    document.getElementById('modal').style.display = 'flex';
   }
 
-  function marcarEntregue(id) {
-    var rom = null;
-    for (var i = 0; i < romaneios.length; i++) { if (romaneios[i].id === id) { rom = romaneios[i]; break; } }
-    var nome = rom ? (rom.filial || rom.clienteNome || rom.cliente) : id;
-    if (!confirm('Marcar como ENTREGUE o pedido da filial ' + nome + '?')) return;
+  function fecharModal() {
+    document.getElementById('modal').style.display = 'none';
+    pendingId = null;
+  }
+
+  document.getElementById('modal-confirmar').onclick = function() {
+    if (!pendingId) return;
+    var id = pendingId;
+    fecharModal();
+
+    var btn = document.querySelector('#card-' + id + ' .btn-entregar');
+    if (btn) { btn.disabled = true; btn.textContent = 'Processando...'; }
 
     fetch(SERVER_URL + '/romaneio/' + id + '/status', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({status:'entregue'}) })
       .then(function(r) { return r.json(); })
       .then(function(data) {
         if (data.ok) {
           romaneios = romaneios.filter(function(r) { return r.id !== id; });
-          map.closePopup();
-          montarFiltro(romaneios);
-          renderMarkers(false);
+          var card = document.getElementById('card-' + id);
+          if (card) {
+            card.style.opacity = '0';
+            card.style.transition = 'opacity .3s';
+            setTimeout(function() { montarFiltro(romaneios); montarFiltroRegiao(romaneios); renderLista(); }, 300);
+          } else {
+            montarFiltro(romaneios); montarFiltroRegiao(romaneios); renderLista();
+          }
         } else {
-          alert('Erro: ' + (data.erro || 'Falha ao excluir'));
+          alert('Erro: ' + (data.erro || 'Falha ao remover'));
+          if (btn) { btn.disabled = false; btn.textContent = '✓ Entregue'; }
         }
-      })
-      .catch(function(e) { alert('Erro: ' + e.message); });
-  }
-
-  // ── Zonas (geofences) ───────────────────────────────────────────────
-  function estiloZona(cor) {
-    return { color: COR_ZONA, weight: 2, fillColor: COR_ZONA, fillOpacity: 0.12 };
-  }
-
-  // (re)desenha todas as zonas salvas em zonasLayer
-  function desenharZonas() {
-    zonasLayer.clearLayers();
-    zonaLayerById = {};
-    zonas.forEach(function(z) {
-      try {
-        var gj = L.geoJSON(z.geojson, { style: estiloZona(z.cor || '#8B1C1C'), pmIgnore: false });
-        gj.eachLayer(function(layer) {
-          layer._zonaId = z.id;
-          layer.bindTooltip(z.nome || z.id, { sticky: true });
-          // ao terminar de editar a geometria, re-salva (mesmo id)
-          layer.on('pm:update', function(e) { salvarEdicaoZona(e.layer); });
-          // ao remover pela ferramenta de remoção do Geoman
-          layer.on('pm:remove', function(e) { removerZonaServidor(e.layer._zonaId); });
-          zonasLayer.addLayer(layer);
-          zonaLayerById[z.id] = layer;
-        });
-      } catch (err) { console.warn('zona inválida', z.id, err); }
-    });
-  }
-
-  function atualizarPainelZonas() {
-    var body = document.getElementById('pz-body');
-    var visiveis = romaneios.filter(pinoVisivel);
-
-    var somas = {}; // id -> {pedidos, kg}
-    zonas.forEach(function(z) { somas[z.id] = { pedidos: 0, kg: 0 }; });
-    var fora = { pedidos: 0, kg: 0 };
-
-    visiveis.forEach(function(rom) {
-      var alvo = fora;
-      if (zonas.length && window.turf) {
-        var pt = turf.point([Number(rom.lng), Number(rom.lat)]);
-        for (var i = 0; i < zonas.length; i++) {
-          try {
-            if (turf.booleanPointInPolygon(pt, zonas[i].geojson)) { alvo = somas[zonas[i].id]; break; }
-          } catch (e) { /* zona malformada: ignora */ }
-        }
-      }
-      alvo.pedidos += 1;
-      alvo.kg += Number(rom.kgPlanejados) || 0;
-    });
-
-    if (zonas.length === 0) {
-      body.innerHTML = '<div class="pz-vazio">Nenhuma zona desenhada' +
-        (EDIT_MODE_ALLOWED ? '.<br>Use “Editar zonas” para criar.' : '.') + '</div>';
-      return;
-    }
-
-    var html = '';
-    var totP = 0, totK = 0;
-    zonas.slice().sort(function(a, b) { return (a.nome || '').localeCompare(b.nome || ''); }).forEach(function(z) {
-      var s = somas[z.id];
-      totP += s.pedidos; totK += s.kg;
-      html += '<div class="pz-row">' +
-        '<span class="pz-swatch" style="background:' + COR_ZONA + '"></span>' +
-        '<span class="pz-nome" title="' + (z.nome || '') + '">' + (z.nome || z.id) + '</span>' +
-        '<span class="pz-nums"><b>' + s.pedidos + '</b> ped · <b>' + Math.round(s.kg) + '</b> kg</span>' +
-        '</div>';
-    });
-    if (fora.pedidos > 0) {
-      totP += fora.pedidos; totK += fora.kg;
-      html += '<div class="pz-row pz-fora">' +
-        '<span class="pz-swatch" style="background:#ccc"></span>' +
-        '<span class="pz-nome">Fora de zona</span>' +
-        '<span class="pz-nums"><b>' + fora.pedidos + '</b> ped · <b>' + Math.round(fora.kg) + '</b> kg</span>' +
-        '</div>';
-    }
-    html += '<div class="pz-row pz-total">' +
-      '<span class="pz-swatch" style="background:transparent;border:none"></span>' +
-      '<span class="pz-nome">Total</span>' +
-      '<span class="pz-nums"><b>' + totP + '</b> ped · <b>' + Math.round(totK) + '</b> kg</span>' +
-      '</div>';
-    body.innerHTML = html;
-  }
-
-  function carregarZonas() {
-    return fetch(SERVER_URL + '/geofences')
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        zonas = Array.isArray(data) ? data : [];
-        desenharZonas();
-        atualizarPainelZonas();
-      })
-      .catch(function(e) { console.warn('falha ao carregar zonas', e); });
-  }
-
-  // ── Edição de zonas (atrás da flag) ─────────────────────────────────
-  var zonaPendente = null; // layer recém-criada aguardando nome+cor
-
-  function toggleEdicao() {
-    edicaoAtiva = !edicaoAtiva;
-    var btn = document.getElementById('btn-editar');
-    if (edicaoAtiva) {
-      btn.classList.add('ativo');
-      btn.textContent = '✓ Concluir edição';
-      map.pm.addControls({
-        position: 'topleft',
-        drawPolygon: true, editMode: true, dragMode: true, removalMode: true,
-        drawMarker: false, drawCircleMarker: false, drawCircle: false,
-        drawPolyline: false, drawRectangle: false, drawText: false, cutPolygon: false, rotateMode: false
-      });
-    } else {
-      btn.classList.remove('ativo');
-      btn.textContent = 'Editar zonas';
-      map.pm.disableDraw();
-      map.pm.disableGlobalEditMode();
-      map.pm.disableGlobalRemovalMode();
-      map.pm.disableGlobalDragMode();
-      map.pm.removeControls();
-    }
-  }
-
-  // polígono novo desenhado → pede nome+cor, depois salva no servidor
-  map.on('pm:create', function(e) {
-    if (e.shape !== 'Polygon') return;
-    zonaPendente = e.layer;
-    abrirZmodal('Nova zona', '', '#8B1C1C');
-  });
-
-  function abrirZmodal(titulo, nome, cor) {
-    document.getElementById('zmodal-titulo').textContent = titulo;
-    document.getElementById('zmodal-nome').value = nome || '';
-    document.getElementById('zmodal-cor').value = cor || '#8B1C1C';
-    document.getElementById('zmodal').style.display = 'flex';
-    setTimeout(function(){ document.getElementById('zmodal-nome').focus(); }, 50);
-  }
-
-  function zmodalCancelar() {
-    document.getElementById('zmodal').style.display = 'none';
-    if (zonaPendente) { map.removeLayer(zonaPendente); zonaPendente = null; }
-  }
-
-  function zmodalConfirmar() {
-    var nome = document.getElementById('zmodal-nome').value.trim();
-    var cor = document.getElementById('zmodal-cor').value || '#8B1C1C';
-    if (!nome) { alert('Dê um nome à zona.'); return; }
-    if (!zonaPendente) { document.getElementById('zmodal').style.display = 'none'; return; }
-
-    var geojson = zonaPendente.toGeoJSON();
-    // remove a layer "crua" do Geoman; ela volta pelo desenharZonas após salvar
-    map.removeLayer(zonaPendente);
-    zonaPendente = null;
-    document.getElementById('zmodal').style.display = 'none';
-
-    fetch(SERVER_URL + '/geofence', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nome: nome, cor: cor, geojson: geojson })
-    })
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        if (data.ok && data.geofence) {
-          zonas.push(data.geofence);
-          desenharZonas();
-          atualizarPainelZonas();
-        } else {
-          alert('Erro ao salvar zona: ' + (data.erro || 'desconhecido'));
-        }
-      })
-      .catch(function(e) { alert('Erro ao salvar zona: ' + e.message); });
-  }
-
-  // geometria editada → re-salva com o mesmo id (POST sobrescreve)
-  function salvarEdicaoZona(layer) {
-    var id = layer._zonaId;
-    if (!id) return;
-    var z = null;
-    for (var i = 0; i < zonas.length; i++) { if (zonas[i].id === id) { z = zonas[i]; break; } }
-    if (!z) return;
-    var geojson = layer.toGeoJSON();
-    fetch(SERVER_URL + '/geofence', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: id, nome: z.nome, cor: z.cor, geojson: geojson })
-    })
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        if (data.ok && data.geofence) {
-          z.geojson = data.geofence.geojson;
-          atualizarPainelZonas();
-        }
-      })
-      .catch(function(e) { console.warn('falha ao salvar edição da zona', e); });
-  }
-
-  function removerZonaServidor(id) {
-    if (!id) return;
-    fetch(SERVER_URL + '/geofence/' + id, { method: 'DELETE' })
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        if (data.ok) {
-          zonas = zonas.filter(function(z) { return z.id !== id; });
-          delete zonaLayerById[id];
-          atualizarPainelZonas();
-        } else {
-          alert('Erro ao excluir zona: ' + (data.erro || 'desconhecido'));
-          carregarZonas(); // re-sincroniza, repõe o polígono que sumiu da tela
-        }
-      })
-      .catch(function(e) { alert('Erro ao excluir zona: ' + e.message); carregarZonas(); });
-  }
-
-  // ── Painel recolhível ───────────────────────────────────────────────
-  function togglePainel() {
-    var body = document.getElementById('pz-body');
-    var tg = document.getElementById('pz-toggle');
-    var hidden = body.style.display === 'none';
-    body.style.display = hidden ? 'block' : 'none';
-    tg.textContent = hidden ? '▾' : '▸';
-  }
-
-  // ── Carregamento ────────────────────────────────────────────────────
-  function carregarRomaneios() {
-    document.getElementById('loading').style.display = 'flex';
-    fetch(SERVER_URL + '/romaneios')
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        document.getElementById('loading').style.display = 'none';
-        romaneios = data || [];
-        montarFiltro(romaneios);
-        montarFiltroCor();
-        montarFiltroPeso();
-        montarFiltroSituacao();
-        renderMarkers(true);
       })
       .catch(function(e) {
-        document.getElementById('loading').style.display = 'none';
-        alert('Erro ao carregar romaneios: ' + e.message);
+        alert('Erro: ' + e.message);
+        if (btn) { btn.disabled = false; btn.textContent = '✓ Entregue'; }
       });
-  }
+  };
 
-  // habilita o botão de edição só com a flag correta na URL
-  if (EDIT_MODE_ALLOWED) {
-    document.getElementById('btn-editar').style.display = 'inline-block';
-  }
-
-  carregarZonas();
-  carregarRomaneios();
+  carregar();
 </script>
 </body>
 </html>
