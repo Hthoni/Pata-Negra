@@ -589,7 +589,6 @@ def logo(cliente):
         return jsonify({'erro': str(e)}), 500
 
 
-@app.route('/processar', methods=['POST'])
 def _fmt_data_prog(iso):
     """Converte '2026-07-10T08:00:00' -> '10/07/2026' para o campo Data Entrega."""
     if not iso:
@@ -603,6 +602,7 @@ def _fmt_data_prog(iso):
             return ''
 
 
+@app.route('/processar', methods=['POST'])
 def processar():
     try:
         perfil_file = request.files.get('perfil')
