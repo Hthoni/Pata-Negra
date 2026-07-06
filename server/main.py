@@ -430,6 +430,74 @@ def excluir_entrega(entrega_id):
         return jsonify({'erro': str(e)}), 500
 
 
+@app.route('/entregas/<entrega_id>/adicionar', methods=['POST'])
+def adicionar_pedido_entrega(entrega_id):
+    """Adiciona UM pedido a uma entrega já salva. Body: {pedidoId}.
+    Marca o pedido em_rota carimbando a entrega. Trava: recusa se o pedido
+    já está em outra entrega."""
+    body = request.get_json(silent=True) or {}
+    pid = (body.get('pedidoId') or '').strip()
+    if not pid:
+        return jsonify({'erro': 'pedidoId ausente'}), 400
+    try:
+        ent = carregar_entrega(entrega_id)
+        if not ent:
+            return jsonify({'erro': 'Entrega não encontrada'}), 404
+        idx = {r['id']: r for r in listar_romaneios()}
+        r = idx.get(pid)
+        if not r:
+            return jsonify({'erro': 'Pedido não encontrado'}), 404
+        if r.get('status') == 'em_rota' and r.get('entregaId') != entrega_id:
+            return jsonify({'erro': 'Pedido já está em outra entrega',
+                            'entrega': r.get('entregaNome', '?')}), 409
+        ids = ent.get('pedidoIds', [])
+        if pid not in ids:
+            ids.append(pid)
+            ent['pedidoIds'] = ids
+            salvar_entrega(entrega_id, ent)
+        r['status'] = 'em_rota'
+        r['entregaId'] = entrega_id
+        r['entregaNome'] = ent.get('nome', '')
+        salvar_romaneio(pid, r)
+        return jsonify({'ok': True, 'entregaNome': ent.get('nome', '')})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'erro': str(e)}), 500
+
+
+@app.route('/entregas/<entrega_id>/remover', methods=['POST'])
+def remover_pedido_entrega(entrega_id):
+    """Remove UM pedido de uma entrega. Body: {pedidoId}. O pedido volta a
+    pendente. Se a entrega ficar vazia, é apagada."""
+    body = request.get_json(silent=True) or {}
+    pid = (body.get('pedidoId') or '').strip()
+    if not pid:
+        return jsonify({'erro': 'pedidoId ausente'}), 400
+    try:
+        ent = carregar_entrega(entrega_id)
+        if not ent:
+            return jsonify({'erro': 'Entrega não encontrada'}), 404
+        ids = [x for x in ent.get('pedidoIds', []) if x != pid]
+        # devolve o pedido para pendente
+        idx = {r['id']: r for r in listar_romaneios()}
+        r = idx.get(pid)
+        if r and r.get('status') == 'em_rota':
+            r['status'] = 'pendente'
+            r.pop('entregaId', None)
+            r.pop('entregaNome', None)
+            salvar_romaneio(pid, r)
+        # entrega vazia -> apaga; senão salva
+        if not ids:
+            deletar_entrega(entrega_id)
+            return jsonify({'ok': True, 'entregaVazia': True})
+        ent['pedidoIds'] = ids
+        salvar_entrega(entrega_id, ent)
+        return jsonify({'ok': True, 'entregaVazia': False})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'erro': str(e)}), 500
+
+
 @app.route('/romaneio-pdf/<rid>')
 def romaneio_pdf(rid):
     """Serve inline o PDF da filial associado a um romaneio (abre no navegador)."""
