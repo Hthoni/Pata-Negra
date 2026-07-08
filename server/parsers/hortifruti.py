@@ -2,18 +2,21 @@
 Parser Hortifruti (Neogrid) — formato "PEDIDO DE COMPRA" da Neogrid, usado
 pelas redes Americanas / Hortifruti (Natural da Terra).
 
-MUITO diferente do SuasVendas: layout de tabela, descrições que quebram em
-várias linhas, cliente identificado por CNPJ (sem nome de filial no texto).
+Layout de tabela; descrições quebram em varias linhas. Usa extract_tables():
+cada item vem como um campo (possivelmente multi-linha) do tipo
+   [desc-A]\\n[N?] [codigo] [desc-B] (Quilograma|Unidade) [8 numeros]\\n[desc-C]
+As vezes o N e o codigo se fundem (ex.: '1,007898611040613'); por isso a
+descricao e reconstruida por TOKENS (descartando os puramente numericos) e a
+quantidade/preco sao lidos DEPOIS da unidade de medida.
 
-Estratégia: usa pdfplumber.extract_tables() — a tabela de itens junta as
-linhas quebradas num só campo por item. Cada item vira:
-   [desc-A] N Codigo [desc-B] (Quilograma|Unidade) 8-numeros [desc-C]
-A descricao completa = desc-A + desc-B + desc-C.
+Unidade:
+ - 'Quilograma' -> Qtde Pedida ja em KG.
+ - 'Unidade'    -> Qtde Pedida em unidades; converte pelo peso no nome
+                   (ex.: 500G -> 0,5 kg/un, 400G -> 0,4 kg/un).
 
-Unidade de medida:
- - 'Quilograma' -> Qtde Pedida ja esta em KG.
- - 'Unidade'    -> Qtde Pedida em unidades; converte p/ kg pelo peso no nome
-                   do produto (ex.: '500G' -> 0,5 kg/un; '400G' -> 0,4 kg/un).
+Empresa (faturamento): detectada pelo CNPJ do Fornecedor:
+ - 10.171.633 -> Industria  (empresa 1)
+ - 56.423.719 -> Distribuidora (empresa 2)
 """
 
 __cliente_nome__ = "Hortifruti"
@@ -23,15 +26,10 @@ import re
 import pdfplumber
 from perfil import processar_item, match_perfil
 
-# linha de item da tabela Neogrid (tudo num campo). Captura desc antes/meio/depois,
-# N, codigo, unidade e os numeros; a Qtde Pedida e o 2o numero, o preco liquido o 5o.
-_ITEM = re.compile(
-    r'^(?P<a>.*?)\s*(?P<n>\d{1,2})\s+(?P<cod>\d{10,})\s+(?P<b>.*?)\s*'
-    r'(?P<un>Quilograma|Unidade)\s+'
-    r'(?P<qemb>[\d.,]+)\s+(?P<qped>[\d.,]+)\s+(?P<qbon>[\d.,]+)\s+'
-    r'(?P<pbruto>[\d.,]+)\s+(?P<pliq>[\d.,]+)\s+(?P<vdesc>[\d.,]+)\s+'
-    r'(?P<ipi>[\d.,]+)\s+(?P<vtot>[\d.,]+)\s*(?P<c>.*)$'
-)
+CNPJ_INDUSTRIA = '10.171.633'
+CNPJ_DISTRIBUIDORA = '56.423.719'
+_UNID = re.compile(r'\b(Quilograma|Unidade)\b', re.I)
+_NUM = re.compile(r'\d[\d.,]*')
 
 
 def _num(s):
@@ -40,7 +38,6 @@ def _num(s):
 
 def parse(pdf_bytes, produtos):
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-        page = pdf.pages[0]
         full_text = '\n'.join(p.extract_text() or '' for p in pdf.pages)
         tabelas = []
         for pg in pdf.pages:
@@ -54,8 +51,11 @@ def parse(pdf_bytes, produtos):
     dataPedido = fm(r'Data de Emissão:\s*([\d/ ]+)').replace(' ', '')
     dataEntrega = fm(r'Data Inicial:\s*([\d/ ]+)').replace(' ', '')
     cnpj = fm(r'CNPJ do Local de Entrega:\s*([\d./ \-]+)').replace(' ', '')
-    if not cnpj:
-        cnpj = fm(r'Comprador.*?CNPJ:\s*([\d./ \-]+)').replace(' ', '')
+
+    # Empresa pela origem de faturamento (2o CNPJ da linha Comprador/Fornecedor).
+    cnpjs_linha = re.search(r'CNPJ:\s*([\d./ \-]+)\s+CNPJ:\s*([\d./ \-]+)', full_text)
+    forn = (cnpjs_linha.group(2) if cnpjs_linha else '').replace(' ', '')
+    empresa = 1 if CNPJ_INDUSTRIA.replace('.', '') in forn.replace('.', '').replace('-', '') else 2
 
     itens = []
     for t in tabelas:
@@ -63,27 +63,47 @@ def parse(pdf_bytes, produtos):
             for cell in row:
                 if not cell:
                     continue
-                linha = cell.replace('\n', ' ').strip()
-                m = _ITEM.match(linha)
-                if not m:
+                mu = _UNID.search(cell)
+                if not mu:
                     continue
-                # descricao completa remontada
-                nome = ' '.join(x for x in [m.group('a'), m.group('b'), m.group('c')] if x).strip()
+                linha = cell.replace('\n', ' ').strip()
+                mu = _UNID.search(linha)
+                if not mu:
+                    continue
+                un = mu.group(1)
+                antes = linha[:mu.start()].strip()
+                depois = linha[mu.end():].strip()
+
+                # separa as COLUNAS numéricas (logo após a unidade) da desc-C:
+                # os tokens numéricos iniciais são as colunas; o resto é descrição.
+                dtoks = depois.split()
+                nums, resto = [], []
+                for i, w in enumerate(dtoks):
+                    if not resto and re.match(r'^[\d.,]+$', w):
+                        nums.append(w)
+                    else:
+                        resto.append(w)
+                if len(nums) < 6:
+                    continue
+                qped = _num(nums[1])                       # Qtde Pedida
+                preco = _num(nums[4]) if len(nums) >= 5 else 0.0   # Preço Líquido
+                total = _num(nums[7]) if len(nums) >= 8 else _num(nums[-1])  # Valor Total
+                descC = ' '.join(resto).strip()
+
+                # desc-A/B = tokens não-puramente-numéricos do "antes"
+                toks = [w for w in antes.split() if not re.match(r'^[\d.,]+$', w)]
+                nome = ' '.join(toks + ([descC] if descC else [])).strip()
                 nome = re.sub(r'\s+', ' ', nome)
-                un = m.group('un')
-                qped = _num(m.group('qped'))
-                preco = _num(m.group('pliq'))
-                total = _num(m.group('vtot'))
 
                 if un.lower().startswith('quilog'):
-                    kg = qped                     # ja esta em kg
+                    kg = qped
                 else:
-                    # 'Unidade' -> pega peso no nome (ex.: 500G, 400G) e converte
                     mg = re.search(r'(\d+)\s*G\b', nome, re.I)
                     gramas = int(mg.group(1)) if mg else 1000
                     kg = qped * gramas / 1000.0
 
-                it = processar_item(m.group('cod'), nome, 'KG', 1, kg, preco, total, produtos)
+                it = processar_item('', nome, 'KG', 1, kg, preco, total, produtos)
+                it['empresa'] = empresa
                 itens.append(it)
 
     if not itens:
@@ -91,6 +111,5 @@ def parse(pdf_bytes, produtos):
     return [{
         'filial': 'HORTIFRUTI', 'pedidoNum': pedidoNum, 'cnpj': cnpj,
         'endereco': '', 'dataPedido': dataPedido, 'dataEntrega': dataEntrega,
-        'condPgto': '', 'empresa': 2, 'itens': itens
+        'condPgto': '', 'empresa': empresa, 'itens': itens
     }]
-
