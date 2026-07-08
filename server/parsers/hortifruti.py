@@ -93,3 +93,4 @@ def parse(pdf_bytes, produtos):
         'endereco': '', 'dataPedido': dataPedido, 'dataEntrega': dataEntrega,
         'condPgto': '', 'empresa': 2, 'itens': itens
     }]
+
