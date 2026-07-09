@@ -36,7 +36,7 @@
   tbody tr:last-child td { border-bottom:none; }
   .nome { font-weight:500; }
   .vol { text-align:right; font-weight:600; font-variant-numeric:tabular-nums; }
-  .raiz-rot { text-align:left; font-weight:800; background:var(--accent-lt); color:var(--accent); border-left:1px solid var(--border); vertical-align:middle; font-size:22px; text-transform:capitalize; }
+  .raiz-rot { text-align:left; font-weight:800; background:var(--accent-lt); color:var(--accent); border-left:1px solid var(--border); vertical-align:middle; font-size:22px; }
   .raiz-cell { text-align:right; font-weight:800; font-variant-numeric:tabular-nums; background:var(--accent-lt); color:var(--accent); border-left:1px solid var(--border); vertical-align:middle; font-size:26px; }
   .grupo-sep td { border-top:3px solid #c9a9a9; }
   tfoot td { padding:14px 16px; font-weight:800; background:#2b2b2b; color:#fff; font-size:14px; }
@@ -118,7 +118,7 @@
     'GARGANTA SALGADA':'garganta','ORELHA SALGADA':'orelha','RABO SALGADO':'rabo',
     'INGREDIENTES DE FEIJOADA':'ingredientes'
   };
-  function rotulo(raiz) { return ROTULOS[raiz] || raiz; }
+  function rotulo(raiz) { return raiz; }  // mostra a raiz exatamente como no master
   function fmt(v) { return v ? Number(v).toLocaleString('pt-BR') : ''; }
   function fmtG(v) { return v ? Number(v).toLocaleString('pt-BR') : '—'; }
 
@@ -161,10 +161,17 @@
     document.getElementById('loading').style.display = 'none';
     document.getElementById('tabela').style.display = '';
     var corpo = document.getElementById('corpo');
-    var html = '', totalGeral = 0, i = 0;
-    while (i < linhas.length) {
-      var rz = linhas[i].raiz, grupo = [];
-      while (i < linhas.length && linhas[i].raiz === rz) { grupo.push(linhas[i]); i++; }
+    // agrupa por NOME DA RAIZ (coluna A do master), independente da ordem/vizinhança
+    // na planilha. Preserva a ordem da 1ª aparição de cada raiz e das linhas dentro dela.
+    var ordemRaiz = [], grupos = Object.create(null);
+    linhas.forEach(function(d) {
+      var rz = d.raiz;
+      if (!grupos[rz]) { grupos[rz] = []; ordemRaiz.push(rz); }
+      grupos[rz].push(d);
+    });
+    var html = '', totalGeral = 0;
+    ordemRaiz.forEach(function(rz) {
+      var grupo = grupos[rz];
       var sub = grupo.reduce(function(s, d) { return s + d.vol; }, 0);
       totalGeral += sub;
       grupo.forEach(function(d, gi) {
@@ -177,7 +184,7 @@
         }
         html += '</tr>';
       });
-    }
+    });
     corpo.innerHTML = html;
     document.getElementById('tot').textContent = fmtG(totalGeral) + ' kg';
     document.getElementById('badge').textContent = 'demanda total: ' + fmtG(totalGeral) + ' kg';
