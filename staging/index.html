@@ -119,10 +119,11 @@ table.itens td.nome-produto{text-align:left}
 .btn-gerar:disabled{background:#aaa;cursor:not-allowed}
 .erro-msg{color:var(--cor-erro);font-size:13px;padding:0 16px 10px;display:none}
 .carregando{padding:40px;text-align:center;color:var(--cor-texto-fraco)}
+.header-actions{display:flex;gap:8px}.btn-header{font-family:inherit;height:34px;min-width:110px;display:inline-flex;align-items:center;justify-content:center;padding:0 14px;border-radius:8px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.15);color:#fff;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;white-space:nowrap}.btn-header:hover{background:rgba(255,255,255,.28)}
 </style>
 </head>
 <body>
-<script>
+  <script>
 (function(){
   var SRV = window.SERVER_URL || 'https://pata-negra-staging-784065203515.us-central1.run.app';
   var t = localStorage.getItem('pn_token');
@@ -138,11 +139,15 @@ table.itens td.nome-produto{text-align:left}
   <div class="logo">PN</div>
   <h1>Pata Negra — Processamento de Pedidos</h1>
   <span id="hdate" style="font-size:12px;opacity:.65;margin-left:auto;margin-right:12px"></span>
-  <a href="mapa.html" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.15);color:#fff;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;">Mapa</a>
-  <a href="pedidos.html" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.15);color:#fff;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;">Pedidos</a>
-  <a href="entregas.html" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.15);color:#fff;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;">Entregas</a>
-  <a href="demandas.html" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.15);color:#fff;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;">Demandas</a>
-  <a href="embarque.html" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.15);color:#fff;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;">Embarque</a>
+  <div class="header-actions">
+    <span class="btn-header" style="opacity:.4;pointer-events:none;background:rgba(255,255,255,.08);cursor:default">Criar Pedidos</span>
+    <a href="demandas.html" class="btn-header">Total Pedidos</a>
+    <a href="pedidos.html" class="btn-header">Lista Pedidos</a>
+    <a href="mapa.html" class="btn-header">Mapa de Pedidos</a>
+    <a href="entregas.html" class="btn-header">Plano de entrega</a>
+    <a href="embarque.html" class="btn-header">Demanda de embarque</a>
+    <a href="em_rota.html" class="btn-header">Entregas em rota</a>
+  </div>
 </header>
 <main>
 
@@ -198,10 +203,7 @@ table.itens td.nome-produto{text-align:left}
             <div class="zf" id="fn-o"></div>
           </div>
         </div>
-        <div style="display:flex;gap:10px">
-          <button class="btn-proc" id="btn-manual" disabled onclick="iniciarPedidoManual()" style="flex:1;background:#4a4a4a">📝 &nbsp;Pedido manual</button>
-          <button class="btn-proc" id="btn-proc" disabled onclick="acaoPrincipal()" style="flex:1">⚙️ &nbsp;Processar pedido</button>
-        </div>
+        <button class="btn-proc" id="btn-proc" disabled onclick="acaoPrincipal()">⚙️ &nbsp;Processar pedido</button>
       </div>
     </div>
   </div>
@@ -337,7 +339,6 @@ function selCliente(id, btn) {
   document.getElementById('pedido-label').style.visibility = 'visible';
   document.getElementById('btn-proc').classList.toggle('as-zone', manual);
   document.getElementById('btn-proc').textContent = manual ? '📝  Abrir pedido manual' : '⚙️  Processar pedido';
-  document.getElementById('btn-manual').style.display = manual ? 'none' : '';
 
   // restaurar logos que possam ter sumido (cold start do servidor)
   CLIENTES_LISTA.forEach(function(c) {
@@ -406,8 +407,6 @@ function atualizarBotao() {
     : !(S.cliente && S.pedidoFile && temPerfil());
   var bp = document.getElementById('btn-upd-perfil');
   if (bp) bp.disabled = !(S.cliente && S.perfilFile);
-  var bm = document.getElementById('btn-manual');
-  if (bm) bm.disabled = !(S.cliente && temPerfil());
 }
 
 function addLog(msg,cls){var el=document.getElementById('log');el.style.display='block';var d=document.createElement('div');if(cls)d.className=cls;d.textContent='['+new Date().toLocaleTimeString('pt-BR')+'] '+msg;el.appendChild(d);el.scrollTop=el.scrollHeight;}
@@ -482,9 +481,7 @@ async function atualizarPerfil() {
 }
 
 async function iniciarPedidoManual() {
-  var isManualClient = S.cliente && CLIENTES[S.cliente].manual;
-  var btn = document.getElementById(isManualClient ? 'btn-proc' : 'btn-manual');
-  var labelOriginal = isManualClient ? '📝  Abrir pedido manual' : '📝 \u00a0Pedido manual';
+  var btn = document.getElementById('btn-proc');
   btn.disabled = true; btn.textContent = '⏳  Carregando…';
   clearLog();
   try {
@@ -503,7 +500,7 @@ async function iniciarPedidoManual() {
   } catch(e) {
     logErr('Erro de conexão: '+e.message);
   } finally {
-    btn.disabled = false; btn.textContent = labelOriginal;
+    btn.disabled = false; btn.textContent = '📝  Abrir pedido manual';
   }
 }
 
@@ -875,4 +872,3 @@ async function gerarPedido() {
 </div>
 </body>
 </html>
-
