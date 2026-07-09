@@ -58,6 +58,10 @@
     .b-det:hover { background:var(--accent-lt); }
     .b-excluir { border:1px solid #bbb; background:#fff; color:#777; }
     .b-excluir:hover { background:#f2f2f2; }
+    .b-rota { border:none; background:var(--green); color:#fff; }
+    .b-rota:hover { background:#145230; }
+    .b-voltar { border:1px solid var(--accent); background:#fff; color:var(--accent); }
+    .b-voltar:hover { background:var(--accent-lt); }
     .caret { align-self:center; color:#aaa; font-size:18px; width:22px; text-align:center; flex-shrink:0; user-select:none; }
 
     .card-corpo { border-top:1px solid var(--border); background:#FBFAF8; padding:6px 18px 12px; display:none; }
@@ -84,7 +88,7 @@
     /* ── Impressão: só a relação de cards (esconde navegação e botões) ── */
     @media print {
       header, .topbar, #loading, #vazio, .ped-acoes, .btn-header, .btn-hist, .btn-geral,
-      .b-det, .b-pdf, .b-xls, .b-entregue, .b-falhou { display:none !important; }
+      .card-acoes, .b-det, .b-pdf, .b-xls, .b-entregue, .b-falhou, .b-rota, .b-voltar { display:none !important; }
       body { background:#fff; }
       main { padding:0 !important; }
       .lista { display:block !important; }
@@ -109,13 +113,15 @@
 </script>
 <header>
   <div class="logo">PN</div>
-  <h1>Pata Negra — Gerenciar Entregas</h1>
+  <h1>Pata Negra — Plano de Entrega</h1>
   <div class="header-actions">
-    <a href="index.html" class="btn-header">Criar Pedido</a>
-    <a href="mapa.html" class="btn-header">Mapa</a>
-    <a href="pedidos.html" class="btn-header">Pedidos</a>
-    <a href="demandas.html" class="btn-header">Demandas</a>
-    <a href="embarque.html" class="btn-header">Embarque</a>
+    <a href="index.html" class="btn-header">Criar Pedidos</a>
+    <a href="demandas.html" class="btn-header">Total Pedidos</a>
+    <a href="pedidos.html" class="btn-header">Lista Pedidos</a>
+    <a href="mapa.html" class="btn-header">Mapa de Pedidos</a>
+    <span class="btn-header" style="opacity:.4;pointer-events:none;background:rgba(255,255,255,.08);cursor:default">Plano de entrega</span>
+    <a href="embarque.html" class="btn-header">Demanda de embarque</a>
+    <a href="em_rota.html" class="btn-header">Entregas em rota</a>
   </div>
 </header>
 
@@ -196,6 +202,7 @@
           '<span class="fase">' + c.label + '</span><span class="horas">' + Math.round(h) + 'h</span>' +
         '</div>' +
         '<div class="card-acoes" onclick="event.stopPropagation()">' +
+          '<button class="b-rota" onclick="despacharEntrega(\'' + ent.id + '\',\'' + escapeAttr(ent.nome) + '\')">Em rota &rarr;</button>' +
           '<button class="b-det" onclick="detalharEntrega(\'' + ent.id + '\')">Detalhar totais</button>' +
           '<button class="b-excluir" onclick="excluirEntrega(\'' + ent.id + '\',\'' + escapeAttr(ent.nome) + '\')">Excluir</button>' +
         '</div>' +
@@ -216,8 +223,7 @@
             '<div class="ped-acoes">' +
               '<button class="b-pdf" onclick="verPdf(\'' + r.id + '\')">Ver PDF</button>' +
               '<button class="b-xls" onclick="baixarExcel(\'' + r.id + '\')">Gerar xlx</button>' +
-              '<button class="b-entregue" onclick="marcarPedido(\'' + r.id + '\',\'entregue\',\'' + escapeAttr(r.clienteNome || r.cliente || '') + '\')">Entregue</button>' +
-              '<button class="b-falhou" onclick="marcarPedido(\'' + r.id + '\',\'falhou\',\'' + escapeAttr(r.clienteNome || r.cliente || '') + '\')">Falhou entrega</button>' +
+              '<button class="b-falhou" onclick="retirarPedido(\'' + ent.id + '\',\'' + r.id + '\',\'' + escapeAttr(r.clienteNome || r.cliente || '') + '\')">Retirar da entrega</button>' +
             '</div>' +
           '</div>';
         });
@@ -247,6 +253,32 @@
       var resp = await fetch(SERVER_URL + '/romaneio/' + id + '/status', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: desfecho })
+      });
+      var d = await resp.json();
+      if (!resp.ok || d.erro) { alert('Erro: ' + (d.erro || resp.status)); return; }
+      carregar();
+    } catch (e) { alert('Erro de conexão: ' + e.message); }
+  }
+
+  async function despacharEntrega(id, nome) {
+    if (!confirm('Colocar a entrega "' + nome + '" EM ROTA?\nEla sai do Plano de entrega e deixa de contar na Demanda de embarque.')) return;
+    try {
+      var resp = await fetch(SERVER_URL + '/entregas/' + id + '/fase', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fase: 'em_rota' })
+      });
+      var d = await resp.json();
+      if (!resp.ok || d.erro) { alert('Erro: ' + (d.erro || resp.status)); return; }
+      carregar();
+    } catch (e) { alert('Erro de conexão: ' + e.message); }
+  }
+
+  async function retirarPedido(entregaId, pedidoId, nome) {
+    if (!confirm('Retirar o pedido de ' + nome + ' desta entrega?\nEle volta para a lista de pendentes.')) return;
+    try {
+      var resp = await fetch(SERVER_URL + '/entregas/' + entregaId + '/remover', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pedidoId: pedidoId })
       });
       var d = await resp.json();
       if (!resp.ok || d.erro) { alert('Erro: ' + (d.erro || resp.status)); return; }
@@ -355,7 +387,7 @@
         return;
       }
       var res = await Promise.all([
-        fetch(SERVER_URL + '/entregas').then(function(r) { return r.json(); }),
+        fetch(SERVER_URL + '/entregas?fase=planejamento').then(function(r) { return r.json(); }),
         fetch(SERVER_URL + '/romaneios?status=em_rota').then(function(r) { return r.json(); })
       ]);
       entregas = Array.isArray(res[0]) ? res[0] : [];
