@@ -19,7 +19,7 @@ import datetime
 import traceback
 from flask_cors import CORS
 
-from storage import perfil_existe, salvar_perfil, carregar_perfil_bytes, perfil_filename, salvar_romaneio, listar_romaneios, deletar_romaneio, salvar_pedido_pdf, carregar_pedido_pdf, salvar_pedido_excel, carregar_pedido_excel, salvar_geofence, listar_geofences, deletar_geofence, salvar_master, master_existe, carregar_master_bytes, atualizar_status_romaneio, salvar_entrega, carregar_entrega, listar_entregas, deletar_entrega, registrar_desfecho_entrega, salvar_estoque, carregar_estoque
+from storage import perfil_existe, salvar_perfil, carregar_perfil_bytes, perfil_filename, salvar_romaneio, listar_romaneios, deletar_romaneio, salvar_pedido_pdf, carregar_pedido_pdf, salvar_pedido_excel, carregar_pedido_excel, salvar_geofence, listar_geofences, deletar_geofence, salvar_master, master_existe, carregar_master_bytes, atualizar_status_romaneio, salvar_entrega, carregar_entrega, listar_entregas, deletar_entrega, registrar_desfecho_entrega, salvar_estoque, carregar_estoque, carregar_usuarios, salvar_usuarios, hash_senha, verifica_senha, registrar_login, criar_sessao, validar_sessao, encerrar_sessao
 from perfil import ler_perfil, ler_filiais, buscar_filial, ler_operadores
 from excel_gen import gerar_excel
 from pdf_gen import gerar_pdf, _kg_pdf, gerar_pdf_totais
@@ -564,6 +564,94 @@ def del_geofence(geofence_id):
         return jsonify({'erro': 'Geofence não encontrada'}), 404
     except Exception as e:
         return jsonify({'erro': str(e)}), 500
+
+
+# ─────────────────────────────────────────────────────────────────────
+# AUTENTICAÇÃO
+# ─────────────────────────────────────────────────────────────────────
+def _sessao_atual():
+    """Lê o token do header Authorization: Bearer <token> e valida."""
+    auth = request.headers.get('Authorization', '')
+    token = auth[7:].strip() if auth.startswith('Bearer ') else ''
+    return (token, validar_sessao(token)) if token else ('', None)
+
+
+def _exige_admin():
+    _, s = _sessao_atual()
+    return s if (s and s.get('papel') == 'admin') else None
+
+
+@app.route('/login', methods=['POST'])
+def login():
+    body = request.get_json(silent=True) or {}
+    usuario = (body.get('usuario') or '').strip()
+    senha = body.get('senha') or ''
+    if not usuario or not senha:
+        return jsonify({'erro': 'Informe usuário e senha'}), 400
+    users = carregar_usuarios()
+    u = next((x for x in users if str(x.get('usuario', '')).lower() == usuario.lower()), None)
+    ok = bool(u and u.get('ativo', True) and verifica_senha(senha, u.get('senhaHash', '')))
+    try: registrar_login(usuario, ok)
+    except Exception: pass
+    if not ok:
+        return jsonify({'erro': 'Usuário ou senha inválidos, ou usuário inativo'}), 401
+    token = criar_sessao(u['usuario'], u.get('papel', 'operador'), u.get('codRepresentante', ''))
+    return jsonify({'token': token, 'usuario': u['usuario'],
+                    'papel': u.get('papel', 'operador'),
+                    'nome': u.get('nome', u['usuario'])})
+
+
+@app.route('/logout', methods=['POST'])
+def logout():
+    token, _ = _sessao_atual()
+    encerrar_sessao(token)
+    return jsonify({'ok': True})
+
+
+@app.route('/me')
+def me():
+    _, s = _sessao_atual()
+    if not s:
+        return jsonify({'erro': 'sessão inválida'}), 401
+    return jsonify({'usuario': s['usuario'], 'papel': s['papel'],
+                    'codRepresentante': s.get('codRepresentante', '')})
+
+
+@app.route('/admin/usuarios', methods=['GET'])
+def admin_listar_usuarios():
+    if not _exige_admin():
+        return jsonify({'erro': 'acesso restrito'}), 403
+    users = carregar_usuarios()
+    # nunca devolve o hash da senha
+    return jsonify([{k: v for k, v in u.items() if k != 'senhaHash'} for u in users])
+
+
+@app.route('/admin/usuarios', methods=['POST'])
+def admin_salvar_usuario():
+    """Cria ou atualiza um usuário. Body: {usuario, nome, papel, ativo,
+    codRepresentante, senha?}. Se 'senha' vier, gera novo hash; senão mantém."""
+    if not _exige_admin():
+        return jsonify({'erro': 'acesso restrito'}), 403
+    body = request.get_json(silent=True) or {}
+    usuario = (body.get('usuario') or '').strip()
+    if not usuario:
+        return jsonify({'erro': 'usuário obrigatório'}), 400
+    users = carregar_usuarios()
+    u = next((x for x in users if str(x.get('usuario', '')).lower() == usuario.lower()), None)
+    novo = u is None
+    if novo:
+        u = {'usuario': usuario, 'senhaHash': ''}
+        users.append(u)
+    u['nome'] = body.get('nome', u.get('nome', usuario))
+    u['papel'] = body.get('papel', u.get('papel', 'operador'))
+    u['ativo'] = bool(body.get('ativo', u.get('ativo', True)))
+    u['codRepresentante'] = body.get('codRepresentante', u.get('codRepresentante', ''))
+    if body.get('senha'):
+        u['senhaHash'] = hash_senha(body['senha'])
+    if novo and not u['senhaHash']:
+        return jsonify({'erro': 'defina uma senha para o novo usuário'}), 400
+    salvar_usuarios(users)
+    return jsonify({'ok': True, 'novo': novo})
 
 
 @app.route('/health')
