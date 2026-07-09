@@ -56,13 +56,17 @@
   if(x.status !== 200){ localStorage.removeItem('pn_token'); location.replace('login.html'); }
 })();
 </script>
-<header><div class="logo">PN</div><h1>Pata Negra — Embarque</h1>
+<header>
+  <div class="logo">PN</div>
+  <h1>Pata Negra — Demanda de Embarque</h1>
   <div class="header-actions">
-    <a href="index.html" class="btn-header">Criar Pedido</a>
-    <a href="mapa.html" class="btn-header">Mapa</a>
-    <a href="pedidos.html" class="btn-header">Pedidos</a>
-    <a href="entregas.html" class="btn-header">Entregas</a>
-    <a href="demandas.html" class="btn-header">Demandas</a>
+    <a href="index.html" class="btn-header">Criar Pedidos</a>
+    <a href="demandas.html" class="btn-header">Total Pedidos</a>
+    <a href="pedidos.html" class="btn-header">Lista Pedidos</a>
+    <a href="mapa.html" class="btn-header">Mapa de Pedidos</a>
+    <a href="entregas.html" class="btn-header">Plano de entrega</a>
+    <span class="btn-header" style="opacity:.4;pointer-events:none;background:rgba(255,255,255,.08);cursor:default">Demanda de embarque</span>
+    <a href="em_rota.html" class="btn-header">Entregas em rota</a>
   </div>
 </header>
 <main>
