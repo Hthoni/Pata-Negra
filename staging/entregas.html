@@ -95,6 +95,18 @@
 </style>
 </head>
 <body>
+  <script>
+(function(){
+  var SRV = window.SERVER_URL || 'https://pata-negra-staging-784065203515.us-central1.run.app';
+  var t = localStorage.getItem('pn_token');
+  if(!t){ location.replace('login.html'); return; }
+  var x = new XMLHttpRequest();
+  x.open('GET', SRV + '/me', false);
+  x.setRequestHeader('Authorization', 'Bearer ' + t);
+  try{ x.send(); }catch(e){ location.replace('login.html'); return; }
+  if(x.status !== 200){ localStorage.removeItem('pn_token'); location.replace('login.html'); }
+})();
+</script>
 <header>
   <div class="logo">PN</div>
   <h1>Pata Negra — Gerenciar Entregas</h1>
