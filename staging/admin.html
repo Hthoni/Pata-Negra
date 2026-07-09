@@ -1,0 +1,150 @@
+<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BELLOTAS — Admin de Usuários</title>
+<style>
+  :root{ --vinho:#541313; --ouro:#BDA66C; --bg:#F2EFEA; --linha:#e0d9cf; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:#2b2b2b;padding:24px;max-width:1000px;margin:0 auto}
+  h1{color:var(--vinho);font-size:22px;margin-bottom:4px}
+  .sub{color:#888;font-size:13px;margin-bottom:20px}
+  .card{background:#fff;border:1px solid var(--linha);border-radius:10px;padding:18px 20px;margin-bottom:18px}
+  .card h2{font-size:15px;color:var(--vinho);margin-bottom:14px}
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  label{display:block;font-size:12px;font-weight:600;color:#555;margin-bottom:4px}
+  input,select{width:100%;height:36px;border:1px solid #ccc;border-radius:7px;padding:0 10px;font-size:14px;font-family:inherit;outline:none}
+  input:focus,select:focus{border-color:var(--vinho)}
+  .full{grid-column:1/3}
+  .btn{height:38px;padding:0 20px;border:1px solid var(--vinho);border-radius:7px;background:var(--vinho);color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;margin-top:12px}
+  .btn:hover{background:#3f0e0e}
+  .btn-sec{background:#fff;color:var(--vinho)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;color:#888;font-weight:600;padding:8px;border-bottom:2px solid var(--linha);font-size:12px}
+  td{padding:9px 8px;border-bottom:1px solid #f0ece5}
+  .tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px}
+  .tag.admin{background:#fdecea;color:#c0392b}
+  .tag.operador{background:#eaf2fd;color:#2471a3}
+  .tag.representante{background:#eafaf1;color:#1e8449}
+  .tag.on{background:#eafaf1;color:#1e8449}
+  .tag.off{background:#f2f2f2;color:#999}
+  .acao{color:var(--vinho);cursor:pointer;font-weight:600;font-size:12px;margin-right:10px}
+  .acao:hover{text-decoration:underline}
+  .msg{padding:10px 14px;border-radius:7px;font-size:13px;font-weight:600;margin-bottom:14px;display:none}
+  .msg.ok{background:#eafaf1;color:#1e8449;display:block}
+  .msg.err{background:#fdecea;color:#c0392b;display:block}
+  .topo{display:flex;justify-content:space-between;align-items:center}
+  .sair{font-size:12px;color:#888;cursor:pointer}
+</style></head><body>
+  <div class="topo">
+    <div><h1>BELLOTAS — Usuários</h1><div class="sub" id="quem"></div></div>
+    <div class="sair" onclick="sair()">Sair</div>
+  </div>
+  <div class="msg" id="msg"></div>
+
+  <div class="card">
+    <h2 id="form-titulo">Adicionar usuário</h2>
+    <div class="form-grid">
+      <div><label>Usuário (login)</label><input id="f-usuario" autocomplete="off"></div>
+      <div><label>Nome</label><input id="f-nome" autocomplete="off"></div>
+      <div><label>Senha <span style="color:#aaa">(deixe vazio p/ manter ao editar)</span></label><input id="f-senha" type="text" autocomplete="off"></div>
+      <div><label>Papel</label>
+        <select id="f-papel">
+          <option value="operador">Operador</option>
+          <option value="admin">Admin</option>
+          <option value="representante">Representante</option>
+        </select>
+      </div>
+      <div><label>Código do representante <span style="color:#aaa">(só p/ representante)</span></label><input id="f-cod" autocomplete="off"></div>
+      <div><label>Status</label>
+        <select id="f-ativo"><option value="true">Ativo</option><option value="false">Inativo</option></select>
+      </div>
+    </div>
+    <button class="btn" onclick="salvar()">Salvar</button>
+    <button class="btn btn-sec" onclick="limparForm()">Limpar</button>
+  </div>
+
+  <div class="card">
+    <h2>Usuários cadastrados</h2>
+    <table>
+      <thead><tr><th>Usuário</th><th>Nome</th><th>Papel</th><th>Cód. Rep.</th><th>Status</th><th>Ações</th></tr></thead>
+      <tbody id="lista"></tbody>
+    </table>
+  </div>
+
+<script>
+  var SERVER_URL='https://pata-negra-staging-784065203515.us-central1.run.app';
+  var token=localStorage.getItem('pn_token');
+  // guarda: só admin logado
+  if(!token){ location.replace('login.html'); }
+  function hdr(){ return {'Authorization':'Bearer '+token,'Content-Type':'application/json'}; }
+  function msg(t,ok){ var m=document.getElementById('msg'); m.textContent=t; m.className='msg '+(ok?'ok':'err'); }
+
+  async function init(){
+    var r=await fetch(SERVER_URL+'/me',{headers:hdr()});
+    if(r.status!==200){ location.replace('login.html'); return; }
+    var me=await r.json();
+    if(me.papel!=='admin'){ document.body.innerHTML='<h1 style="color:#541313">Acesso restrito ao admin.</h1>'; return; }
+    document.getElementById('quem').textContent='Logado como '+me.usuario+' (admin)';
+    carregar();
+  }
+  async function carregar(){
+    var r=await fetch(SERVER_URL+'/admin/usuarios',{headers:hdr()});
+    if(r.status!==200){ msg('Erro ao listar usuários',false); return; }
+    var us=await r.json();
+    document.getElementById('lista').innerHTML=us.map(function(u){
+      return '<tr>'+
+        '<td><b>'+u.usuario+'</b></td>'+
+        '<td>'+(u.nome||'')+'</td>'+
+        '<td><span class="tag '+u.papel+'">'+u.papel+'</span></td>'+
+        '<td>'+(u.codRepresentante||'')+'</td>'+
+        '<td><span class="tag '+(u.ativo?'on':'off')+'">'+(u.ativo?'ativo':'inativo')+'</span></td>'+
+        '<td><span class="acao" onclick=\'editar('+JSON.stringify(u).replace(/'/g,"&#39;")+')\'>editar</span>'+
+        (u.ativo?'<span class="acao" onclick="desativar(\''+u.usuario+'\')">desativar</span>':'<span class="acao" onclick="reativar(\''+u.usuario+'\')">reativar</span>')+
+        '</td></tr>';
+    }).join('');
+  }
+  function limparForm(){
+    document.getElementById('form-titulo').textContent='Adicionar usuário';
+    ['f-usuario','f-nome','f-senha','f-cod'].forEach(function(id){document.getElementById(id).value='';});
+    document.getElementById('f-papel').value='operador';
+    document.getElementById('f-ativo').value='true';
+    document.getElementById('f-usuario').disabled=false;
+  }
+  function editar(u){
+    document.getElementById('form-titulo').textContent='Editar usuário: '+u.usuario;
+    document.getElementById('f-usuario').value=u.usuario;
+    document.getElementById('f-usuario').disabled=true;
+    document.getElementById('f-nome').value=u.nome||'';
+    document.getElementById('f-senha').value='';
+    document.getElementById('f-papel').value=u.papel||'operador';
+    document.getElementById('f-cod').value=u.codRepresentante||'';
+    document.getElementById('f-ativo').value=u.ativo?'true':'false';
+    window.scrollTo(0,0);
+  }
+  async function salvar(){
+    var body={
+      usuario:document.getElementById('f-usuario').value.trim(),
+      nome:document.getElementById('f-nome').value.trim(),
+      papel:document.getElementById('f-papel').value,
+      codRepresentante:document.getElementById('f-cod').value.trim(),
+      ativo:document.getElementById('f-ativo').value==='true'
+    };
+    var s=document.getElementById('f-senha').value;
+    if(s) body.senha=s;
+    if(!body.usuario){ msg('Informe o usuário',false); return; }
+    var r=await fetch(SERVER_URL+'/admin/usuarios',{method:'POST',headers:hdr(),body:JSON.stringify(body)});
+    var d=await r.json();
+    if(!r.ok){ msg(d.erro||'Erro ao salvar',false); return; }
+    msg('Usuário '+body.usuario+' salvo.',true);
+    limparForm(); carregar();
+  }
+  function desativar(u){ setAtivo(u,false); }
+  function reativar(u){ setAtivo(u,true); }
+  async function setAtivo(u,ativo){
+    var r=await fetch(SERVER_URL+'/admin/usuarios',{method:'POST',headers:hdr(),body:JSON.stringify({usuario:u,ativo:ativo})});
+    if(r.ok){ msg('Usuário '+u+(ativo?' reativado':' desativado')+'.',true); carregar(); }
+    else msg('Erro ao alterar status',false);
+  }
+  function sair(){ localStorage.removeItem('pn_token'); location.replace('login.html'); }
+  init();
+</script>
+</body></html>
