@@ -172,8 +172,6 @@
     <a href="entregas.html" class="btn-header">Plano de entrega</a>
     <a href="embarque.html" class="btn-header">Demanda de embarque</a>
     <a href="em_rota.html" class="btn-header">Entregas em rota</a>
-    <button class="btn-header" onclick="document.getElementById('inp-master').click()">Subir Master</button>
-    <input type="file" id="inp-master" accept=".xlsx" style="display:none" onchange="uploadMaster(this)">
   </div>
 </header>
 
@@ -200,6 +198,8 @@
       <button id="btn-filtro-situacao" onclick="toggleFiltroSituacao(event)">Situação</button>
       <div class="filtro-dropdown" id="filtro-situacao-dropdown"></div>
     </div>
+    <button id="btn-subir-master" style="margin-left:auto;font-family:inherit;height:34px;padding:0 18px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap" onclick="document.getElementById('inp-master').click()">Subir Master</button>
+    <input type="file" id="inp-master" accept=".xlsx" style="display:none" onchange="uploadMaster(this)">
   </div>
 
   <div id="loading">
