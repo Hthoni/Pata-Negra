@@ -148,7 +148,7 @@
   </style>
 </head>
 <body>
-<script>
+  <script>
 (function(){
   var SRV = window.SERVER_URL || 'https://pata-negra-staging-784065203515.us-central1.run.app';
   var t = localStorage.getItem('pn_token');
@@ -160,15 +160,18 @@
   if(x.status !== 200){ localStorage.removeItem('pn_token'); location.replace('login.html'); }
 })();
 </script>
+
 <header>
   <div class="logo">PN</div>
   <h1>Pata Negra — Gerenciar Pedidos</h1>
   <div class="header-actions">
-    <a href="index.html" class="btn-header">Criar Pedido</a>
-    <a href="mapa.html" class="btn-header">Mapa</a>
-    <a href="entregas.html" class="btn-header">Entregas</a>
-    <a href="demandas.html" class="btn-header">Demandas</a>
-    <a href="embarque.html" class="btn-header">Embarque</a>
+    <a href="index.html" class="btn-header">Criar Pedidos</a>
+    <a href="demandas.html" class="btn-header">Total Pedidos</a>
+    <span class="btn-header" style="opacity:.4;pointer-events:none;background:rgba(255,255,255,.08);cursor:default">Lista Pedidos</span>
+    <a href="mapa.html" class="btn-header">Mapa de Pedidos</a>
+    <a href="entregas.html" class="btn-header">Plano de entrega</a>
+    <a href="embarque.html" class="btn-header">Demanda de embarque</a>
+    <a href="em_rota.html" class="btn-header">Entregas em rota</a>
     <button class="btn-header" onclick="document.getElementById('inp-master').click()">Subir Master</button>
     <input type="file" id="inp-master" accept=".xlsx" style="display:none" onchange="uploadMaster(this)">
   </div>
