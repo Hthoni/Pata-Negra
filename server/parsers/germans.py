@@ -1,6 +1,15 @@
 """
-Parser Germans — formato TOTVS, itens em uma única linha (nome entre
-seq e embalagem), sufixo do nome na linha seguinte.
+Parser Germans (Supermercados Campeão) — formato TOTVS.
+Pedido multi-página (2 págs por pedido). Itens numa linha, nome podendo
+continuar na linha seguinte; algumas linhas sem Cód. Forn (só a Seq).
+
+Robustez:
+ - embalagem = primeiro token CX/KG SEGUIDO de número (evita o 'KG' que faz
+   parte do nome do produto, ex.: 'BACON PORC KG');
+ - Cód. Forn opcional (linha pode começar pela Seq, ex.: INGRED FEIJOADA);
+ - colunas de CX e KG tratadas separadamente (MINI COSTELA é faturado em KG);
+ - kg físico = Valor Item ÷ Valor Unit (preço é por kg) — robusto a colunas
+   extras que o TOTVS às vezes insere.
 """
 import io
 import re
@@ -9,6 +18,45 @@ from perfil import processar_item
 
 CNPJ_DISTRIBUIDORA = '56.423.719'
 CNPJ_INDUSTRIA = '10.171.633'
+
+
+def _num(s):
+    return float(str(s).replace('.', '').replace(',', '.'))
+
+
+def _parse_item(ln, prox):
+    parts = ln.split()
+    if not parts or not re.match(r'^\d{4,6}$', parts[0]):
+        return None
+    # embalagem = primeiro CX/KG cujo próximo token é numérico
+    emb_j = None
+    for j, p in enumerate(parts):
+        if p in ('CX', 'KG') and j + 1 < len(parts) and re.match(r'^[\d.,]+$', parts[j + 1]):
+            emb_j = j
+            break
+    if emb_j is None:
+        return None
+    emb = parts[emb_j]
+    # nome = tokens entre os dígitos iniciais (cod/seq) e a embalagem
+    k = 0
+    while k < len(parts) and re.match(r'^\d{3,6}$', parts[k]):
+        k += 1
+    nome = ' '.join(parts[k:emb_j])
+    nums = parts[emb_j + 1:]
+    try:
+        if emb == 'CX':
+            preco = _num(nums[3]); total = _num(nums[5])
+        else:  # KG
+            preco = _num(nums[2]); total = _num(nums[4])
+    except (IndexError, ValueError):
+        return None
+    # sufixo do nome na próxima linha (não puxa '- REF:', 'EANs', códigos)
+    if prox and len(prox) < 30 and not prox.startswith(('EANs', 'TOTAIS', '- REF')):
+        suf = re.sub(r'\bKG\b', '', prox).strip().rstrip('-').strip()
+        if suf and not suf.upper().startswith('REF'):
+            nome = (nome + ' ' + suf).strip()
+    kg = round(total / preco, 3) if preco else 0.0
+    return {'cod': parts[0], 'nome': nome, 'kg': kg, 'preco': preco, 'total': total}
 
 
 def parse(pdf_bytes, produtos):
@@ -36,57 +84,30 @@ def parse(pdf_bytes, produtos):
             for ln in lines:
                 found = re.findall(r'\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}', ln)
                 if len(found) >= 2:
-                    cnpj = found[1]
-                    break
+                    cnpj = found[1]; break
                 elif len(found) == 1 and CNPJ_INDUSTRIA not in found[0] and CNPJ_DISTRIBUIDORA not in found[0]:
-                    cnpj = found[0]
-                    break
+                    cnpj = found[0]; break
 
-            cnpj_forn = fm(r'CNPJ\s+([\d./\-]+)\s+Inscrição')
-            empresa = 1 if CNPJ_INDUSTRIA.replace('.', '') in cnpj_forn.replace('.', '').replace('-', '') else 2
+            cnpj_forn = fm(r'CNPJ\s+([\d./\- ]+?)\s+Inscri')
+            empresa = 1 if CNPJ_INDUSTRIA.replace('.', '') in cnpj_forn.replace('.', '').replace('-', '').replace(' ', '') else 2
 
-            filial_m = re.search(r'COMESTIVEI\s+(.+?)$', txt1, re.M)
+            filial_m = re.search(r'COMESTIVEI?\s+(.+?)$', txt1, re.M)
             filial = filial_m.group(1).strip() if filial_m else 'CAMPEAO - CORDOVIL'
-            endereco = fm(r'Endereço (RUA CORDOVIL[^\n]+?)\s{2,}')
-            if not endereco:
-                endereco = 'RUA CORDOVIL-1000, PARADA DE LUCAS'
+            endereco = 'RUA CORDOVIL-1000, PARADA DE LUCAS'
 
-            reLinhaItem = re.compile(r'^(\d{5,6})\s+\d+\s+')
             itens = []
             for i, ln in enumerate(lines):
-                if not reLinhaItem.match(ln.strip()):
+                prox = lines[i + 1].strip() if i + 1 < len(lines) else ''
+                d = _parse_item(ln.strip(), prox)
+                if not d:
                     continue
-                parts = ln.strip().split()
-                cod = parts[0]
-                for j, p in enumerate(parts):
-                    if p in ('KG', 'CX') and j >= 3:
-                        nome_raw = ' '.join(parts[2:j])
-                        emb_tipo = p
-                        try:
-                            qtde_emb = int(parts[j + 1])
-                            preco = float(parts[j + 4].replace('.', '').replace(',', '.'))
-                            total = float(parts[j + 6].replace('.', '').replace(',', '.'))
-                            # Quantidade derivada de total ÷ preço: robusto ao TOTVS,
-                            # que às vezes insere colunas extras entre embalagem e
-                            # quantidade (deslocando a posição). Fallback posicional.
-                            if preco:
-                                qtde_ped = round(total / preco, 3)
-                            else:
-                                qtde_ped = float(parts[j + 2].replace('.', '').replace(',', '.'))
-                        except (IndexError, ValueError):
-                            break
-                        if i + 1 < len(lines):
-                            prox = lines[i + 1].strip()
-                            if prox and not prox.startswith('EANs') and not prox.startswith('TOTAIS') and len(prox) < 30:
-                                sufixo = re.sub(r'\bKG\b', '', prox).strip()
-                                if sufixo:
-                                    nome_raw = (nome_raw + ' ' + sufixo).strip()
-                        it = processar_item(cod, nome_raw, emb_tipo, qtde_emb, qtde_ped, preco, total, produtos)
-                        itens.append(it)
-                        break
+                # kg já é físico -> passa como KG p/ processar_item não multiplicar
+                it = processar_item(d['cod'], d['nome'], 'KG', 1, d['kg'], d['preco'], d['total'], produtos)
+                it['empresa'] = empresa
+                itens.append(it)
 
             if itens:
                 filiais.append({'filial': filial, 'pedidoNum': pedidoNum, 'cnpj': cnpj,
-                                 'endereco': endereco, 'dataPedido': dataPedido, 'dataEntrega': dataEntrega,
-                                 'condPgto': condPgto, 'empresa': empresa, 'itens': itens})
+                                'endereco': endereco, 'dataPedido': dataPedido, 'dataEntrega': dataEntrega,
+                                'condPgto': condPgto, 'empresa': empresa, 'itens': itens})
     return filiais
