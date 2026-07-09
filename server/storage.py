@@ -377,24 +377,72 @@ def registrar_login(usuario, ok):
     b.upload_from_string(json.dumps(logs, ensure_ascii=False),
                          content_type='application/json')
 
-# Sessões (tokens) — guardadas em memória do processo. Simples e suficiente
-# para controle de acesso; se o container reinicia, pede login de novo.
-_SESSOES = {}
+# Sessões: token AUTO-VALIDÁVEL, assinado com HMAC. NÃO depende de memória
+# do processo — qualquer instância do Cloud Run valida qualquer token e não
+# desloga em restart/deploy (era a causa do "algumas páginas pedem login de
+# novo": sessão em memória + várias instâncias). Formato do token:
+#   base64url(payload_json) + '.' + base64url(hmac_sha256).
+import hmac
+import base64
+
 SESSAO_HORAS = 2
+_secret_cache = None
+
+
+def _session_secret():
+    """Segredo p/ assinar tokens. Guardado no bucket (auth/session_secret),
+    gerado uma única vez e cacheado em memória — compartilhado por todas as
+    instâncias, então o token vale em qualquer uma."""
+    global _secret_cache
+    if _secret_cache is not None:
+        return _secret_cache
+    blob = _bucket().blob('auth/session_secret')
+    if blob.exists():
+        _secret_cache = blob.download_as_bytes()
+    else:
+        _secret_cache = secrets.token_bytes(32)
+        try:
+            blob.upload_from_string(_secret_cache, content_type='application/octet-stream')
+        except Exception:
+            pass
+    return _secret_cache
+
+
+def _b64e(b):
+    return base64.urlsafe_b64encode(b).decode('ascii').rstrip('=')
+
+
+def _b64d(s):
+    return base64.urlsafe_b64decode(s + '=' * (-len(s) % 4))
+
+
+def _assina(payload_b64):
+    return _b64e(hmac.new(_session_secret(), payload_b64.encode('ascii'),
+                          hashlib.sha256).digest())
+
 
 def criar_sessao(usuario, papel, codRep):
-    token = secrets.token_urlsafe(24)
     exp = datetime.datetime.utcnow() + datetime.timedelta(hours=SESSAO_HORAS)
-    _SESSOES[token] = {'usuario': usuario, 'papel': papel,
-                       'codRepresentante': codRep, 'exp': exp}
-    return token
+    payload = {'usuario': usuario, 'papel': papel,
+               'codRepresentante': codRep, 'exp': exp.isoformat()}
+    p = _b64e(json.dumps(payload, ensure_ascii=False).encode('utf-8'))
+    return p + '.' + _assina(p)
+
 
 def validar_sessao(token):
-    s = _SESSOES.get(token)
-    if not s: return None
-    if datetime.datetime.utcnow() > s['exp']:
-        _SESSOES.pop(token, None); return None
-    return s
+    try:
+        p, sig = str(token).split('.', 1)
+        if not secrets.compare_digest(sig, _assina(p)):
+            return None
+        dados = json.loads(_b64d(p).decode('utf-8'))
+        if datetime.datetime.utcnow() > datetime.datetime.fromisoformat(dados['exp']):
+            return None
+        return dados
+    except Exception:
+        return None
+
 
 def encerrar_sessao(token):
-    _SESSOES.pop(token, None)
+    # Token stateless: logout é client-side (remove do localStorage) e o token
+    # expira sozinho em SESSAO_HORAS. Nada a revogar no servidor.
+    return
