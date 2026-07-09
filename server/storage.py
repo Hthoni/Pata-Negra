@@ -312,3 +312,89 @@ def registrar_desfecho_entrega(entrega_id, pedido_id, desfecho, snapshot=None):
         ent['finalizadaEm'] = datetime.datetime.utcnow().isoformat()
     salvar_entrega(entrega_id, ent)
     return ent, finalizada
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Autenticação: usuários, sessões e log de login (JSON no bucket)
+# ─────────────────────────────────────────────────────────────────────
+import hashlib
+import secrets
+
+def _usuarios_blob():
+    return _bucket().blob('auth/usuarios.json')
+
+def _logins_blob():
+    return _bucket().blob('auth/logins.json')
+
+def hash_senha(senha, salt=None):
+    """SHA-256 com salt. Retorna 'salt$hash'."""
+    salt = salt or secrets.token_hex(8)
+    h = hashlib.sha256((salt + str(senha)).encode('utf-8')).hexdigest()
+    return f'{salt}${h}'
+
+def verifica_senha(senha, armazenado):
+    try:
+        salt, _ = str(armazenado).split('$', 1)
+    except ValueError:
+        return False
+    return secrets.compare_digest(hash_senha(senha, salt), armazenado)
+
+def carregar_usuarios():
+    """Lista de usuários. Cria o admin inicial se o arquivo não existir."""
+    b = _usuarios_blob()
+    if not b.exists():
+        inicial = [{
+            'usuario': 'hthoni',
+            'senhaHash': hash_senha('Belldelta41!'),
+            'papel': 'admin',
+            'ativo': True,
+            'codRepresentante': '',
+            'nome': 'Henrique (admin)'
+        }]
+        b.upload_from_string(json.dumps(inicial, ensure_ascii=False, indent=2),
+                             content_type='application/json')
+        return inicial
+    return json.loads(b.download_as_bytes().decode('utf-8'))
+
+def salvar_usuarios(lista):
+    _usuarios_blob().upload_from_string(
+        json.dumps(lista, ensure_ascii=False, indent=2),
+        content_type='application/json')
+
+def registrar_login(usuario, ok):
+    """Append de um registro de login (quem, quando, sucesso)."""
+    b = _logins_blob()
+    logs = []
+    if b.exists():
+        try: logs = json.loads(b.download_as_bytes().decode('utf-8'))
+        except Exception: logs = []
+    logs.append({
+        'usuario': usuario,
+        'quando': datetime.datetime.utcnow().isoformat() + 'Z',
+        'ok': bool(ok)
+    })
+    logs = logs[-5000:]  # mantém os últimos 5000
+    b.upload_from_string(json.dumps(logs, ensure_ascii=False),
+                         content_type='application/json')
+
+# Sessões (tokens) — guardadas em memória do processo. Simples e suficiente
+# para controle de acesso; se o container reinicia, pede login de novo.
+_SESSOES = {}
+SESSAO_HORAS = 2
+
+def criar_sessao(usuario, papel, codRep):
+    token = secrets.token_urlsafe(24)
+    exp = datetime.datetime.utcnow() + datetime.timedelta(hours=SESSAO_HORAS)
+    _SESSOES[token] = {'usuario': usuario, 'papel': papel,
+                       'codRepresentante': codRep, 'exp': exp}
+    return token
+
+def validar_sessao(token):
+    s = _SESSOES.get(token)
+    if not s: return None
+    if datetime.datetime.utcnow() > s['exp']:
+        _SESSOES.pop(token, None); return None
+    return s
+
+def encerrar_sessao(token):
+    _SESSOES.pop(token, None)
