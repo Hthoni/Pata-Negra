@@ -4,10 +4,19 @@ Armazenamento de perfis de clientes no Google Cloud Storage.
 import os
 import json
 import datetime
+from concurrent.futures import ThreadPoolExecutor
 from google.cloud import storage as gcs
 
 GCS_BUCKET_NAME = os.environ.get('GCS_BUCKET', 'pata-negra-perfis')
 _gcs_client = None
+
+
+def _baixar_json(blob):
+    """Baixa e faz parse de um blob JSON; None em erro (usado no paralelo)."""
+    try:
+        return json.loads(blob.download_as_bytes())
+    except Exception:
+        return None
 
 
 def _bucket():
@@ -130,18 +139,13 @@ def atualizar_status_romaneio(romaneio_id, status, data=None, falha=False):
 
 
 def listar_romaneios():
-    """Lista todos os romaneios pendentes. Retorna lista de dicts."""
-    blobs = _romaneios_bucket().list_blobs()
-    result = []
-    for blob in blobs:
-        if not blob.name.endswith('.json'):
-            continue
-        try:
-            data = json.loads(blob.download_as_bytes())
-            result.append(data)
-        except Exception:
-            pass
-    return result
+    """Lista todos os romaneios. Baixa os JSONs em paralelo (o gargalo era
+    baixar um a um, em série — com centenas de pedidos ficava lento)."""
+    blobs = [b for b in _romaneios_bucket().list_blobs() if b.name.endswith('.json')]
+    if not blobs:
+        return []
+    with ThreadPoolExecutor(max_workers=32) as ex:
+        return [d for d in ex.map(_baixar_json, blobs) if d is not None]
 
 
 def salvar_pedido_pdf(romaneio_id, pdf_bytes):
@@ -267,16 +271,12 @@ def carregar_entrega(entrega_id):
 
 
 def listar_entregas():
-    """Lista todas as entregas salvas. Retorna lista de dicts."""
-    result = []
-    for blob in _entregas_bucket().list_blobs():
-        if not blob.name.endswith('.json'):
-            continue
-        try:
-            result.append(json.loads(blob.download_as_bytes()))
-        except Exception:
-            pass
-    return result
+    """Lista todas as entregas salvas. Baixa os JSONs em paralelo."""
+    blobs = [b for b in _entregas_bucket().list_blobs() if b.name.endswith('.json')]
+    if not blobs:
+        return []
+    with ThreadPoolExecutor(max_workers=32) as ex:
+        return [d for d in ex.map(_baixar_json, blobs) if d is not None]
 
 
 def deletar_entrega(entrega_id):
