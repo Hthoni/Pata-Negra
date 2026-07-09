@@ -254,12 +254,24 @@ def set_estoque():
 @app.route('/embarque')
 def embarque():
     """Painel de embarque: por produto (ordem da master, linha a linha),
-    o estoque de produtos acabados, o volume EM ROTA (pedidos dentro das
-    entregas) e o quanto falta produzir (em_rota - estoque, mínimo 0)."""
+    o estoque de produtos acabados, o volume a EMBARCAR (pedidos das entregas
+    em PLANEJAMENTO — as já despachadas/em rota saem da conta, pois já deixaram
+    a fábrica) e o quanto falta produzir (embarcar - estoque, mínimo 0).
+    A key da resposta segue 'emRota' por compatibilidade com o front."""
     try:
-        emrota = [r for r in listar_romaneios() if r.get('status') == 'em_rota']
+        # pedidos das entregas ativas em planejamento (em rota já foi embarcado)
+        ids_plan = set()
+        for e in listar_entregas():
+            if e.get('status', 'em_andamento') == 'finalizada':
+                continue
+            if (e.get('fase') or 'planejamento') != 'planejamento':
+                continue
+            for pid in e.get('pedidoIds', []):
+                ids_plan.add(pid)
         agregado = {}
-        for r in emrota:
+        for r in listar_romaneios():
+            if r.get('id') not in ids_plan:
+                continue
             for it in (r.get('itens') or []):
                 cod = str(it.get('cod') or '').strip()
                 kg = float(it.get('kg') or 0)
@@ -340,10 +352,12 @@ def set_status_romaneio(romaneio_id):
 
 @app.route('/entregas', methods=['GET'])
 def get_entregas():
-    """Lista entregas. Por padrão as ativas (em_andamento). ?status=finalizada
-    devolve o histórico (últimos 20 dias)."""
+    """Lista entregas. Por padrão as ativas (em_andamento). ?fase=planejamento|em_rota
+    filtra as ativas por fase (entrega sem fase conta como 'planejamento').
+    ?status=finalizada devolve o histórico (últimos 20 dias)."""
     try:
         filtro = (request.args.get('status') or 'em_andamento').strip()
+        fase = (request.args.get('fase') or '').strip()
         todas = listar_entregas()
         if filtro == 'finalizada':
             limite = datetime.datetime.utcnow() - datetime.timedelta(days=20)
@@ -360,7 +374,10 @@ def get_entregas():
             out.sort(key=lambda x: x.get('finalizadaEm', ''), reverse=True)
             return jsonify(out)
         # ativas: em_andamento (default) — trata ausência de status como ativa
-        return jsonify([e for e in todas if e.get('status', 'em_andamento') != 'finalizada'])
+        ativas = [e for e in todas if e.get('status', 'em_andamento') != 'finalizada']
+        if fase:
+            ativas = [e for e in ativas if (e.get('fase') or 'planejamento') == fase]
+        return jsonify(ativas)
     except Exception as e:
         return jsonify({'erro': str(e)}), 500
 
@@ -392,7 +409,7 @@ def criar_entrega():
 
         eid = f"ENT-{datetime.datetime.utcnow().strftime('%Y%m%d-%H%M%S')}"
         entrega = {'id': eid, 'nome': nome, 'criadaEm': datetime.datetime.utcnow().isoformat(),
-                   'status': 'em_andamento', 'pedidoIds': ids}
+                   'status': 'em_andamento', 'fase': 'planejamento', 'pedidoIds': ids}
         salvar_entrega(eid, entrega)
         # marca os pedidos como em_rota, carimbando a entrega
         for pid in ids:
@@ -493,6 +510,33 @@ def remover_pedido_entrega(entrega_id):
         ent['pedidoIds'] = ids
         salvar_entrega(entrega_id, ent)
         return jsonify({'ok': True, 'entregaVazia': False})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'erro': str(e)}), 500
+
+
+@app.route('/entregas/<entrega_id>/fase', methods=['POST'])
+def set_fase_entrega(entrega_id):
+    """Alterna a fase de uma entrega: 'planejamento' <-> 'em_rota'.
+    'em_rota' = despachada (saiu da fábrica) -> deixa de contar no /embarque.
+    Os pedidos continuam com status 'em_rota' nas duas fases (mapa/pedidos
+    não mudam); a fase vive só na entrega."""
+    body = request.get_json(silent=True) or {}
+    nova = (body.get('fase') or '').strip()
+    if nova not in ('planejamento', 'em_rota'):
+        return jsonify({'erro': 'fase invalida'}), 400
+    try:
+        ent = carregar_entrega(entrega_id)
+        if not ent:
+            return jsonify({'erro': 'Entrega não encontrada'}), 404
+        ent['fase'] = nova
+        carimbo = datetime.datetime.utcnow().isoformat()
+        if nova == 'em_rota':
+            ent['despachadaEm'] = carimbo
+        else:
+            ent.pop('despachadaEm', None)
+        salvar_entrega(entrega_id, ent)
+        return jsonify({'ok': True, 'fase': nova})
     except Exception as e:
         traceback.print_exc()
         return jsonify({'erro': str(e)}), 500
