@@ -162,7 +162,7 @@
 <body>
   <script>
 (function(){
-  var SRV = window.SERVER_URL || 'https://pata-negra-staging-784065203515.us-central1.run.app';
+  var SRV = window.SERVER_URL || 'https://pata-negra-784065203515.us-central1.run.app';
   var t = localStorage.getItem('pn_token');
   if(!t){ location.replace('login.html'); return; }
   var x = new XMLHttpRequest();
@@ -250,7 +250,7 @@
 </div>
 
 <script>
-  var SERVER_URL = 'https://pata-negra-staging-784065203515.us-central1.run.app';
+  var SERVER_URL = 'https://pata-negra-784065203515.us-central1.run.app';
   function sair(){ localStorage.removeItem('pn_token'); location.replace('login.html'); }
   var romaneios = [];
   var pendingId = null;
