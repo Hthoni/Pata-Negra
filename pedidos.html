@@ -611,7 +611,7 @@
   var entregasAtivas = [];
   async function carregarEntregasAtivas() {
     try {
-      var d = await fetch(SERVER_URL + '/entregas').then(function(r){ return r.json(); });
+      var d = await fetch(SERVER_URL + '/entregas?fase=planejamento').then(function(r){ return r.json(); });
       var lista = (d.entregas || d || []);
       entregasAtivas = lista.filter(function(e){ return e.status !== 'finalizada'; })
         .sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||''); });
