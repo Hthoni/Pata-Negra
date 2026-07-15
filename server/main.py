@@ -733,17 +733,44 @@ def health():
     return jsonify(resp)
 
 
+def _validar_perfil(cliente, perfil_bytes):
+    """Confere o perfil no momento do upload e devolve uma lista de AVISOS
+    (não bloqueia o salvamento; é para corrigir o perfil na fonte). Foca no
+    que faz o pedido sumir/ficar torto: filial sem lat/lng (não plota no mapa),
+    tabela de filiais vazia e perfil sem produtos."""
+    avisos = []
+    try:
+        _, produtos = ler_perfil(perfil_bytes)
+        filiais = ler_filiais(perfil_bytes)
+        multi = _cliente_meta(cliente).get('multiFilial', True) if _cliente_meta(cliente) else True
+        if not produtos:
+            avisos.append('O perfil não tem nenhum produto cadastrado (coluna C a partir da linha 8).')
+        if multi and not filiais:
+            avisos.append('A tabela de filiais (colunas M–T) está vazia — os pedidos não vão casar filial/região/coordenada.')
+        for cnpj, info in filiais.items():
+            nome = info.get('nome') or f'CNPJ {cnpj}'
+            if info.get('lat') is None or info.get('lng') is None:
+                avisos.append(f'Filial "{nome}" sem lat/lng (colunas S e T) — o pedido entra na lista, mas NÃO aparece no mapa.')
+    except Exception as e:
+        avisos.append(f'Não consegui validar o perfil por completo: {e}')
+    return avisos
+
+
 @app.route('/perfil/<cliente>', methods=['POST'])
 def upload_perfil(cliente):
-    """Salva ou atualiza o perfil de um cliente no servidor."""
+    """Salva ou atualiza o perfil de um cliente no servidor. Valida e devolve
+    'avisos' (ex.: filial sem coordenada) para o front mostrar na tela."""
     if cliente not in CLIENTES and cliente not in CLIENTES_MANUAIS:
         return jsonify({'erro': f'Cliente inválido: {cliente}'}), 400
     f = request.files.get('perfil')
     if not f:
         return jsonify({'erro': 'Envie o arquivo perfil'}), 400
     filename = f.filename or ''
-    salvar_perfil(cliente, f.read(), filename)
-    return jsonify({'ok': True, 'cliente': cliente, 'filename': filename, 'mensagem': 'Perfil salvo com sucesso'})
+    perfil_bytes = f.read()
+    salvar_perfil(cliente, perfil_bytes, filename)
+    avisos = _validar_perfil(cliente, perfil_bytes)
+    return jsonify({'ok': True, 'cliente': cliente, 'filename': filename,
+                    'mensagem': 'Perfil salvo com sucesso', 'avisos': avisos})
 
 
 @app.route('/master', methods=['POST'])
@@ -867,13 +894,15 @@ def processar():
 
         arquivos, eb_simples, pb_simples, split = _gerar_arquivos_por_empresa(dados, filiais, logo_bytes=logo_bytes)
 
-        # Salvar pin de mapa para cada filial com coordenadas
+        # Salvar o romaneio de cada filial. O romaneio alimenta a LISTA e o
+        # mapa; salvamos SEMPRE que houver itens, mesmo sem lat/lng (aí o
+        # pedido aparece na lista e o mapa só não plota o pino — o mapa já
+        # ignora romaneio sem coordenada). Antes, sem coordenada o pedido
+        # sumia da lista também (bug: filial sem lat/lng no perfil).
         from datetime import datetime
         for fd in filiais:
             lat = fd.get('lat')
             lng = fd.get('lng')
-            if lat is None or lng is None:
-                continue
             its = fd.get('itens', [])
             if not its:
                 continue
@@ -892,7 +921,7 @@ def processar():
                 'lng': lng,
                 'dataPedido': fd.get('dataPedido', fd.get('dataEmissao', '')),
                 'dataGeracao': datetime.utcnow().isoformat(),
-                'kgPlanejados': round(sum(_kg_pdf(i) for i in its), 1),
+                'kgPlanejados': round(sum(float(i.get('kgPlanejados', 0)) for i in its), 1),
                 'itens': [{'cod': str(i.get('codInterno') or '').strip(), 'nome': str(i.get('nomeProduto') or ''), 'kg': round(_kg_pdf(i), 3)} for i in its],
                 'pedidoNum': fd.get('pedidoNum', ''),
                 'dataEntregaProgramada': data_prog,
@@ -919,11 +948,11 @@ def processar():
             'split': split,
             'filiais': len(filiais),
             'itens': len(todos_itens),
-            'totalKg': round(sum(_kg_pdf(i) for i in todos_itens), 1),
+            'totalKg': round(sum(i['kgPlanejados'] for i in todos_itens), 1),
             'totalValor': round(sum(i['valorPedido'] for i in todos_itens), 2),
             'resumo': [{'filial': f['filial'], 'pedidoNum': f.get('pedidoNum', ''),
                         'itens': len(f['itens']),
-                        'kg': round(sum(_kg_pdf(i) for i in f['itens']), 1),
+                        'kg': round(sum(i['kgPlanejados'] for i in f['itens']), 1),
                         'valor': round(sum(i['valorPedido'] for i in f['itens']), 2)}
                        for f in filiais],
             'arquivos': arquivos,
@@ -1152,7 +1181,7 @@ def processar_manual():
                 'dataPedido': agora.strftime('%d/%m/%Y'),
                 'dataGeracao': datetime.datetime.utcnow().isoformat(),
                 'dataEntregaProgramada': data_prog,
-                'kgPlanejados': round(sum(_kg_pdf(i) for i in itens), 1),
+                'kgPlanejados': round(sum(float(i.get('kgPlanejados', 0)) for i in itens), 1),
                 'itens': [{'cod': str(i.get('codInterno') or '').strip(), 'nome': str(i.get('nomeProduto') or ''), 'kg': round(_kg_pdf(i), 3)} for i in itens],
                 'pedidoNum': pedido_num,
             })
@@ -1180,12 +1209,12 @@ def processar_manual():
             'split': split,
             'filiais': 1,
             'itens': len(itens),
-            'totalKg': round(sum(_kg_pdf(i) for i in itens), 1),
+            'totalKg': round(sum(i['kgPlanejados'] for i in itens), 1),
             'totalValor': round(sum(i['valorPedido'] for i in itens), 2),
             'pedidoNum': pedido_num,
             'resumo': [{'filial': filial_info['nome'], 'pedidoNum': pedido_num,
                         'itens': len(itens),
-                        'kg': round(sum(_kg_pdf(i) for i in itens), 1),
+                        'kg': round(sum(i['kgPlanejados'] for i in itens), 1),
                         'valor': round(sum(i['valorPedido'] for i in itens), 2)}],
             'arquivos': arquivos,
             'excel': base64.b64encode(eb_simples).decode() if eb_simples is not None else '',
