@@ -33,8 +33,8 @@ def parse(pdf_bytes, produtos):
 
     # Nº do pedido: usa o do RODAPÉ (Observação -> 'Pedido: NNNNNN'), que é o
     # número que o Henrique controla; cai no Nº do cabeçalho só se faltar.
-    pedidoNum = (fm(r'Observaç[ãa]o\s*Pedido:\s*(\d+)')
-                 or fm(r'\bPedido:\s*(\d+)')
+    pedidoNum = (fm(r'Observaç[ãa]o\s*Pedido:\s*(\d+(?:-\d+)?)')
+                 or fm(r'\bPedido:\s*(\d+(?:-\d+)?)')
                  or fm(r'Informações sobre PEDIDO.*?Nº\s*(\d+)'))
     dataPedido = fm(r'Data da Venda:\s*([\d/]+)')
     cnpj = fm(r'CNPJ/CPF:\s*([\d./\-]+)')
