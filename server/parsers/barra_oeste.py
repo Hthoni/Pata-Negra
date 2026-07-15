@@ -14,7 +14,7 @@ item a item pelo Perfil: unidFat='cx' -> 'CX' (qtde = nº de caixas ->
 kg = qtde x kgCx); senão 'KG' (qtde já em kg).
 """
 
-__cliente_nome__ = "Supermercado Barra Oeste"
+__cliente_nome__ = "Barra Oeste"
 
 import io
 import re
