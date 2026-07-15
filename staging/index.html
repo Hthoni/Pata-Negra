@@ -491,6 +491,10 @@ async function atualizarPerfil() {
     badge.textContent = '📋 ' + nomeArq;
     badge.style.display = 'inline-block';
     logOk('Perfil de ' + CLIENTES[S.cliente].nome + ' atualizado no servidor.');
+    if (data.avisos && data.avisos.length) {
+      logWarn('⚠ ' + data.avisos.length + ' aviso(s) no perfil — recomendo corrigir:');
+      data.avisos.forEach(function(a){ logWarn('   • ' + a); });
+    }
   } catch(e) {
     logErr('Erro de conexão: '+e.message);
   } finally {
