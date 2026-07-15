@@ -25,7 +25,11 @@ def parse(pdf_bytes, produtos):
         m = re.search(pat, txt, re.I)
         return m.group(1).strip() if m else ''
 
-    pedidoNum = fm(r'Informações sobre PEDIDO.*?Nº\s*(\d+)')
+    # Nº do pedido: usa o do RODAPÉ (Observação -> 'Pedido: NNNNNN'), que é o
+    # número que o Henrique controla; cai no Nº do cabeçalho só se faltar.
+    pedidoNum = (fm(r'Observaç[ãa]o\s*Pedido:\s*(\d+)')
+                 or fm(r'\bPedido:\s*(\d+)')
+                 or fm(r'Informações sobre PEDIDO.*?Nº\s*(\d+)'))
     dataPedido = fm(r'Data da Venda:\s*([\d/]+)')
     cnpj = fm(r'CNPJ/CPF:\s*([\d./\-]+)')
     razao = fm(r'Razão Social:\s*(.+?)\s+E-?mail')
