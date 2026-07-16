@@ -436,13 +436,13 @@
           '</div>' +
         '</div>' +
         '<div class="card-acoes">' +
-          '<button class="btn-pdf" onclick="verPdf(\'' + rom.id + '\')">PDF</button>' +
+          '<button class="btn-pdf" onclick="verPdf(\'' + rom.id + '\',' + JSON.stringify(rom.empresas||[]) + ')">PDF</button>' +
           (emRota
             ? '<button class="btn-sim lock" title="' + (rom.entregaNome || '') + '" onclick="menuRetirar(event,\'' + rom.id + '\')">🔒 ' + (rom.entregaNome || 'Em rota') + '</button>'
             : (noSim
               ? '<button class="btn-sim lock" onclick="menuRetirar(event,\'' + rom.id + '\')">🔒 Simulação</button>'
               : '<button class="btn-sim" onclick="abrirDDEntrega(event,\'' + rom.id + '\')">＋ Entrega</button>')) +
-          '<button class="btn-xls" onclick="baixarExcel(\'' + rom.id + '\')">Gerar xlx</button>' +
+          '<button class="btn-xls" onclick="baixarExcel(\'' + rom.id + '\',' + JSON.stringify(rom.empresas||[]) + ')">Gerar xlx</button>' +
           '<button class="btn-entregar" onclick="confirmarEntrega(\'' + rom.id + '\',\'' + (rom.clienteNome||rom.cliente) + '\',\'' + (rom.filial||'') + '\')">Entregue</button>' +
         '</div>' +
       '</div>';
@@ -452,11 +452,13 @@
     atualizarBotoesFiltro();
   }
 
-  function verPdf(id) {
-    window.open(SERVER_URL + '/romaneio-pdf/' + id, '_blank');
+  function verPdf(id, emps) {
+    var lst = (emps && emps.length > 1) ? emps : [null];
+    lst.forEach(function(e){ window.open(SERVER_URL + '/romaneio-pdf/' + id + (e ? '__e' + e : ''), '_blank'); });
   }
-  function baixarExcel(id) {
-    window.open(SERVER_URL + '/romaneio-excel/' + id, '_blank');
+  function baixarExcel(id, emps) {
+    var lst = (emps && emps.length > 1) ? emps : [null];
+    lst.forEach(function(e){ window.open(SERVER_URL + '/romaneio-excel/' + id + (e ? '__e' + e : ''), '_blank'); });
   }
 
   async function uploadMaster(inp) {
