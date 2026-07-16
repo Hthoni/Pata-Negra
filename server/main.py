@@ -542,6 +542,36 @@ def set_fase_entrega(entrega_id):
         return jsonify({'erro': str(e)}), 500
 
 
+def _empresas_da_filial(fd, dados):
+    """Empresas de faturamento presentes nos itens da filial (1=Indústria,
+    2=Distribuidora). Ex.: [2] só distribuidora; [1, 2] pedido dividido."""
+    return sorted({(i.get('empresa') or dados.get('empresa', 2)) for i in fd.get('itens', [])})
+
+
+def _persistir_arquivos_romaneio(rid, dados, fd, emps, logo_bytes=None):
+    """Salva o PDF e o Excel do romaneio. Se a filial tem as DUAS empresas,
+    salva um par por empresa (ids sufixados '{rid}__e{N}', com empresa_override)
+    — pra bater com o split do index e servir NF separada por emitente. Com uma
+    empresa só, salva um arquivo único ('{rid}'), como antes. O front decide se
+    baixa 1 ou 2 arquivos pelo campo 'empresas' do romaneio."""
+    try:
+        if len(emps) > 1:
+            for e in emps:
+                salvar_pedido_pdf(f'{rid}__e{e}', gerar_pdf({**dados, 'filiais': [fd]}, empresa_override=e, logo_bytes=logo_bytes))
+        else:
+            salvar_pedido_pdf(rid, gerar_pdf({**dados, 'filiais': [fd]}, logo_bytes=logo_bytes))
+    except Exception as _e:
+        print(f'[WARN] falha ao salvar PDF do romaneio {rid}: {_e}')
+    try:
+        if len(emps) > 1:
+            for e in emps:
+                salvar_pedido_excel(f'{rid}__e{e}', gerar_excel({**dados, 'filiais': [fd]}, empresa_override=e))
+        else:
+            salvar_pedido_excel(rid, gerar_excel({**dados, 'filiais': [fd]}))
+    except Exception as _e:
+        print(f'[WARN] falha ao salvar Excel do romaneio {rid}: {_e}')
+
+
 @app.route('/romaneio-pdf/<rid>')
 def romaneio_pdf(rid):
     """Serve inline o PDF da filial associado a um romaneio (abre no navegador)."""
@@ -906,6 +936,7 @@ def processar():
             its = fd.get('itens', [])
             if not its:
                 continue
+            emps = _empresas_da_filial(fd, dados)
             ts = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
             filial_slug = _re.sub(r'[^a-z0-9]', '_', fd['filial'].lower())
             rid = f"{cliente}_{filial_slug}_{ts}"
@@ -924,23 +955,14 @@ def processar():
                 'kgPlanejados': round(sum(float(i.get('kgPlanejados', 0)) for i in its), 1),
                 'itens': [{'cod': str(i.get('codInterno') or '').strip(), 'nome': str(i.get('nomeProduto') or ''), 'kg': round(_kg_pdf(i), 3)} for i in its],
                 'pedidoNum': fd.get('pedidoNum', ''),
+                'empresas': emps,
                 'dataEntregaProgramada': data_prog,
             })
             # Se o pedido foi programado, usa a data programada no campo Data Entrega
             if data_prog:
                 fd['dataEntrega'] = _fmt_data_prog(data_prog)
-            # Persistir o PDF da filial junto ao romaneio (best-effort)
-            try:
-                pdf_fd = gerar_pdf({**dados, 'filiais': [fd]}, logo_bytes=logo_bytes)
-                salvar_pedido_pdf(rid, pdf_fd)
-            except Exception as _e:
-                print(f'[WARN] falha ao salvar PDF do romaneio {rid}: {_e}')
-            # Persistir tambem o Excel da filial junto ao romaneio (best-effort)
-            try:
-                xls_fd = gerar_excel({**dados, 'filiais': [fd]})
-                salvar_pedido_excel(rid, xls_fd)
-            except Exception as _e:
-                print(f'[WARN] falha ao salvar Excel do romaneio {rid}: {_e}')
+            # Persistir PDF+Excel do romaneio (separados por empresa se for pedido dividido)
+            _persistir_arquivos_romaneio(rid, dados, fd, emps, logo_bytes)
 
         todos_itens = [i for f in filiais for i in f['itens']]
         return jsonify({
@@ -1184,21 +1206,13 @@ def processar_manual():
                 'kgPlanejados': round(sum(float(i.get('kgPlanejados', 0)) for i in itens), 1),
                 'itens': [{'cod': str(i.get('codInterno') or '').strip(), 'nome': str(i.get('nomeProduto') or ''), 'kg': round(_kg_pdf(i), 3)} for i in itens],
                 'pedidoNum': pedido_num,
+                'empresas': _empresas_da_filial(filiais[0], dados),
             })
-            # Persistir o PDF da filial única junto ao romaneio (best-effort)
+            # Persistir PDF+Excel do romaneio (separados por empresa se dividido)
             if data_prog:
                 filiais[0]['dataEntrega'] = _fmt_data_prog(data_prog)
-            try:
-                pdf_fd = gerar_pdf({**dados, 'filiais': [filiais[0]]}, logo_bytes=logo_bytes)
-                salvar_pedido_pdf(rid, pdf_fd)
-            except Exception as _e:
-                print(f'[WARN] falha ao salvar PDF do romaneio {rid}: {_e}')
-            # Persistir tambem o Excel da filial junto ao romaneio (best-effort)
-            try:
-                xls_fd = gerar_excel({**dados, 'filiais': [filiais[0]]})
-                salvar_pedido_excel(rid, xls_fd)
-            except Exception as _e:
-                print(f'[WARN] falha ao salvar Excel do romaneio {rid}: {_e}')
+            _persistir_arquivos_romaneio(rid, dados, filiais[0],
+                                         _empresas_da_filial(filiais[0], dados), logo_bytes)
         else:
             print(f'[INFO] romaneio não salvo — lat={lat} lng={lng}')
 
