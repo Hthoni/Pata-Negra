@@ -410,8 +410,8 @@
       '<div class="popup-row"><span class="popup-label">Kg planejados</span><span class="popup-valor">' + (rom.kgPlanejados || '—') + ' kg</span></div>' +
       '<span class="popup-idade" style="background:' + c.bg + ';color:' + c.txt + '">' + (isDormente(rom) ? 'Programado' : (c.label + ' — ' + Math.round(horas) + 'h')) + '</span>' +
       '<div class="popup-acoes">' +
-        '<button class="popup-btn popup-btn-pdf" onclick="verPdf(\'' + rom.id + '\')">Ver PDF</button>' +
-        '<button class="popup-btn popup-btn-xls" onclick="baixarExcel(\'' + rom.id + '\')">Gerar xlx</button>' +
+        '<button class="popup-btn popup-btn-pdf" onclick="verPdf(\'' + rom.id + '\',' + JSON.stringify(rom.empresas||[]) + ')">Ver PDF</button>' +
+        '<button class="popup-btn popup-btn-xls" onclick="baixarExcel(\'' + rom.id + '\',' + JSON.stringify(rom.empresas||[]) + ')">Gerar xlx</button>' +
       '</div>' +
       (rom.status === 'em_rota'
         ? '<button class="popup-btn" style="width:100%;margin-top:6px;color:#555;border-color:#aaa;background:#f2f2f2" onclick="menuRetirarMapa(event,\'' + rom.id + '\')">🔒 ' + (rom.entregaNome || 'Em rota') + '</button>'
@@ -808,11 +808,13 @@
   });
 
   // ── Ações do popup ──────────────────────────────────────────────────
-  function verPdf(id) {
-    window.open(SERVER_URL + '/romaneio-pdf/' + id, '_blank');
+  function verPdf(id, emps) {
+    var lst = (emps && emps.length > 1) ? emps : [null];
+    lst.forEach(function(e){ window.open(SERVER_URL + '/romaneio-pdf/' + id + (e ? '__e' + e : ''), '_blank'); });
   }
-  function baixarExcel(id) {
-    window.open(SERVER_URL + '/romaneio-excel/' + id, '_blank');
+  function baixarExcel(id, emps) {
+    var lst = (emps && emps.length > 1) ? emps : [null];
+    lst.forEach(function(e){ window.open(SERVER_URL + '/romaneio-excel/' + id + (e ? '__e' + e : ''), '_blank'); });
   }
 
   function marcarFalhou(id) {
