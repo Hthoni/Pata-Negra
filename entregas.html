@@ -241,8 +241,8 @@
             '<div class="ped-regiao">' + escapeHtml(r.regiao || '') + '</div>' +
             '<div class="ped-idade" style="background:' + cp.bg + ';color:' + cp.txt + '">' + Math.round(hp) + 'h</div>' +
             '<div class="ped-acoes">' +
-              '<button class="b-pdf" onclick="verPdf(\'' + r.id + '\')">Ver PDF</button>' +
-              '<button class="b-xls" onclick="baixarExcel(\'' + r.id + '\')">Gerar xlx</button>' +
+              '<button class="b-pdf" onclick="verPdf(\'' + r.id + '\',' + JSON.stringify(r.empresas||[]) + ')">Ver PDF</button>' +
+              '<button class="b-xls" onclick="baixarExcel(\'' + r.id + '\',' + JSON.stringify(r.empresas||[]) + ')">Gerar xlx</button>' +
               '<button class="b-falhou" onclick="retirarPedido(\'' + ent.id + '\',\'' + r.id + '\',\'' + escapeAttr(r.clienteNome || r.cliente || '') + '\')">Retirar da entrega</button>' +
             '</div>' +
           '</div>';
@@ -261,8 +261,14 @@
 
   // ── Ações ──────────────────────────────────────────────────────────
   function imprimirRelacao() { window.print(); }
-  function baixarExcel(id) { window.open(SERVER_URL + '/romaneio-excel/' + id, '_blank'); }
-  function verPdf(id) { window.open(SERVER_URL + '/romaneio-pdf/' + id, '_blank'); }
+  function baixarExcel(id, emps) {
+    var lst = (emps && emps.length > 1) ? emps : [null];
+    lst.forEach(function(e){ window.open(SERVER_URL + '/romaneio-excel/' + id + (e ? '__e' + e : ''), '_blank'); });
+  }
+  function verPdf(id, emps) {
+    var lst = (emps && emps.length > 1) ? emps : [null];
+    lst.forEach(function(e){ window.open(SERVER_URL + '/romaneio-pdf/' + id + (e ? '__e' + e : ''), '_blank'); });
+  }
 
   async function marcarPedido(id, desfecho, nome) {
     var msg = (desfecho === 'entregue')
