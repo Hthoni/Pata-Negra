@@ -6,7 +6,7 @@ import io
 from reportlab.lib.pagesizes import landscape, A4
 from reportlab.lib import colors
 from reportlab.lib.units import mm
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, KeepTogether, Image, PageBreak
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, KeepTogether, Image, PageBreak, Spacer
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 import master
@@ -266,8 +266,8 @@ def gerar_pdf_totais(produtos, pedidos, meta):
     doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=16 * mm, bottomMargin=16 * mm,
                             leftMargin=16 * mm, rightMargin=16 * mm,
                             title='Simulacao de Entregas')
-    S_TIT = ParagraphStyle('tit', fontName='Helvetica-Bold', fontSize=15, textColor=ACCENT, spaceAfter=2)
-    S_SUB = ParagraphStyle('sub', fontName='Helvetica', fontSize=10, textColor=colors.HexColor('#555555'), spaceAfter=2)
+    S_TIT = ParagraphStyle('tit', fontName='Helvetica-Bold', fontSize=15, textColor=ACCENT, spaceAfter=7)
+    S_SUB = ParagraphStyle('sub', fontName='Helvetica', fontSize=10, textColor=colors.HexColor('#555555'), leading=14, spaceAfter=12)
     S_WARN = ParagraphStyle('warn', fontName='Helvetica-Bold', fontSize=9, textColor=ACCENT, spaceBefore=4, spaceAfter=2)
     S_SEC = ParagraphStyle('sec', fontName='Helvetica-Bold', fontSize=11, textColor=colors.black, spaceBefore=14, spaceAfter=6)
     S_HDR = ParagraphStyle('hdr', fontName='Helvetica-Bold', fontSize=9.5, textColor=colors.white)
@@ -278,11 +278,13 @@ def gerar_pdf_totais(produtos, pedidos, meta):
     S_PED = ParagraphStyle('ped', fontName='Helvetica', fontSize=9.5, textColor=colors.HexColor('#333333'), leading=14)
 
     story = []
-    story.append(Paragraph('Simulacao de Entregas &mdash; Totais por Produto', S_TIT))
+    titulo = meta.get('titulo') or 'Simulacao de Entregas &mdash; Totais por Produto'
+    story.append(Paragraph(titulo, S_TIT))
     story.append(Paragraph(f"{meta.get('data','')} &nbsp;&bull;&nbsp; {meta.get('nPedidos',0)} pedido(s) &nbsp;&bull;&nbsp; Total: <b>{_fmt(meta.get('totalKg',0))} kg</b>", S_SUB))
     if meta.get('semItens'):
         story.append(Paragraph(f"&#9888; {meta['semItens']} pedido(s) sem detalhamento (gerados antes desta atualizacao) &mdash; nao somados.", S_WARN))
 
+    story.append(Spacer(1, 5 * mm))   # respiro entre o cabeçalho e a faixa vermelha
     data = [[Paragraph('Produto', S_HDR), Paragraph('Kg total', S_HDRR)]]
     for p in produtos:
         st = S_AL if p.get('alerta') else S_IT
