@@ -315,7 +315,7 @@
     try {
       var resp = await fetch(SERVER_URL + '/simular-totais', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: ids })
+        body: JSON.stringify({ ids: ids, titulo: 'Relatório de Pedidos em Rota' })
       });
       if (!resp.ok) { var e = {}; try { e = await resp.json(); } catch (x) {} alert('Erro ao gerar totais: ' + (e.erro || resp.status)); return; }
       var blob = await resp.blob();
