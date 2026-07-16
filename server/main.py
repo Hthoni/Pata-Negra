@@ -67,6 +67,7 @@ CLIENTES_MANUAIS = {
     'mundial_lojas': {'nome': 'Mundial Lojas', 'multiFilial': True},
     'guanabara_central': {'nome': 'Guanabara Central', 'multiFilial': False},
     'mundial_central': {'nome': 'Mundial Central', 'multiFilial': False},
+    'prezunic': {'nome': 'Prezunic', 'multiFilial': False},
 }
 
 
