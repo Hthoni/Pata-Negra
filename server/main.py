@@ -175,6 +175,7 @@ def simular_totais():
             'nPedidos': len(pedidos_incl),
             'totalKg': round(sum(p['kg'] for p in produtos), 1),
             'semItens': sem_itens,
+            'titulo': (body.get('titulo') or '').strip(),  # ex.: 'Relatório de Pedidos em Rota'
         }
         pdf = gerar_pdf_totais(produtos, pedidos_incl, meta)
         return send_file(io.BytesIO(pdf), mimetype='application/pdf',
