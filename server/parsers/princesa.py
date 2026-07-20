@@ -38,7 +38,7 @@ def parse(pdf_bytes, produtos):
 
     # itens: Seq  Cód  Nome  Qtde  IPI%  Peso  Preço/Kg  Total
     reItem = re.compile(
-        r'(\d+)\s+(\d+)\s+([A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇ][^\n]+?)\s+(\d+)\s+[\d,.]+\s+[\d,.]+\s+R\$\s*([\d,.]+)\s+([\d,.]+)',
+        r'(\d+)\s+(\d+(?:-\d+)?)\s+([A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇ][^\n]+?)\s+([\d.,]+)\s+[\d,.]+\s+[\d,.]+\s+R\$\s*([\d,.]+)\s+([\d,.]+)',
         re.M
     )
     itens = []
