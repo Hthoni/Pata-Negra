@@ -69,6 +69,7 @@ CLIENTES_MANUAIS = {
     'mundial_central': {'nome': 'Mundial Central', 'multiFilial': False},
     'prezunic': {'nome': 'Prezunic', 'multiFilial': False},
     'soberano': {'nome': 'Soberano', 'multiFilial': True},
+    'publix': {'nome': 'Publix', 'multiFilial': True},
 }
 
 
