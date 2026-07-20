@@ -79,6 +79,19 @@ def _normaliza_cnpj(cnpj):
     return ''.join(c for c in str(cnpj or '') if c.isdigit())
 
 
+def _coord(v):
+    """Lat/Lng do perfil, tolerante a como o usuário digitou no Excel: aceita
+    número (-22.83) OU texto com vírgula decimal (-22,83, comum no BR). Valor
+    vazio/ruim vira None (a filial fica sem pino no mapa em vez de derrubar a
+    leitura inteira do perfil)."""
+    if v is None:
+        return None
+    try:
+        return float(str(v).strip().replace(',', '.'))
+    except (ValueError, TypeError):
+        return None
+
+
 def ler_filiais(perfil_bytes):
     """Lê a tabela de filiais do Perfil Excel (colunas M:N:O, a partir da
     linha 9): CNPJ | Nome Filial | Número Filial. Opcionalmente também lê
@@ -112,8 +125,8 @@ def ler_filiais(perfil_bytes):
                 'endereco': str(endereco or '').strip(),
                 'cidade': str(cidade or '').strip(),
                 'regiao': str(regiao or '').strip(),
-                'lat': float(lat) if lat is not None else None,
-                'lng': float(lng) if lng is not None else None,
+                'lat': _coord(lat),
+                'lng': _coord(lng),
             }
     return filiais
 
