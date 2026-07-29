@@ -31,6 +31,16 @@ def _normaliza_cnpj(cnpj):
     """Remove formatação do CNPJ, deixando só dígitos. Definida aqui
     localmente pra não depender da versão do perfil.py no servidor."""
     return _re.sub(r'\D', '', str(cnpj or ''))
+
+
+def _pacotes_por_caixa(embalagem):
+    """FIX (29/07/2026): extrai o N de 'CX-N' (ex.: 'CX-40' -> 40), usado
+    para converter itens vendidos em PACOTE ('pct') de nº de pacotes para
+    kg reais. None se não achar um padrão CX-N na embalagem."""
+    m = re.search(r'CX[-\s]?(\d+)', str(embalagem or '').upper())
+    return int(m.group(1)) if m else None
+
+
 import importlib
 import pkgutil
 import parsers
@@ -1129,7 +1139,22 @@ def processar_manual():
                 continue
             kgCx = produto['kgCx']
             unidFat = produto['unidFat']
-            kgPlan = qtde * kgCx if unidFat == 'cx' else qtde
+            # FIX (29/07/2026): itens vendidos em PACOTE ('pct') não tinham
+            # nenhuma conversão aqui — kgPlan ficava com o Nº de pacotes
+            # digitado, tratado como se já fosse kg. Isso inflava o total
+            # em qualquer lugar que usa kgPlanejados direto (card de pedido
+            # na lista/mapa, Excel de upload, Demanda de Produção); só o PDF
+            # de expedição corrigia isoladamente na hora de desenhar
+            # (pdf_gen.py, _kg_pdf). Convertendo aqui, na origem, kgPlan já
+            # nasce em kg reais e todo o resto do sistema fica consistente
+            # automaticamente.
+            if unidFat == 'cx':
+                kgPlan = qtde * kgCx
+            elif unidFat == 'pct':
+                n = _pacotes_por_caixa(produto.get('embalagem', ''))
+                kgPlan = qtde * (kgCx / n) if n else qtde  # sem N legível: mantém como estava (não piora)
+            else:
+                kgPlan = qtde
             preco = produto['precoUnit']
             itens.append({
                 'empresa': produto.get('empresa'),
@@ -1248,7 +1273,3 @@ if __name__ == '__main__':
     import os
     port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port)
-
-
-
-
