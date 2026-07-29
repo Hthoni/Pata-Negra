@@ -17,6 +17,16 @@ Unidade:
 Empresa (faturamento): detectada pelo CNPJ do Fornecedor:
  - 10.171.633 -> Industria  (empresa 1)
  - 56.423.719 -> Distribuidora (empresa 2)
+
+FIX (29/07/2026): _UNID tinha \\b nos dois lados ("\\b(Quilograma|Unidade)\\b").
+Quando o pdfplumber cola o fim do nome do produto direto na coluna de unidade
+sem espaço (ex.: "...PATAQuilograma", visto no pedido Hortifruti 4507891618,
+item "LOMBO SUINO DEF CANADENSE PATA NEGRA kg"), não existe fronteira de
+palavra entre duas letras -> o \\b da esquerda falha -> o item inteiro é
+descartado em silêncio no `continue`, sem erro nenhum. Removido o \\b da
+esquerda (mantido o da direita, que continua protegendo contra casar no meio
+de outra palavra). Comportamento para o caso comum (com espaço antes da
+unidade) não muda.
 """
 
 __cliente_nome__ = "Hortifruti"
@@ -28,7 +38,7 @@ from perfil import processar_item, match_perfil
 
 CNPJ_INDUSTRIA = '10.171.633'
 CNPJ_DISTRIBUIDORA = '56.423.719'
-_UNID = re.compile(r'\b(Quilograma|Unidade)\b', re.I)
+_UNID = re.compile(r'(Quilograma|Unidade)\b', re.I)   # \b só à direita (ver FIX acima)
 _NUM = re.compile(r'\d[\d.,]*')
 
 
