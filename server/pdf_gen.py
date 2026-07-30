@@ -12,33 +12,18 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 import master
 
 
-def _kg_por_pacote(it):
-    """Peso de 1 pacote em kg = kg por caixa ÷ pacotes por caixa.
-    Os pacotes por caixa vêm da embalagem no formato 'CX-N' (ex.: CX-40 -> 40);
-    kg por caixa vem de kgCx. Ex.: CX-40 com kgCx=20 -> 0,5; CX-50 -> 0,4.
-    Fallback: gramas explícitas na embalagem ('400G'), senão 0,5."""
-    import re
-    emb = str(it.get('embalagem', '')).upper()
-    kgcx = float(it.get('kgCx', 0) or 0)
-    m = re.search(r'CX[-\s]?(\d+)', emb)
-    if m and kgcx:
-        n = int(m.group(1))
-        if n:
-            return kgcx / n
-    m = re.search(r'(\d+)\s*G\b', emb)
-    if m:
-        return int(m.group(1)) / 1000.0
-    return 0.5
-
-
 def _kg_pdf(it):
-    """Kg a exibir no PDF de expedição. Itens vendidos em pacote
-    (unidFat='pct') são convertidos de nº de pacotes para kg; os demais
-    já estão em kg. O Excel e o pedido seguem em pacotes — só o PDF converte."""
-    base = float(it.get('kgPlanejados', 0) or 0)
-    if str(it.get('unidFat', '')).lower() == 'pct':
-        return base * _kg_por_pacote(it)
-    return base
+    """Kg a exibir no PDF de expedição.
+
+    FIX (30/07/2026): kgPlanejados já nasce em kg REAIS desde a origem
+    (parsers e /processar-manual, que convertem pacote->kg na hora de
+    calcular o item) — não precisa mais converter pacote aqui. A versão
+    antiga desta função reconvertia (base * kg_por_pacote) em cima de um
+    valor que já estava certo, causando dupla conversão: o PDF saía com
+    metade do peso real para itens vendidos em pacote (ex.: 10 kg reais
+    x 0,5 kg/pacote = 5 kg exibidos). A função auxiliar _kg_por_pacote,
+    que só era usada aqui, foi removida junto."""
+    return float(it.get('kgPlanejados', 0) or 0)
 
 
 def _nome_prod(it):
