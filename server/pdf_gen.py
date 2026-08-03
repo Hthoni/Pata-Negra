@@ -12,39 +12,98 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 import master
 
 
-def _kg_por_pacote(it):
-    """Peso de 1 pacote em kg = kg por caixa ÷ pacotes por caixa.
-    Os pacotes por caixa vêm da embalagem no formato 'CX-N' (ex.: CX-40 -> 40);
-    kg por caixa vem de kgCx. Ex.: CX-40 com kgCx=20 -> 0,5; CX-50 -> 0,4.
-    Fallback: gramas explícitas na embalagem ('400G'), senão 0,5."""
-    import re
-    emb = str(it.get('embalagem', '')).upper()
-    kgcx = float(it.get('kgCx', 0) or 0)
-    m = re.search(r'CX[-\s]?(\d+)', emb)
-    if m and kgcx:
-        n = int(m.group(1))
-        if n:
-            return kgcx / n
-    m = re.search(r'(\d+)\s*G\b', emb)
-    if m:
-        return int(m.group(1)) / 1000.0
-    return 0.5
-
-
 def _kg_pdf(it):
-    """Kg a exibir no PDF de expedição. Itens vendidos em pacote
-    (unidFat='pct') são convertidos de nº de pacotes para kg; os demais
-    já estão em kg. O Excel e o pedido seguem em pacotes — só o PDF converte."""
-    base = float(it.get('kgPlanejados', 0) or 0)
-    if str(it.get('unidFat', '')).lower() == 'pct':
-        return base * _kg_por_pacote(it)
-    return base
+    """Kg a exibir no PDF de expedição.
+
+    FIX (30/07/2026): kgPlanejados já nasce em kg REAIS desde a origem
+    (parsers e /processar-manual, que convertem pacote->kg na hora de
+    calcular o item) — não precisa mais converter pacote aqui. A versão
+    antiga desta função reconvertia (base * kg_por_pacote) em cima de um
+    valor que já estava certo, causando dupla conversão: o PDF saía com
+    metade do peso real para itens vendidos em pacote (ex.: 10 kg reais
+    x 0,5 kg/pacote = 5 kg exibidos). A função auxiliar _kg_por_pacote,
+    que só era usada aqui, foi removida junto."""
+    return float(it.get('kgPlanejados', 0) or 0)
 
 
 def _nome_prod(it):
     """Nome MASTER do produto (coluna unica). Fallback: nome do cliente + aviso."""
     nm = master.nome_master(it.get('codInterno'), '')
     return nm if nm else (str(it.get('nomeProduto', '')).strip() + '  (SEM MASTER)')
+
+
+def _diverge_preco(preco_pedido, preco_sistema):
+    """True se o preço do pedido difere do preço cadastrado no perfil
+    (coluna I). Compara já arredondado a centavos, pra ruído de ponto
+    flutuante (ex.: 10,601 vs 10,60) não disparar alerta à toa. Item sem
+    preço de sistema cadastrado (0/None) não entra na comparação — nesse
+    caso não há "preço certo" de referência pra apontar divergência."""
+    ps = round(float(preco_sistema or 0), 2)
+    if not ps:
+        return False
+    pp = round(float(preco_pedido or 0), 2)
+    return pp != ps
+
+
+def _monta_alerta_preco(its, largura_total):
+    """NOVO (31/07/2026): quando algum item do pedido veio com preço
+    diferente do preço cadastrado no perfil (coluna I), monta o bloco de
+    alerta — texto simples "Atenção! Diferença de preço:" (sem faixa
+    colorida, pra não pesar tinta na impressão) seguido de uma tabela
+    (Item | Preço pedido | Preço sistema | Preço certo) com cabeçalho em
+    fundo branco e texto preto. A coluna "Preço certo" fica em branco, de
+    propósito, para o operador preencher manualmente com o valor correto
+    na conferência. Retorna lista de flowables para inserir na story, ou
+    [] se nenhum item diverge."""
+    divergentes = []
+    for it in its:
+        pp = it.get('precoUnit', 0)
+        ps = it.get('precoSistema', 0)
+        if _diverge_preco(pp, ps):
+            divergentes.append((it, round(float(pp or 0), 2), round(float(ps or 0), 2)))
+    if not divergentes:
+        return []
+
+    ST_ALERTA_TXT = ParagraphStyle('alertaTxt', fontSize=11, fontName='Helvetica-Bold',
+                                    textColor=colors.HexColor('#8B1C1C'), alignment=TA_LEFT, leading=13)
+    ST_AHDR = ParagraphStyle('ahdr', fontSize=9, fontName='Helvetica-Bold', alignment=TA_CENTER, textColor=colors.black)
+    ST_AIT = ParagraphStyle('ait', fontSize=9.5, fontName='Helvetica', alignment=TA_LEFT, leading=11)
+    ST_AITR = ParagraphStyle('aitr', fontSize=9.5, fontName='Helvetica', alignment=TA_RIGHT, leading=11)
+
+    # Coluna "Item" larga (a página tem espaço de sobra em paisagem) — nomes
+    # de produto cabem numa linha só, sem precisar quebrar em várias linhas.
+    col_item = largura_total * 0.46
+    col_preco = largura_total * 0.18
+    col_certo = largura_total - col_item - 2 * col_preco
+
+    alerta_texto = Paragraph('Atenção! Diferença de preço:', ST_ALERTA_TXT)
+
+    rows = [[
+        Paragraph('Item', ST_AHDR), Paragraph('Preço pedido', ST_AHDR),
+        Paragraph('Preço sistema', ST_AHDR), Paragraph('Preço certo', ST_AHDR),
+    ]]
+    for it, pp, ps in divergentes:
+        rows.append([
+            Paragraph(_nome_prod(it), ST_AIT),
+            Paragraph(f"R$ {pp:.2f}".replace('.', ','), ST_AITR),
+            Paragraph(f"R$ {ps:.2f}".replace('.', ','), ST_AITR),
+            Paragraph('', ST_AIT),  # em branco — preenchimento manual do operador
+        ])
+
+    tbl = Table(rows, colWidths=[col_item, col_preco, col_preco, col_certo])
+    tbl.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.white),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#BBBBBB')),
+        ('LINEBELOW', (0, 0), (-1, 0), 1, colors.HexColor('#8B1C1C')),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 5), ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ('LEFTPADDING', (0, 0), (-1, -1), 6), ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+    ]))
+
+    ST_NOTA_AL = ParagraphStyle('notaAl', fontSize=8, fontName='Helvetica', textColor=colors.HexColor('#666666'))
+    nota_alerta = Paragraph('Coluna "Preço certo": preenchida manualmente pelo operador na conferência.', ST_NOTA_AL)
+
+    return [Spacer(1, 4 * mm), alerta_texto, Spacer(1, 2 * mm), tbl, Spacer(1, 1.5 * mm), nota_alerta]
 
 
 def gerar_pdf(dados, empresa_override=None, logo_bytes=None):
@@ -241,7 +300,11 @@ def gerar_pdf(dados, empresa_override=None, logo_bytes=None):
             f'Col. G — Kg Embarcados: preenchida pelo encarregado de embarque.   |   {nota_empresa}',
             ST_NOTA)
 
-        story.append(KeepTogether([tbl_cab, tbl_meta, tbl_itens, nota]))
+        # NOVO (31/07/2026): bloco de alerta de diferença de preço, se houver
+        # algum item com preço do pedido diferente do preço do perfil.
+        bloco_alerta = _monta_alerta_preco(its, W)
+
+        story.append(KeepTogether([tbl_cab, tbl_meta, tbl_itens, nota] + bloco_alerta))
         story.append(PageBreak())
 
     # Remover o último PageBreak (não precisa após a última filial)
