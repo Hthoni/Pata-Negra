@@ -32,6 +32,80 @@ def _nome_prod(it):
     return nm if nm else (str(it.get('nomeProduto', '')).strip() + '  (SEM MASTER)')
 
 
+def _diverge_preco(preco_pedido, preco_sistema):
+    """True se o preço do pedido difere do preço cadastrado no perfil
+    (coluna I). Compara já arredondado a centavos, pra ruído de ponto
+    flutuante (ex.: 10,601 vs 10,60) não disparar alerta à toa. Item sem
+    preço de sistema cadastrado (0/None) não entra na comparação — nesse
+    caso não há "preço certo" de referência pra apontar divergência."""
+    ps = round(float(preco_sistema or 0), 2)
+    if not ps:
+        return False
+    pp = round(float(preco_pedido or 0), 2)
+    return pp != ps
+
+
+def _monta_alerta_preco(its, largura_total):
+    """NOVO (31/07/2026): quando algum item do pedido veio com preço
+    diferente do preço cadastrado no perfil (coluna I), monta o bloco de
+    alerta — texto simples "Atenção! Diferença de preço:" (sem faixa
+    colorida, pra não pesar tinta na impressão) seguido de uma tabela
+    (Item | Preço pedido | Preço sistema | Preço certo) com cabeçalho em
+    fundo branco e texto preto. A coluna "Preço certo" fica em branco, de
+    propósito, para o operador preencher manualmente com o valor correto
+    na conferência. Retorna lista de flowables para inserir na story, ou
+    [] se nenhum item diverge."""
+    divergentes = []
+    for it in its:
+        pp = it.get('precoUnit', 0)
+        ps = it.get('precoSistema', 0)
+        if _diverge_preco(pp, ps):
+            divergentes.append((it, round(float(pp or 0), 2), round(float(ps or 0), 2)))
+    if not divergentes:
+        return []
+
+    ST_ALERTA_TXT = ParagraphStyle('alertaTxt', fontSize=11, fontName='Helvetica-Bold',
+                                    textColor=colors.HexColor('#8B1C1C'), alignment=TA_LEFT, leading=13)
+    ST_AHDR = ParagraphStyle('ahdr', fontSize=9, fontName='Helvetica-Bold', alignment=TA_CENTER, textColor=colors.black)
+    ST_AIT = ParagraphStyle('ait', fontSize=9.5, fontName='Helvetica', alignment=TA_LEFT, leading=11)
+    ST_AITR = ParagraphStyle('aitr', fontSize=9.5, fontName='Helvetica', alignment=TA_RIGHT, leading=11)
+
+    # Coluna "Item" larga (a página tem espaço de sobra em paisagem) — nomes
+    # de produto cabem numa linha só, sem precisar quebrar em várias linhas.
+    col_item = largura_total * 0.46
+    col_preco = largura_total * 0.18
+    col_certo = largura_total - col_item - 2 * col_preco
+
+    alerta_texto = Paragraph('Atenção! Diferença de preço:', ST_ALERTA_TXT)
+
+    rows = [[
+        Paragraph('Item', ST_AHDR), Paragraph('Preço pedido', ST_AHDR),
+        Paragraph('Preço sistema', ST_AHDR), Paragraph('Preço certo', ST_AHDR),
+    ]]
+    for it, pp, ps in divergentes:
+        rows.append([
+            Paragraph(_nome_prod(it), ST_AIT),
+            Paragraph(f"R$ {pp:.2f}".replace('.', ','), ST_AITR),
+            Paragraph(f"R$ {ps:.2f}".replace('.', ','), ST_AITR),
+            Paragraph('', ST_AIT),  # em branco — preenchimento manual do operador
+        ])
+
+    tbl = Table(rows, colWidths=[col_item, col_preco, col_preco, col_certo])
+    tbl.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.white),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#BBBBBB')),
+        ('LINEBELOW', (0, 0), (-1, 0), 1, colors.HexColor('#8B1C1C')),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 5), ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ('LEFTPADDING', (0, 0), (-1, -1), 6), ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+    ]))
+
+    ST_NOTA_AL = ParagraphStyle('notaAl', fontSize=8, fontName='Helvetica', textColor=colors.HexColor('#666666'))
+    nota_alerta = Paragraph('Coluna "Preço certo": preenchida manualmente pelo operador na conferência.', ST_NOTA_AL)
+
+    return [Spacer(1, 4 * mm), alerta_texto, Spacer(1, 2 * mm), tbl, Spacer(1, 1.5 * mm), nota_alerta]
+
+
 def gerar_pdf(dados, empresa_override=None, logo_bytes=None):
     """Gera o PDF completo. Se empresa_override for passado, filtra
     apenas os itens daquela empresa (usado no modo split)."""
@@ -226,7 +300,11 @@ def gerar_pdf(dados, empresa_override=None, logo_bytes=None):
             f'Col. G — Kg Embarcados: preenchida pelo encarregado de embarque.   |   {nota_empresa}',
             ST_NOTA)
 
-        story.append(KeepTogether([tbl_cab, tbl_meta, tbl_itens, nota]))
+        # NOVO (31/07/2026): bloco de alerta de diferença de preço, se houver
+        # algum item com preço do pedido diferente do preço do perfil.
+        bloco_alerta = _monta_alerta_preco(its, W)
+
+        story.append(KeepTogether([tbl_cab, tbl_meta, tbl_itens, nota] + bloco_alerta))
         story.append(PageBreak())
 
     # Remover o último PageBreak (não precisa após a última filial)
