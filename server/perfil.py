@@ -3,33 +3,46 @@ Leitura do Perfil Excel de cada cliente e algoritmo de matching
 de produtos do pedido (PDF) com produtos cadastrados no perfil.
 """
 import io
+import re
+import unicodedata
 import openpyxl
 
 CNPJ_DISTRIBUIDORA = '56.423.719'
 CNPJ_INDUSTRIA = '10.171.633'
 
 
+def _normaliza_nome(s):
+    """Normaliza um nome de produto para comparação: sem acento, minúsculas,
+    espaços múltiplos colapsados, sem espaço nas pontas. Usado só para achar
+    o produto certo — NÃO decide a grafia final (essa continua vindo do
+    perfil, coluna C)."""
+    s = str(s or '')
+    s = unicodedata.normalize('NFKD', s).encode('ASCII', 'ignore').decode('ASCII')
+    s = re.sub(r'\s+', ' ', s).strip().lower()
+    return s
+
+
 def match_perfil(nome, produtos):
-    """Encontra o produto do perfil que melhor corresponde ao nome do PDF.
-    NUNCA usar o código do cliente no PDF — sempre casar por nome."""
-    n = (nome or '').lower().strip()
-    best, score = None, 0
+    """Encontra o produto do perfil cujo nome bate EXATAMENTE (tolerando só
+    maiúscula/minúscula, acentuação e espaços extras) com o nome do PDF.
+
+    FIX (01/08/2026): antes fazia matching APROXIMADO — substring ('n in a'
+    / 'a in n') ou contagem de palavras em comum — o que às vezes casava o
+    pedido com um produto PARECIDO mas ERRADO quando o nome do cliente vinha
+    um pouco diferente do cadastrado (ex.: faltando "DEF", ou um nome mais
+    curto que por acaso é substring de outro). Isso é silencioso e perigoso:
+    o pedido processa normal, só que o item físico errado. Agora só casa por
+    igualdade exata normalizada; sem correspondência exata, retorna None —
+    e processar_item() interrompe o pedido com um erro claro em vez de
+    seguir adiante com um "SEM MASTER" ou uma aproximação arriscada."""
+    alvo = _normaliza_nome(nome)
+    if not alvo:
+        return None
     for p in produtos:
-        a = (p.get('nomePerfil', '') or '').lower().strip()
-        if not a:
-            continue
-        if a == n:
-            s = 100
-        elif n in a:
-            s = 50 + len(a)
-        elif a in n:
-            s = 40 + len(n)
-        else:
-            common = len(set(a.split()) & set(n.split()))
-            s = common * 10 if common >= 2 else 0
-        if s > score:
-            score, best = s, p
-    return best
+        a = _normaliza_nome(p.get('nomePerfil', ''))
+        if a and a == alvo:
+            return p
+    return None
 
 
 def ler_perfil(perfil_bytes):
@@ -163,12 +176,23 @@ def ler_operadores(perfil_bytes):
 
 def processar_item(cod_cli, nome_raw, emb_tipo, qtde_emb, qtde_ped, preco, total, produtos):
     """Normaliza um item do pedido casando com o perfil e calculando
-    kg planejados, número de caixas e demais campos derivados."""
-    import re
+    kg planejados, número de caixas e demais campos derivados.
+
+    FIX (01/08/2026): antes, quando match_perfil não achava o produto,
+    o item era criado assim mesmo com dados "de emergência" (kgCx=20,
+    embalagem chutada, nome cru do PDF) — aparecia como "(SEM MASTER)"
+    no PDF/Excel, mas o pedido inteiro processava normal, silenciosamente.
+    Combinado com o match aproximado antigo, isso também deixava passar
+    itens colados no produto ERRADO sem nenhum aviso. Agora, sem
+    correspondência exata no perfil, para o processamento do pedido
+    inteiro com um erro claro — melhor corrigir o perfil (ou o nome do
+    produto nele) do que gerar um romaneio errado ou incompleto."""
     nome_raw = re.sub(r'\s+', ' ', nome_raw).strip()
     pf = match_perfil(nome_raw, produtos)
-    kgCx = pf['kgCx'] if pf else 20
-    embalagem = pf['embalagem'] if pf else ('CX-' + str(qtde_emb) if emb_tipo in ['CX', 'CXA'] else 'CX-20')
+    if pf is None:
+        raise ValueError(f'Produto não cadastrado no perfil do mercado: "{nome_raw}"')
+    kgCx = pf['kgCx']
+    embalagem = pf['embalagem']
     if emb_tipo in ['CX', 'CXA']:
         kgPlan = qtde_ped * kgCx
         nrCx = qtde_ped
@@ -180,18 +204,18 @@ def processar_item(cod_cli, nome_raw, emb_tipo, qtde_emb, qtde_ped, preco, total
         qtdeMult = kgPlan
         unidFat = 'kg'
     return {
-        'empresa': pf.get('empresa') if pf else None,  # herda do perfil (coluna A)
-        'codInterno': pf['codInterno'] if pf else cod_cli,
-        'nomeProduto': pf['nomePerfil'] if pf else nome_raw,
-        'formato': pf.get('formato', '') if pf else '',
+        'empresa': pf.get('empresa'),  # herda do perfil (coluna A)
+        'codInterno': pf['codInterno'],
+        'nomeProduto': pf['nomePerfil'],
+        'formato': pf.get('formato', ''),
         'embalagem': embalagem,
         'kgCx': kgCx,
         'kgPlanejados': kgPlan,
         'nrCaixas': nrCx,
-        'obs': pf.get('obs', '') if pf else '',
+        'obs': pf.get('obs', ''),
         'qtdeMultipl': qtdeMult,
         'precoUnit': preco,
         'valorPedido': total,
-        'precoSistema': pf['precoUnit'] if pf else 0,
+        'precoSistema': pf['precoUnit'],
         'unidFat': unidFat,
     }
