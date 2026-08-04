@@ -41,21 +41,6 @@ def _pacotes_por_caixa(embalagem):
     return int(m.group(1)) if m else None
 
 
-def _slug_arquivo(pedido_num, filial_fallback):
-    """FIX (01/08/2026): o nome do arquivo do romaneio (rid) usava a
-    filial/razão social do cliente, extraída do próprio PDF do pedido —
-    para clientes formato SuasVendas isso é a Razão Social completa
-    (ex.: "EMANUEL COMERCIO DE GENEROS ALIMENTICIOS LTDA"), deixando o
-    nome do arquivo longo e quebrando a importação em outro sistema.
-    Agora usa o Nº do Pedido (curto, único, já é o identificador que o
-    outro sistema espera); só cai no nome da filial truncado a 20
-    caracteres no caso raro de faltar o Nº do Pedido."""
-    ped_slug = re.sub(r'[^a-zA-Z0-9]+', '_', str(pedido_num or '')).strip('_')
-    if ped_slug:
-        return ped_slug
-    return re.sub(r'[^a-z0-9]', '_', str(filial_fallback or '').lower())[:20]
-
-
 import importlib
 import pkgutil
 import parsers
@@ -966,9 +951,16 @@ def processar():
             if not its:
                 continue
             emps = _empresas_da_filial(fd, dados)
-            ts = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-            ped_slug = _slug_arquivo(fd.get('pedidoNum', ''), fd.get('filial', ''))
-            rid = f"{cliente}_{ped_slug}_{ts}"
+            # FIX (01/08/2026): o nome do arquivo usava a filial/razão social
+            # extraída do PDF do pedido (ex.: "EMANUEL COMERCIO DE GENEROS
+            # ALIMENTICIOS LTDA" para clientes SuasVendas), deixando o nome
+            # longo e quebrando a importação em outro sistema. Voltou a usar
+            # só o nome curto do cliente (a chave do parser, ex.: 'obom',
+            # 'superprix') + timestamp com MICROSSEGUNDOS — suficiente pro
+            # operador reconhecer o cliente de cara, e nunca repete mesmo
+            # processando várias filiais do mesmo cliente quase juntas.
+            ts = datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')
+            rid = f"{cliente}_{ts}"
             salvar_romaneio(rid, {
                 'id': rid,
                 'cliente': cliente,
@@ -1231,9 +1223,9 @@ def processar_manual():
 
         # Salvar pin de mapa se tiver coordenadas
         if lat is not None and lng is not None:
-            ts = datetime.datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-            ped_slug = _slug_arquivo(pedido_num, filial_info['nome'])
-            rid = f"{cliente}_{ped_slug}_{ts}"
+            # FIX (01/08/2026): ver comentário equivalente em /processar.
+            ts = datetime.datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')
+            rid = f"{cliente}_{ts}"
             salvar_romaneio(rid, {
                 'id': rid,
                 'cliente': cliente,
