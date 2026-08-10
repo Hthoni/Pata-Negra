@@ -5,9 +5,10 @@ separadas por múltiplos espaços. Unidade sempre KG no PDF, exceto quando
 a embalagem começa com KG-N (indica venda por caixa de N kg).
 """
 
-__cliente_nome__ = "Mercado Summer"
+cliente_nome = "Mercado Summer"
 
 import re
+import io
 import pdfplumber
 from perfil import processar_item
 
@@ -44,7 +45,7 @@ def _limpa_float(txt):
 
 def parse(pdf_bytes, produtos):
     texto = ''
-    with pdfplumber.open(__import__('io').BytesIO(pdf_bytes)) as pdf:
+    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
         for page in pdf.pages:
             texto += (page.extract_text() or '') + '\n'
 
@@ -83,8 +84,8 @@ def parse(pdf_bytes, produtos):
             m = CNPJ_RE.search(ln)
             if m:
                 cnpj_raw = m.group(0)
-            # nome da filial: texto entre "Fil XX CD -" e o CNPJ
-            mf = re.search(r'Filial:\s*(.*?)\s*(?:' + re.escape(cnpj_raw) + r')', ln)
+            # nome da filial: texto entre "Filial:" e o CNPJ (com hífen opcional no meio)
+            mf = re.search(r'Filial:\s*(.+?)\s*-?\s*' + re.escape(cnpj_raw), ln)
             if mf:
                 filial_nome = mf.group(1).strip().rstrip('-').strip()
             break
