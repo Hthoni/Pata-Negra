@@ -3,35 +3,30 @@ Parser Mercado Summer — formato proprietário (rptPedido.rdlc).
 Layout: 1 filial por PDF, cabeçalho no topo, linhas de itens com colunas
 separadas por múltiplos espaços. Unidade sempre KG no PDF, exceto quando
 a embalagem começa com KG-N (indica venda por caixa de N kg).
+
+FIX (10/08/2026): matching de produto quebrado desde que o sistema passou
+a exigir nome EXATO (perfil.py, match_perfil) em vez de aproximado. Duas
+causas, as duas neste parser:
+  1) A regex cortava o nome ANTES do "kg" (ex.: "CHISPE SUINO SALG PATA
+     NEGRA"), mas o perfil cadastra o nome COM "kg" no final (ex.:
+     "CHISPE SUINO SALG PATA NEGRA kg") — nunca batia exato. Corrigido
+     capturando o nome JUNTO com o "kg" minúsculo (que é parte do nome
+     de exibição do produto, diferente do "KG"/"KG-N" maiúsculo da coluna
+     Embalagem que vem logo depois).
+  2) _nome_limpo() removia palavras genéricas (SUINO, SALG, PATA NEGRA)
+     pra "ajudar" o matching aproximado antigo — mas o perfil MANTÉM essas
+     palavras no nome cadastrado, então a limpeza afastava ainda mais do
+     nome exato esperado. Removida (junto com o sinônimo RABO->RABINHO,
+     que também nunca bateu: o perfil cadastra "RABO", não "RABINHO").
 """
 
-cliente_nome = "Mercado Summer"
+__cliente_nome__ = "Mercado Summer"
 
 import re
-import io
 import pdfplumber
 from perfil import processar_item
 
 CNPJ_RE = re.compile(r'\d{2}\.?\d{3}\.?\d{3}\s*/\s*\d{4}\s*-\s*\d{2}')
-
-
-_SINONIMOS_SUMMER = [
-    (re.compile(r'\bRABO\b', re.IGNORECASE), 'RABINHO'),
-]
-
-_SUFIXOS_GENERICOS = re.compile(
-    r'\b(?:PATA\s+NEGRA|PCT|SUINO|SALG|SALGADO|SALGADA|DEFUMADO|DEFUMADA)\b',
-    re.IGNORECASE
-)
-
-def _nome_limpo(nome):
-    """Remove termos genéricos e expande sinônimos Summer-específicos
-    pra melhorar o fuzzy matching com o Perfil."""
-    s = nome
-    for pat, sub in _SINONIMOS_SUMMER:
-        s = pat.sub(sub, s)
-    s = _SUFIXOS_GENERICOS.sub(' ', s)
-    return re.sub(r'\s{2,}', ' ', s).strip()
 
 
 def _limpa_float(txt):
@@ -45,7 +40,7 @@ def _limpa_float(txt):
 
 def parse(pdf_bytes, produtos):
     texto = ''
-    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+    with pdfplumber.open(__import__('io').BytesIO(pdf_bytes)) as pdf:
         for page in pdf.pages:
             texto += (page.extract_text() or '') + '\n'
 
@@ -64,7 +59,6 @@ def parse(pdf_bytes, produtos):
     capturando = False
     for ln in linhas:
         if ln.strip().startswith('ENTREGA'):
-            # O endereço pode estar na mesma linha ou na seguinte
             resto = re.sub(r'^ENTREGA\s*', '', ln).strip()
             if resto:
                 endereco = resto
@@ -84,8 +78,7 @@ def parse(pdf_bytes, produtos):
             m = CNPJ_RE.search(ln)
             if m:
                 cnpj_raw = m.group(0)
-            # nome da filial: texto entre "Filial:" e o CNPJ (com hífen opcional no meio)
-            mf = re.search(r'Filial:\s*(.+?)\s*-?\s*' + re.escape(cnpj_raw), ln)
+            mf = re.search(r'Filial:\s*(.*?)\s*(?:' + re.escape(cnpj_raw) + r')', ln)
             if mf:
                 filial_nome = mf.group(1).strip().rstrip('-').strip()
             break
@@ -94,19 +87,13 @@ def parse(pdf_bytes, produtos):
     cond_pgto   = fm(r'(\d+\s+dias)')
 
     # ── Itens ──────────────────────────────────────────────────────────────
-    # Cada linha de item começa com um número de sequência, depois o cód,
-    # depois o nome (com sufixo " kg"), depois a embalagem (KG ou KG-N),
-    # depois a qtde, depois o cód EAN, depois o cód fab, depois valores.
-    #
-    # Exemplo real:
-    # "1 36205 BACON DEFUMADO PATA NEGRA PCT kg KG-20 36 1213 678,00 0 678,00 43,46 24.408,00"
-    # "3 34515 COSTELA SUINO SALG PATA NEGRA kg KG 140 34516 26,90 0 26,90 26,90 3.766,00"
-    #
-    # Regex: seq  cod  nome(+kg)  embalagem  qtde  codEAN  (codFab)  valorNF  %desc  *IPI  %ST  custoNF  unitario  (bon)  valor
+    # FIX: nome agora capturado JUNTO com o "kg" minúsculo final (parte do
+    # nome de exibição), separado da coluna Embalagem (KG/KG-N, maiúsculo)
+    # que vem logo depois.
     ITEM_RE = re.compile(
         r'^\s*(\d+)\s+'           # seq
         r'(\d{4,6})\s+'           # cód produto
-        r'(.+?)\s+kg\s+'          # nome produto (termina com " kg")
+        r'(.+?\s+kg)\s+'          # nome produto, incluindo o "kg" final
         r'(KG-?\d*)\s+'           # embalagem: KG, KG-10, KG-20 etc
         r'(\d+)\s+'               # qtde
         r'\d+\s+'                 # cód EAN
@@ -129,8 +116,6 @@ def parse(pdf_bytes, produtos):
         preco    = _limpa_float(m.group(7))
         total    = _limpa_float(m.group(7)) * qtde  # recalculado — PDF pode ter arredondamento
 
-        # Se embalagem é KG-N (ex: KG-20), é venda por caixa de N kg
-        # Se embalagem é simplesmente KG, é venda por kg
         if re.match(r'KG-\d+', emb_str):
             emb_tipo = 'CX'
             n = int(re.search(r'\d+', emb_str).group())
@@ -139,7 +124,7 @@ def parse(pdf_bytes, produtos):
             emb_tipo = 'KG'
             qtde_emb = 1
 
-        it = processar_item(cod_cli, _nome_limpo(nome_raw), emb_tipo, qtde_emb, qtde, preco, total, produtos)
+        it = processar_item(cod_cli, nome_raw, emb_tipo, qtde_emb, qtde, preco, total, produtos)
         itens.append(it)
 
     if not itens:
