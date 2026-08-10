@@ -27,6 +27,23 @@ Segue o mesmo contrato dos outros parsers: parse(pdf_bytes, produtos) ->
 lista de pedidos; itens montados via perfil.processar_item, que casa por NOME
 no perfil (col C) e devolve o Cód. Interno (col B). Converte tudo para KG e
 passa emb_tipo='KG' para o processar_item NÃO remultiplicar por kgCx.
+
+FIX (11/08/2026): erro de "produto não cadastrado" no item ORELHA SUINA.
+Causa: o próprio PDF do GPA (gerado pelo TOTVS) quebra a palavra "SUINA"
+entre duas linhas da coluna estreita de descrição — "SU" fica no fim de
+uma linha e "NA" cai pra linha seguinte, e o caractere "Í"/"I" do meio
+simplesmente NÃO aparece em nenhum dos dois tokens (defeito de geração do
+PDF deles, confirmado inspecionando as coordenadas brutas do
+extract_words() — "SU" e "NA" ficam em linhas/posições verticais
+diferentes). _reconstruir_nomes() juntava os dois como "SU NA" (com
+espaço, faltando o "I"), que nunca bate com "ORELHA SUINA..." cadastrado
+no perfil. Não acontece com outros produtos que também têm SUINA/SUINO no
+nome (ex.: "COSTELA SUINA" no mesmo PDF vem intacto) — é específico de
+onde esse item cai na quebra de linha da coluna, não um problema geral de
+fonte/extração. Corrigido remendando ESSA junção específica de tokens
+("SU" seguido de "NA") de volta para "SUINA" antes de montar o nome —
+não é aproximação de produto, é reparo de um defeito conhecido e
+determinístico na geração do PDF de origem.
 """
 
 __cliente_nome__ = "GPA"
@@ -50,6 +67,24 @@ def _num(s):
 
 def _digitos(s):
     return re.sub(r'\D', '', s or '')
+
+
+def _remenda_palavra_quebrada(ws):
+    """FIX: repara a quebra 'SU' + 'NA' -> 'SUINA' (ver docstring do módulo).
+    ws é a lista ordenada de tuplas (top, x0, texto) de um mesmo item; some
+    a palavra 'NA' seguinte quando ela vier logo depois de um token 'SU'
+    isolado (case-insensitive), unindo os dois num só 'SUINA'."""
+    out = []
+    i = 0
+    while i < len(ws):
+        top, x0, txt = ws[i]
+        if txt.upper() == 'SU' and i + 1 < len(ws) and ws[i + 1][2].upper() == 'NA':
+            out.append((top, x0, 'SUINA'))
+            i += 2
+            continue
+        out.append((top, x0, txt))
+        i += 1
+    return out
 
 
 def _reconstruir_nomes(page):
@@ -78,6 +113,7 @@ def _reconstruir_nomes(page):
     nomes = {}
     for t, ws in buckets.items():
         ws.sort(key=lambda x: (round(x[0]), x[1]))
+        ws = _remenda_palavra_quebrada(ws)
         nomes[t] = re.sub(r'\s+', ' ', ' '.join(x[2] for x in ws)).strip()
     return nomes, codes
 
