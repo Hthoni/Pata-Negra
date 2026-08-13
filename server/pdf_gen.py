@@ -118,13 +118,18 @@ def gerar_pdf(dados, empresa_override=None, logo_bytes=None):
     vend = dados.get('vendedor', '')
     tel = dados.get('telefone', '')
 
-    COR_TIT = colors.HexColor('#E0E0E0')
-    COR_SUB = colors.HexColor('#F0F0F0')
-    COR_META = colors.HexColor('#F8F8F8')
-    COR_HDR = colors.HexColor('#D0D0D0')
-    COR_PAR = colors.HexColor('#F5F5F5')
-    COR_CZ = colors.HexColor('#E8E8E8')
-    COR_RG = colors.HexColor('#8B1C1C')
+    # FIX (12/08/2026): paleta de cinza de fundo de célula clareada — a
+    # impressora do escritório estava carregando demais nas áreas com
+    # cinza mais escuro (COR_HDR/COR_TIT principalmente). Mantida a
+    # hierarquia visual (cabeçalho ainda perceptível vs. corpo da tabela),
+    # só reduzida a intensidade de cada tom.
+    COR_TIT = colors.HexColor('#EDEDED')   # era #E0E0E0
+    COR_SUB = colors.HexColor('#F5F5F5')   # era #F0F0F0
+    COR_META = colors.HexColor('#FAFAFA')  # era #F8F8F8
+    COR_HDR = colors.HexColor('#E4E4E4')   # era #D0D0D0 (o mais escuro antes)
+    COR_PAR = colors.HexColor('#F8F8F8')   # era #F5F5F5
+    COR_CZ = colors.HexColor('#EFEFEF')    # era #E8E8E8
+    COR_RG = colors.HexColor('#8B1C1C')    # sem alteração — é o vermelho de destaque, não cinza de fundo
 
     col_w = [8 * mm, 18 * mm, 95 * mm, 24 * mm, 18 * mm, 22 * mm, 26 * mm, 20 * mm, 46 * mm]
     W = sum(col_w)
