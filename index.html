@@ -119,6 +119,18 @@ table.itens td.nome-produto{text-align:left}
 .btn-gerar:disabled{background:#aaa;cursor:not-allowed}
 .erro-msg{color:var(--cor-erro);font-size:13px;padding:0 16px 10px;display:none}
 .carregando{padding:40px;text-align:center;color:var(--cor-texto-fraco)}
+/* ── CLIENTE AVULSO ── */
+.cb-avulso{border-style:dashed;border-color:var(--accent);background:var(--accent-lt)}
+.cb-avulso:hover{background:#F5D5D5}
+.cb-avulso .cb-logo-placeholder{background:transparent;font-size:26px}
+.cnpj-busca{display:flex;gap:6px}
+.cnpj-busca input{flex:1;padding:4px 6px;font-size:13px;border:1px solid #bbb;border-radius:3px}
+.cnpj-busca button{padding:4px 12px;font-size:12px;font-weight:bold;border-radius:3px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer}
+.aviso-cnpj{background:#FEF3E2;color:#8a6d1a;font-size:12.5px;padding:8px 16px;border-top:1px solid #f0dca0;border-bottom:1px solid #f0dca0}
+.btn-add-item{margin:8px 16px;padding:5px 12px;font-size:12px;font-weight:bold;border:1px dashed var(--accent);background:#fff;color:var(--accent);border-radius:3px;cursor:pointer}
+.btn-rm-item{border:none;background:none;color:var(--cor-erro);font-size:16px;cursor:pointer;line-height:1}
+select.unidade-label{font-size:11px;font-weight:bold;color:var(--cor-azul);min-width:52px;border:1px solid var(--cor-azul);border-radius:3px;background:#fff}
+
 .header-actions{display:flex;gap:8px}.btn-header{font-family:inherit;height:34px;min-width:110px;display:inline-flex;align-items:center;justify-content:center;padding:0 14px;border-radius:8px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.15);color:#fff;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;white-space:nowrap}.btn-header:hover{background:rgba(255,255,255,.28)}
 
     /* Cabeçalho v1.1 */
@@ -250,6 +262,11 @@ table.itens td.nome-produto{text-align:left}
   </div>
 </div>
 
+<!-- CLIENTE AVULSO: aberto via abrirPedidoAvulso(), card fixo no grid de clientes. -->
+<div class="overlay" id="overlayAvulso">
+  <div class="popup" id="popupAvulsoConteudo"></div>
+</div>
+
 <script>
 'use strict';
 var SERVER_URL = 'https://pata-negra-784065203515.us-central1.run.app';
@@ -291,6 +308,18 @@ function renderClientGrid() {
     btn.addEventListener('click', function() { selCliente(c.id, btn); });
     grid.appendChild(btn);
   });
+
+  // Cliente Avulso: card fixo, não vem do /health, abre popup próprio
+  // (não passa pelo fluxo de Step 2 / upload de perfil e pedido).
+  var btnAvulso = document.createElement('button');
+  btnAvulso.className = 'cb cb-avulso';
+  btnAvulso.dataset.fixo = '1';
+  btnAvulso.dataset.nome = 'cliente avulso';
+  btnAvulso.innerHTML =
+    '<div class="cb-logo"><div class="cb-logo-placeholder" style="display:flex">➕</div></div>' +
+    '<div class="cb-info"><span class="cn">Cliente Avulso</span></div>';
+  btnAvulso.addEventListener('click', abrirPedidoAvulso);
+  grid.appendChild(btnAvulso);
 }
 
 // ── Busca / filtro ──
@@ -298,6 +327,7 @@ function filtrarClientes(termo) {
   termo = termo.toLowerCase().trim();
   var visiveis = 0;
   document.querySelectorAll('.cb').forEach(function(btn) {
+    if (btn.dataset.fixo) { btn.classList.remove('hidden'); return; }  // Cliente Avulso sempre visível
     var match = !termo || btn.dataset.nome.includes(termo);
     btn.classList.toggle('hidden', !match);
     if (match) visiveis++;
@@ -879,6 +909,282 @@ async function gerarPedido() {
     btn.textContent = 'Gerar Pedido';
   }
 }
+
+
+// ═══════════════════════════════════════════════════════════════════
+// CLIENTE AVULSO — pedido pontual sem parser/perfil dedicado.
+// Popup próprio (#overlayAvulso), independente do fluxo S.cliente acima.
+// ═══════════════════════════════════════════════════════════════════
+var _avulso = { produtosMaster: [], itens: [], faturamentoEncontrado: false };
+
+function abrirPedidoAvulso() {
+  document.getElementById('overlayAvulso').classList.add('aberto');
+  _avulso.itens = [avCriarItemVazio()];
+  fetch(SERVER_URL + '/master/produtos')
+    .then(function(r){ return r.json(); })
+    .then(function(d){ _avulso.produtosMaster = d.produtos || []; avRenderizarPopup(); })
+    .catch(function(){ _avulso.produtosMaster = []; avRenderizarPopup(); });
+}
+
+function fecharPedidoAvulso() {
+  document.getElementById('overlayAvulso').classList.remove('aberto');
+}
+
+function avCriarItemVazio() {
+  return { codigoMaster:'', nomeProduto:'', quantidade:'', unidade:'kg', pesoUnitKg:'', embalagem:'', precoUnit:'', empresa:'2' };
+}
+
+function avDataHojeBR() {
+  var d = new Date();
+  return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
+}
+
+function avRenderizarPopup() {
+  document.getElementById('popupAvulsoConteudo').innerHTML =
+    '<div class="titulo-pedido">PEDIDO CLIENTE AVULSO</div>' +
+    '<div class="subtitulo-pedido" id="avulsoSubtitulo">Informe o CNPJ para localizar os dados de faturamento</div>' +
+    '<div class="meta-grid">' +
+      '<div class="meta-label">Pedido Nº: <span style="color:var(--accent)">*</span></div>' +
+      '<div><input type="text" id="avPedidoNum" placeholder="digite o nº do pedido" autocomplete="off" oninput="avValidarFormulario()" style="width:100%;box-sizing:border-box"></div>' +
+      '<div class="meta-label">Data Pedido:</div>' +
+      '<div class="meta-valor-auto">' + avDataHojeBR() + '</div>' +
+
+      '<div class="meta-label">CNPJ: <span style="color:var(--accent)">*</span></div>' +
+      '<div class="cnpj-busca">' +
+        '<input type="text" id="avCnpj" placeholder="00.000.000/0000-00" autocomplete="off">' +
+        '<button type="button" onclick="avBuscarCnpj()">Buscar</button>' +
+      '</div>' +
+      '<div class="meta-label">Operador:</div>' +
+      '<div><input type="text" id="avOperador" placeholder="nome do operador" oninput="avValidarFormulario()" style="width:100%;box-sizing:border-box"></div>' +
+
+      '<div class="meta-label">Razão Social: <span style="color:var(--accent)">*</span></div>' +
+      '<div><input type="text" id="avRazao" oninput="avValidarFormulario()" style="width:100%;box-sizing:border-box"></div>' +
+      '<div class="meta-label">Vendedor:</div>' +
+      '<div><input type="text" id="avVendedor" style="width:100%;box-sizing:border-box"></div>' +
+
+      '<div class="meta-label">Cond. Pagamento:</div>' +
+      '<div><input type="text" id="avCond" style="width:100%;box-sizing:border-box"></div>' +
+      '<div class="meta-label">Endereço:</div>' +
+      '<div><input type="text" id="avEndereco" style="width:100%;box-sizing:border-box"></div>' +
+    '</div>' +
+
+    '<div class="aviso-cnpj" id="avAvisoCnpj" style="display:none">' +
+      'CNPJ não encontrado na planilha de faturamento. Preencha os dados acima manualmente.' +
+    '</div>' +
+
+    '<table class="itens">' +
+      '<thead><tr>' +
+        '<th>#</th><th>Produto</th><th>Quantidade</th><th>Peso unit. (kg)</th>' +
+        '<th>Embalagem</th><th>Preço Unit.</th><th>Empresa</th>' +
+        '<th>Kg Planejados</th><th>Valor R$</th><th></th>' +
+      '</tr></thead>' +
+      '<tbody id="avCorpoTabela"></tbody>' +
+    '</table>' +
+
+    '<button type="button" class="btn-add-item" onclick="avAdicionarItem()">+ Adicionar item</button>' +
+
+    '<div class="rodape">' +
+      '<span>Total: <span id="avTotalItens">0</span> itens</span>' +
+      '<span>Kg: <span id="avTotalKg">0,0</span></span>' +
+      '<span>Valor: R$ <span id="avTotalValor">0,00</span></span>' +
+    '</div>' +
+
+    '<div class="erro-msg" id="avErroMsg"></div>' +
+
+    '<div class="acoes">' +
+      '<button class="btn btn-cancelar" onclick="fecharPedidoAvulso()">Cancelar</button>' +
+      '<button class="btn btn-gerar" id="avBtnGerar" disabled onclick="avGerarPedido()">Gerar Pedido</button>' +
+    '</div>';
+  avRenderizarLinhas();
+}
+
+function avRenderizarLinhas() {
+  var corpo = document.getElementById('avCorpoTabela');
+  corpo.innerHTML = _avulso.itens.map(function(it, i) {
+    var opcoesProduto = '<option value="">Selecione…</option>';
+    _avulso.produtosMaster.forEach(function(p) {
+      opcoesProduto += '<option value="' + p.codigo + '"' + (it.codigoMaster === p.codigo ? ' selected' : '') + '>' + p.nome + '</option>';
+    });
+    return `<tr>
+      <td>${i + 1}</td>
+      <td class="nome-produto"><select data-index="${i}" onchange="avProdutoSelecionado(${i})" style="width:100%">${opcoesProduto}</select></td>
+      <td><div class="qtde-wrap">
+        <input type="number" min="0" step="0.1" value="${it.quantidade}" oninput="avLinhaMudou(${i},'quantidade',this.value)" placeholder="0">
+        <select class="unidade-label" onchange="avLinhaMudou(${i},'unidade',this.value)">
+          <option value="kg" ${it.unidade==='kg'?'selected':''}>KG</option>
+          <option value="pct" ${it.unidade==='pct'?'selected':''}>PCT</option>
+          <option value="cx" ${it.unidade==='cx'?'selected':''}>CX</option>
+        </select>
+      </div></td>
+      <td><input type="number" min="0" step="0.01" value="${it.pesoUnitKg}" placeholder="—" ${it.unidade==='kg'?'disabled':''} oninput="avLinhaMudou(${i},'pesoUnitKg',this.value)" style="width:70px"></td>
+      <td><input type="text" value="${it.embalagem}" placeholder="ex: CX-25" oninput="avLinhaMudou(${i},'embalagem',this.value)" style="width:90px"></td>
+      <td><input type="number" min="0" step="0.01" value="${it.precoUnit}" placeholder="0,00" oninput="avLinhaMudou(${i},'precoUnit',this.value)" style="width:75px"></td>
+      <td><select onchange="avLinhaMudou(${i},'empresa',this.value)" style="width:100%">
+        <option value="1" ${it.empresa==='1'?'selected':''}>Indústria</option>
+        <option value="2" ${it.empresa==='2'?'selected':''}>Distribuidora</option>
+      </select></td>
+      <td class="col-calc" id="avKgCalc${i}">—</td>
+      <td class="col-calc" id="avValorCalc${i}">—</td>
+      <td><button type="button" class="btn-rm-item" onclick="avRemoverItem(${i})" aria-label="Remover">×</button></td>
+    </tr>`;
+  }).join('');
+  _avulso.itens.forEach(function(_, i){ avRecalcularLinha(i); });
+}
+
+function avProdutoSelecionado(i) {
+  var sel = document.querySelectorAll('#avCorpoTabela select')[i * 3];  // 1º select da linha = produto
+  var p = _avulso.produtosMaster.filter(function(p){ return p.codigo === sel.value; })[0];
+  _avulso.itens[i].codigoMaster = sel.value;
+  _avulso.itens[i].nomeProduto = p ? p.nome : '';
+  avValidarFormulario();
+}
+
+function avLinhaMudou(i, campo, valor) {
+  _avulso.itens[i][campo] = valor;
+  if (campo === 'unidade') { avRenderizarLinhas(); return; }  // reconstrói pra habilitar/desabilitar Peso unit.
+  avRecalcularLinha(i);
+  avRecalcularTotais();
+  avValidarFormulario();
+}
+
+function avRecalcularLinha(i) {
+  var it = _avulso.itens[i];
+  var qtde = parseFloat(it.quantidade) || 0;
+  var peso = parseFloat(it.pesoUnitKg) || 0;
+  var preco = parseFloat(it.precoUnit) || 0;
+  var kgEl = document.getElementById('avKgCalc' + i);
+  var valEl = document.getElementById('avValorCalc' + i);
+  if (!qtde || !it.codigoMaster) {
+    if (kgEl) kgEl.textContent = '—';
+    if (valEl) valEl.textContent = '—';
+    return;
+  }
+  var kg = it.unidade === 'kg' ? qtde : qtde * peso;
+  var valor = qtde * preco;
+  if (kgEl) kgEl.textContent = kg.toLocaleString('pt-BR', {maximumFractionDigits:1});
+  if (valEl) valEl.textContent = valor.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+function avRecalcularTotais() {
+  var n = 0, kgTot = 0, valTot = 0;
+  _avulso.itens.forEach(function(it) {
+    var qtde = parseFloat(it.quantidade) || 0;
+    var peso = parseFloat(it.pesoUnitKg) || 0;
+    var preco = parseFloat(it.precoUnit) || 0;
+    if (!qtde || !it.codigoMaster) return;
+    n++;
+    kgTot += it.unidade === 'kg' ? qtde : qtde * peso;
+    valTot += qtde * preco;
+  });
+  document.getElementById('avTotalItens').textContent = n;
+  document.getElementById('avTotalKg').textContent = kgTot.toLocaleString('pt-BR', {maximumFractionDigits:1});
+  document.getElementById('avTotalValor').textContent = valTot.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+function avAdicionarItem() {
+  _avulso.itens.push(avCriarItemVazio());
+  avRenderizarLinhas();
+}
+
+function avRemoverItem(i) {
+  _avulso.itens.splice(i, 1);
+  if (!_avulso.itens.length) _avulso.itens.push(avCriarItemVazio());
+  avRenderizarLinhas();
+  avRecalcularTotais();
+  avValidarFormulario();
+}
+
+function avBuscarCnpj() {
+  var cnpj = document.getElementById('avCnpj').value.trim();
+  if (!cnpj) return;
+  fetch(SERVER_URL + '/faturamento-avulso/' + encodeURIComponent(cnpj))
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      var aviso = document.getElementById('avAvisoCnpj');
+      if (d.encontrado) {
+        document.getElementById('avRazao').value = d.razaoSocial || '';
+        document.getElementById('avCond').value = d.condPgto || '';
+        document.getElementById('avVendedor').value = d.vendedor || '';
+        document.getElementById('avEndereco').value = d.endereco || '';
+        document.getElementById('avulsoSubtitulo').textContent = d.razaoSocial || '';
+        aviso.style.display = 'none';
+        _avulso.faturamentoEncontrado = true;
+      } else {
+        aviso.style.display = 'block';
+        _avulso.faturamentoEncontrado = false;
+      }
+      avValidarFormulario();
+    })
+    .catch(function(){ document.getElementById('avAvisoCnpj').style.display = 'block'; });
+}
+
+function avValidarFormulario() {
+  var pedidoNum = (document.getElementById('avPedidoNum') || {}).value;
+  var cnpj = (document.getElementById('avCnpj') || {}).value;
+  var razao = (document.getElementById('avRazao') || {}).value;
+  var temItem = _avulso.itens.some(function(it){ return it.codigoMaster && parseFloat(it.quantidade) > 0; });
+  var btn = document.getElementById('avBtnGerar');
+  var erro = document.getElementById('avErroMsg');
+  var ok = pedidoNum && pedidoNum.trim() && cnpj && cnpj.trim() && razao && razao.trim() && temItem;
+  if (btn) btn.disabled = !ok;
+  if (erro) erro.style.display = 'none';
+}
+
+function avGerarPedido() {
+  var itens = _avulso.itens
+    .filter(function(it){ return it.codigoMaster && parseFloat(it.quantidade) > 0; })
+    .map(function(it) {
+      return {
+        codigoMaster: it.codigoMaster,
+        nomeProduto: it.nomeProduto,
+        quantidade: parseFloat(it.quantidade),
+        unidade: it.unidade,
+        pesoUnitKg: parseFloat(it.pesoUnitKg) || null,
+        embalagem: it.embalagem,
+        precoUnit: parseFloat(it.precoUnit) || 0,
+        empresa: parseInt(it.empresa, 10),
+      };
+    });
+
+  var body = {
+    cnpj: document.getElementById('avCnpj').value.trim(),
+    pedidoNum: document.getElementById('avPedidoNum').value.trim(),
+    operador: document.getElementById('avOperador').value.trim(),
+    razaoSocial: document.getElementById('avRazao').value.trim(),
+    condPgto: document.getElementById('avCond').value.trim(),
+    vendedor: document.getElementById('avVendedor').value.trim(),
+    endereco: document.getElementById('avEndereco').value.trim(),
+    itens: itens,
+  };
+
+  var btn = document.getElementById('avBtnGerar');
+  var erro = document.getElementById('avErroMsg');
+  btn.disabled = true;
+  btn.textContent = 'Gerando…';
+
+  fetch(SERVER_URL + '/processar-avulso', {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
+  })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      if (d.erro) {
+        erro.textContent = d.erro;
+        erro.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Gerar Pedido';
+        return;
+      }
+      fecharPedidoAvulso();
+      mostrarResultados(d);
+    })
+    .catch(function(e) {
+      erro.textContent = 'Erro de conexão: ' + e.message;
+      erro.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Gerar Pedido';
+    });
+}
+
 </script>
 
 <!-- Modal: programar data de entrega -->
