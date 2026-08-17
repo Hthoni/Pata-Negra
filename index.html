@@ -960,10 +960,18 @@ function avRenderizarPopup() {
       '<div class="meta-label">Razão Social: <span style="color:var(--accent)">*</span></div>' +
       '<div><input type="text" id="avRazao" oninput="avValidarFormulario()" style="width:100%;box-sizing:border-box"></div>' +
       '<div class="meta-label">Vendedor:</div>' +
-      '<div><input type="text" id="avVendedor" style="width:100%;box-sizing:border-box"></div>' +
+      '<div style="display:flex;gap:6px;align-items:center">' +
+        '<input type="text" id="avVendedor" style="flex:1;box-sizing:border-box">' +
+        '<span style="font-size:11px;color:var(--cor-texto-fraco)">cod:</span>' +
+        '<input type="text" id="avCodVendedor" style="width:44px;box-sizing:border-box" placeholder="—">' +
+      '</div>' +
 
       '<div class="meta-label">Cond. Pagamento:</div>' +
-      '<div><input type="text" id="avCond" style="width:100%;box-sizing:border-box"></div>' +
+      '<div style="display:flex;gap:6px;align-items:center">' +
+        '<input type="text" id="avCond" style="flex:1;box-sizing:border-box">' +
+        '<span style="font-size:11px;color:var(--cor-texto-fraco)">cod:</span>' +
+        '<input type="text" id="avCodCond" style="width:44px;box-sizing:border-box" placeholder="—">' +
+      '</div>' +
       '<div class="meta-label">Endereço:</div>' +
       '<div><input type="text" id="avEndereco" style="width:100%;box-sizing:border-box"></div>' +
     '</div>' +
@@ -1104,7 +1112,9 @@ function avBuscarCnpj() {
       if (d.encontrado) {
         document.getElementById('avRazao').value = d.razaoSocial || '';
         document.getElementById('avCond').value = d.condPgto || '';
+        document.getElementById('avCodCond').value = d.codCondPgto || '';
         document.getElementById('avVendedor').value = d.vendedor || '';
+        document.getElementById('avCodVendedor').value = d.codVendedor || '';
         document.getElementById('avEndereco').value = d.endereco || '';
         document.getElementById('avulsoSubtitulo').textContent = d.razaoSocial || '';
         aviso.style.display = 'none';
@@ -1152,7 +1162,9 @@ function avGerarPedido() {
     operador: document.getElementById('avOperador').value.trim(),
     razaoSocial: document.getElementById('avRazao').value.trim(),
     condPgto: document.getElementById('avCond').value.trim(),
+    codCondPgto: document.getElementById('avCodCond').value.trim(),
     vendedor: document.getElementById('avVendedor').value.trim(),
+    codVendedor: document.getElementById('avCodVendedor').value.trim(),
     endereco: document.getElementById('avEndereco').value.trim(),
     itens: itens,
   };
