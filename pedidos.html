@@ -219,6 +219,8 @@
     </div>
     <button id="btn-subir-master" style="margin-left:auto;font-family:inherit;height:34px;padding:0 18px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap" onclick="document.getElementById('inp-master').click()">Subir Master</button>
     <input type="file" id="inp-master" accept=".xlsx" style="display:none" onchange="uploadMaster(this)">
+    <button id="btn-subir-faturamento" style="font-family:inherit;height:34px;padding:0 18px;border-radius:8px;border:1px solid var(--accent);background:#fff;color:var(--accent);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap" onclick="document.getElementById('inp-faturamento').click()">Subir Faturamento Avulso</button>
+    <input type="file" id="inp-faturamento" accept=".xlsx" style="display:none" onchange="uploadFaturamentoAvulso(this)">
   </div>
 
   <div id="loading">
@@ -478,6 +480,28 @@
       alert('Tabela mestra atualizada: ' + (d.codigos || 0) + ' códigos mapeados.');
     } catch (e) {
       alert('Erro de conexão ao subir a tabela mestra: ' + e.message);
+    } finally {
+      if (btn) btn.textContent = txt;
+    }
+  }
+
+  async function uploadFaturamentoAvulso(inp) {
+    var f = inp.files[0];
+    if (!f) return;
+    inp.value = '';
+    var btn = inp.previousElementSibling || document.querySelector('.btn-header[onclick*="inp-faturamento"]');
+    var txt = btn ? btn.textContent : '';
+    if (btn) btn.textContent = 'Enviando…';
+    try {
+      var form = new FormData();
+      form.append('faturamento', f);
+      var resp = await fetch(SERVER_URL + '/faturamento-avulso', { method: 'POST', body: form });
+      if (resp.status === 404) { alert('A rota /faturamento-avulso ainda não está no ar (deploy do backend pendente). Aguarde o deploy terminar e tente de novo.'); return; }
+      var d = await resp.json();
+      if (!resp.ok || d.erro) { alert('Erro ao subir a planilha de faturamento: ' + (d.erro || resp.status)); return; }
+      alert('Planilha de faturamento avulso atualizada: ' + (d.cnpjs || 0) + ' CNPJs carregados.');
+    } catch (e) {
+      alert('Erro de conexão ao subir a planilha de faturamento: ' + e.message);
     } finally {
       if (btn) btn.textContent = txt;
     }
