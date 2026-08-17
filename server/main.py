@@ -651,7 +651,9 @@ def processar_avulso():
         operador = (body.get('operador') or '').strip()
         razao = (body.get('razaoSocial') or '').strip()
         cond = (body.get('condPgto') or '').strip()
+        cod_cond = (body.get('codCondPgto') or '').strip()
         vendedor = (body.get('vendedor') or '').strip()
+        cod_vendedor = (body.get('codVendedor') or '').strip()
         endereco = (body.get('endereco') or '').strip()
         itens_form = body.get('itens', [])
 
@@ -715,7 +717,11 @@ def processar_avulso():
             'lng': None,
         }
 
-        dados = {'filiais': [filial_dict], 'clienteNome': razao, 'vendedor': vendedor, 'telefone': ''}
+        # codVend/codCond seguem a mesma convenção do fluxo com perfil (ler_perfil
+        # em perfil.py já expõe meta['codVend']/meta['codCond'] pro cabeçalho do
+        # Excel/PDF) — aqui vêm da planilha de faturamento avulso em vez do perfil.
+        dados = {'filiais': [filial_dict], 'clienteNome': razao, 'vendedor': vendedor,
+                 'telefone': '', 'codVend': cod_vendedor, 'codCond': cod_cond}
 
         logo_bytes = None  # cliente avulso não tem logo própria no PDF
 
