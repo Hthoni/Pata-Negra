@@ -6,17 +6,18 @@ Layout do item (uma linha por produto):
   {CodImbativel} {RefForn} KG {Descrição...} {Qtd} {TipoEmb}{TamCx} KG
   {Decto} {Bonif} {Pr.Unit} {Pr.Emb} {Vlr.Total}
 Observações do layout (extração via pdfplumber cola alguns tokens):
-  - Embalagem sai como "CX10 KG" / "KG10 KG": Tipo (CX|KG) + tamanho da caixa
-    (kg/cx) grudados. TamCx = 10 nestes pedidos.
+  - Embalagem sai como "CX10 KG" / "KG10 KG" / "UN1 KG": Tipo (CX|KG|UN) +
+    tamanho da caixa (kg/cx, ou 1 para UN=unidade/granel) grudados.
   - Decto e Bonif podem vir grudados ("0,000,000"); por isso lê-se o VALOR pela
     ÚLTIMA coluna numérica da linha (Vlr. Total), que é a autoritativa.
 
 Conversão p/ KG (faturamento em KG):
-  A coluna Qtd é em CAIXAS; kg = Qtd * TamCx (10). O "Pr. Unit" impresso é o
-  preço de TABELA (~2% acima); o preço líquido real = Vlr.Total ÷ kg. Ex.:
-  CHISPE 5 cx * 10 = 50 kg, Vlr 530,00 -> 10,60/kg. A soma dos Vlr. Total
-  confere com "Valor Total Produtos" do rodapé. Passa emb_tipo='KG' p/ o
-  processar_item NÃO remultiplicar por kgCx.
+  A coluna Qtd é em CAIXAS (ou unidades, se TipoEmb=UN); kg = Qtd * TamCx.
+  O "Pr. Unit" impresso é o preço de TABELA (às vezes ~2% acima do líquido,
+  às vezes igual — varia por item); o preço líquido real = Vlr.Total ÷ kg.
+  Ex.: CHISPE 5 cx * 10 = 50 kg, Vlr 530,00 -> 10,60/kg. A soma dos Vlr.
+  Total confere com "Valor Total Produtos" do rodapé. Passa emb_tipo='KG'
+  p/ o processar_item NÃO remultiplicar por kgCx.
 
 EMPRESA: pelo fornecedor do pedido.
   CNPJ 10.171.633 (INDUSTRIA DE ALIMENTOS PATA NEGRA) -> empresa 1 (Indústria)
@@ -26,6 +27,23 @@ Bate com o Fat do perfil (produtos Imbatível são Fat 1 / Indústria).
 Filial: cliente de uma unidade (CNPJ 28.480.886/0001-37, Niterói). O main.py
 enriquece região/lat/lng pelo CNPJ contra a tabela M:T do perfil. Match de
 produto por NOME no perfil (col C); devolve o Cód. Interno (col B).
+
+FIX (17/08/2026):
+1) O tipo de embalagem só aceitava (CX|KG) — o pedido nº 69075 trouxe a
+   Costela com "UN1" (unidade, granel, sem caixa fechada), tipo que esse
+   parser nunca tinha visto. A linha inteira falhava o regex e o item era
+   descartado SEM NENHUM AVISO (o parse() simplesmente retornava 3 itens
+   em vez de 4, e o pedido processava "normal", incompleto). Adicionado
+   "UN" como terceira opção de tipo de embalagem.
+2) Trava de reconciliação NOVA: depois de montar os itens, soma a
+   coluna Qtd (qtdeCaixas) de cada um e compara com "Quantidade de
+   Peças" do cabeçalho ("Dados Comerciais"). É mais simples e mais
+   direto que comparar valor em R$ (não depende de calcular kg nem
+   preço líquido — é só soma de inteiro contra inteiro). Se não bater
+   (por causa de outro tipo de embalagem ainda não previsto, ou
+   qualquer outro motivo), o pedido inteiro para com um erro claro em
+   vez de processar incompleto silenciosamente — mesmo princípio já
+   adotado no matching de produto (perfil.py).
 """
 
 __cliente_nome__ = "Imbativel"
@@ -39,9 +57,9 @@ CNPJ_INDUSTRIA = '10171633'
 CNPJ_DISTRIBUIDORA = '56423719'
 
 _RE_NUM = re.compile(r'\d[\d.]*,\d+|\d+')
-# item: Cod, RefForn, KG, Desc, Qtd, (CX|KG)+TamCx, KG, resto(nºs; Vlr=último)
+# item: Cod, RefForn, KG, Desc, Qtd, (CX|KG|UN)+TamCx, KG, resto(nºs; Vlr=último)
 _RE_ITEM = re.compile(
-    r'^\s*(\d+)\s+(\d+)\s+KG\s+(.+?)\s+(\d+)\s+(CX|KG)\s*(\d+)\s+KG\s+(.+)$', re.M)
+    r'^\s*(\d+)\s+(\d+)\s+KG\s+(.+?)\s+(\d+)\s+(CX|KG|UN)\s*(\d+)\s+KG\s+(.+)$', re.M)
 
 
 def _num(s):
@@ -102,6 +120,23 @@ def parse(pdf_bytes, produtos):
 
     if not itens:
         return []
+
+    # FIX 2: reconciliação contra "Quantidade de Peças" do cabeçalho — soma
+    # simples de inteiro (Qtd de cada linha) contra inteiro, sem depender de
+    # cálculo de kg/preço. Se não bater, para tudo com erro em vez de deixar
+    # passar um pedido incompleto (ex.: um tipo de embalagem ainda não
+    # previsto na regex, como aconteceu com o "UN" antes deste fix).
+    pecas_esperadas_str = fm(r'Quantidade de Pe[çc]as:\s*(\d+)')
+    if pecas_esperadas_str:
+        pecas_esperadas = int(pecas_esperadas_str)
+        pecas_calculadas = int(sum(i['qtdeCaixas'] for i in itens))
+        if pecas_calculadas != pecas_esperadas:
+            raise ValueError(
+                f'Pedido inconsistente: o cabeçalho do PDF diz "Quantidade de Peças" = '
+                f'{pecas_esperadas}, mas só consegui reconhecer {pecas_calculadas} '
+                f'em {len(itens)} item(ns). Provavelmente algum item tem um formato de '
+                f'embalagem ainda não previsto no parser — confira o PDF original.'
+            )
 
     return [{
         'filial': filial_nome,
