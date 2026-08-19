@@ -915,7 +915,7 @@ async function gerarPedido() {
 // CLIENTE AVULSO — pedido pontual sem parser/perfil dedicado.
 // Popup próprio (#overlayAvulso), independente do fluxo S.cliente acima.
 // ═══════════════════════════════════════════════════════════════════
-var _avulso = { produtosMaster: [], itens: [], faturamentoEncontrado: false };
+var _avulso = { produtosMaster: [], itens: [], faturamentoEncontrado: false, regiao: '', lat: null, lng: null };
 
 function abrirPedidoAvulso() {
   document.getElementById('overlayAvulso').classList.add('aberto');
@@ -1119,9 +1119,17 @@ function avBuscarCnpj() {
         document.getElementById('avulsoSubtitulo').textContent = d.razaoSocial || '';
         aviso.style.display = 'none';
         _avulso.faturamentoEncontrado = true;
+        // Região/lat/lng vêm da planilha (não têm campo próprio no popup —
+        // usados só na hora de gerar o pedido, pro romaneio ganhar pino no mapa).
+        _avulso.regiao = d.regiao || '';
+        _avulso.lat = d.lat != null ? d.lat : null;
+        _avulso.lng = d.lng != null ? d.lng : null;
       } else {
         aviso.style.display = 'block';
         _avulso.faturamentoEncontrado = false;
+        _avulso.regiao = '';
+        _avulso.lat = null;
+        _avulso.lng = null;
       }
       avValidarFormulario();
     })
@@ -1166,6 +1174,9 @@ function avGerarPedido() {
     vendedor: document.getElementById('avVendedor').value.trim(),
     codVendedor: document.getElementById('avCodVendedor').value.trim(),
     endereco: document.getElementById('avEndereco').value.trim(),
+    regiao: _avulso.regiao,
+    lat: _avulso.lat,
+    lng: _avulso.lng,
     itens: itens,
   };
 
