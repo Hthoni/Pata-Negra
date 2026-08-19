@@ -4,15 +4,14 @@ Cliente Avulso — pedidos pontuais sem parser/perfil dedicado.
 Em vez de um Perfil por cliente (produtos + filiais cadastrados), usa uma
 única planilha de FATURAMENTO com os dados fixos por CNPJ (código do
 cliente, razão social, código da condição de pagamento, vendedor + código,
-endereço de entrega). O operador digita o CNPJ no popup, o sistema
-completa esses dados automaticamente, e monta o pedido linha a linha
-escolhendo o produto da tabela MASTER (não existe perfil próprio pra esse
-"cliente", então não há preço de referência nem alerta de divergência de
-preço pra esses pedidos).
+endereço de entrega, região e coordenadas). O operador digita o CNPJ no
+popup, o sistema completa esses dados automaticamente (incluindo o pino no
+mapa), e monta o pedido linha a linha escolhendo o produto da tabela
+MASTER (não existe perfil próprio pra esse "cliente", então não há preço
+de referência nem alerta de divergência de preço pra esses pedidos).
 
 Planilha de faturamento (aba única, uma linha por CNPJ) — layout real
-(exportado do sistema de faturamento existente do cliente, sem coluna de
-descrição textual da condição de pagamento, só o código):
+(exportado do sistema de faturamento existente do cliente):
   Col A: Código Cliente (código interno do sistema de faturamento)
   Col B: CNPJ
   Col C: Razão Social
@@ -20,16 +19,20 @@ descrição textual da condição de pagamento, só o código):
   Col E: Vendedor (nome)
   Col F: Código do Vendedor
   Col G: Endereço de Entrega
+  Col H: Região
+  Col I: Lat
+  Col J: Long
 Cabeçalho na linha 1; dados a partir da linha 2.
 
-FIX (18/08/2026): a primeira versão deste módulo assumia CNPJ na coluna A
-e uma coluna de texto "Condição de Pagamento" que não existe na planilha
-real do Henrique (ela começa com "Código Cliente" e só tem o CÓDIGO da
-condição de pagamento, sem descrição textual). Como a leitura pegava a
-coluna errada como CNPJ (lendo "Código Cliente", ex. "04513", em vez do
-CNPJ de verdade), a busca por CNPJ no popup NUNCA encontrava nada — o
-dicionário ficava indexado pelo valor errado. Corrigido pra ler as
-colunas na ordem real da planilha.
+FIX (19/08/2026): adicionadas as colunas H (Região), I (Lat) e J (Long) —
+sem elas, o romaneio do pedido avulso nunca ganhava pino no mapa nem
+região de roteirização (main.py salvava lat=None/lng=None de propósito,
+já que não havia de onde tirar essas coordenadas). Lat/Long tolera vírgula
+decimal (padrão BR, ex.: "-22,8263973"), igual ao perfil.py normal.
+
+FIX (18/08/2026, mantido): layout real não tem coluna de texto "Condição
+de Pagamento" nem CNPJ na coluna A — a coluna A é "Código Cliente", CNPJ
+é a B. Ver histórico do módulo se precisar do contexto completo.
 """
 import io
 import re
@@ -40,10 +43,21 @@ def _normaliza_cnpj(cnpj):
     return re.sub(r'\D', '', str(cnpj or ''))
 
 
+def _coord(v):
+    """Lat/Lng tolerante a vírgula decimal (BR) ou ponto; vazio/ruim -> None
+    (a filial fica sem pino no mapa em vez de derrubar a leitura inteira)."""
+    if v is None:
+        return None
+    try:
+        return float(str(v).strip().replace(',', '.'))
+    except (ValueError, TypeError):
+        return None
+
+
 def ler_faturamento_avulso(xlsx_bytes):
     """Lê a planilha de faturamento avulso e devolve
     {cnpj_normalizado: {codigoCliente, cnpj, razaoSocial, codCondPgto,
-                         vendedor, codVendedor, endereco}}."""
+                         vendedor, codVendedor, endereco, regiao, lat, lng}}."""
     wb = openpyxl.load_workbook(io.BytesIO(xlsx_bytes), data_only=True)
     ws = wb[wb.sheetnames[0]]
     out = {}
@@ -62,6 +76,9 @@ def ler_faturamento_avulso(xlsx_bytes):
             'vendedor': str(row[4] or '').strip() if len(row) > 4 and row[4] is not None else '',
             'codVendedor': str(row[5] or '').strip() if len(row) > 5 and row[5] is not None else '',
             'endereco': str(row[6] or '').strip() if len(row) > 6 else '',
+            'regiao': str(row[7] or '').strip() if len(row) > 7 and row[7] is not None else '',
+            'lat': _coord(row[8]) if len(row) > 8 else None,
+            'lng': _coord(row[9]) if len(row) > 9 else None,
         }
     return out
 
