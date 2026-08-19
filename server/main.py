@@ -655,6 +655,17 @@ def processar_avulso():
         vendedor = (body.get('vendedor') or '').strip()
         cod_vendedor = (body.get('codVendedor') or '').strip()
         endereco = (body.get('endereco') or '').strip()
+        regiao = (body.get('regiao') or '').strip()
+        lat = body.get('lat')
+        lng = body.get('lng')
+        try:
+            lat = float(lat) if lat not in (None, '') else None
+        except (ValueError, TypeError):
+            lat = None
+        try:
+            lng = float(lng) if lng not in (None, '') else None
+        except (ValueError, TypeError):
+            lng = None
         itens_form = body.get('itens', [])
 
         if not cnpj:
@@ -711,10 +722,10 @@ def processar_avulso():
             'condPgto': cond,
             'solicitante': operador,
             'empresa': itens[0]['empresa'],
-            'regiao': '',
+            'regiao': regiao,
             'itens': itens,
-            'lat': None,
-            'lng': None,
+            'lat': lat,
+            'lng': lng,
         }
 
         # codVend/codCond seguem a mesma convenção do fluxo com perfil (ler_perfil
@@ -735,10 +746,10 @@ def processar_avulso():
             'clienteNome': razao,
             'filial': razao,
             'numero': None,
-            'regiao': '',
+            'regiao': regiao,
             'cnpj': cnpj,
-            'lat': None,
-            'lng': None,
+            'lat': lat,
+            'lng': lng,
             'dataPedido': agora.strftime('%d/%m/%Y'),
             'dataGeracao': datetime.datetime.utcnow().isoformat(),
             'kgPlanejados': round(sum(i['kgPlanejados'] for i in itens), 1),
