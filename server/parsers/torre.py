@@ -1,17 +1,31 @@
 """
-Parser Torre (unificado, multi-filial) — formato SuasVendas (mesmo layout do Zona Sul / Adonai /
-Princesa). O cliente migrou do formato antigo (ERP próprio) para o SuasVendas.
+Parser Torre (unificado, multi-filial) — formato SuasVendas.
 
-CNPJ da loja no cabeçalho ("CNPJ/CPF:"); o main.py casa contra a tabela de
-filiais (M:T) do Perfil para enriquecer nome/região/lat/lng.
+FIX (20/08/2026): o cliente mudou o layout do pedido (mesma mudança já
+vista no Zona Sul em 18/08/2026). O formato antigo tinha colunas
+Seq/Cód/Nome/Qtde/IPI%/Peso/R$ Total (sem impostos)/R$ Total c/ impostos.
+O novo formato é mais enxuto — SEM as colunas Qtde e IPI% separadas, e sem
+"R$ Total" sem impostos:
 
-Código do produto é MISTO: a maioria sem dígito verificador (3425, 48315,
-044391) e alguns com (6580-3, 5116-0). Regex: (\\d+(?:-\\d+)?).
+    Seq  Cód(-DV)  Produto  Peso(Kg)  R$  Preço/Kg  R$ Total c/impostos
 
-Unidade por item: MISTURA unidades — a maioria em kg, mas alguns (linguiça,
-feijoada) vêm em CAIXAS, apesar de o PDF rotular "Kg". emb_tipo é decidido
-item a item pelo Perfil: unidFat='cx' -> 'CX' (qtde = nº de caixas ->
-kg = qtde x kgCx); senão 'KG' (qtde já em kg).
+Ex.: "1 8841 LINGUICA SUINA MINEIRA PATA NEGRA PORC PCT 400g (CX C/25)
+      50,000 R$ 260,000 13.000,00"
+
+Regex reescrita pra esse layout mais curto. O resto da lógica (match por
+nome exato no Perfil, CNPJ casado contra a tabela M:T pelo main.py,
+unidade decidida item a item pelo Perfil) continua igual.
+
+Código do produto é MISTO: a maioria sem dígito verificador (10, 35, 66) e
+alguns com (6580-3, 5116-0). Regex: (\\d+(?:-\\d+)?).
+
+Unidade por item: o Torre MISTURA unidades no mesmo pedido — a maioria em
+kg, mas a linguiça vem em CAIXAS, com o "Peso (Kg)" na verdade sendo o Nº
+de caixas e o "Preço/Kg" sendo o preço POR CAIXA (mesmo padrão já visto no
+GMAP/Vianense/Zona Sul) — o Perfil já reflete isso corretamente pra esse
+SKU (unidFat='cx', Preço Unit. na mesma base de caixa). emb_tipo é
+decidido item a item pelo próprio Perfil: unidFat='cx' -> 'CX' (qtde = nº
+de caixas -> kg = qtde x kgCx); senão 'KG' (qtde já em kg).
 """
 
 __cliente_nome__ = "Torre"
@@ -20,6 +34,15 @@ import io
 import re
 import pdfplumber
 from perfil import processar_item, match_perfil
+
+_RE_ITEM = re.compile(
+    r'(\d+)\s+(\d+(?:-\d+)?)\s+([A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇ][^\n]+?)\s+([\d.,]+)\s+R\$\s*([\d,.]+)\s+([\d,.]+)',
+    re.M
+)
+
+
+def _num(s):
+    return float((s or '0').replace('.', '').replace(',', '.'))
 
 
 def parse(pdf_bytes, produtos):
@@ -42,23 +65,22 @@ def parse(pdf_bytes, produtos):
     end_m = re.search(r'Endereço:\s*(.+?)CEP', txt)
     endereco = end_m.group(1).strip() if end_m else ''
 
-    # itens: Seq  Cód(-DV opcional)  Nome  Qtde  IPI%  Peso  R$ Preço/Kg  Total
-    reItem = re.compile(
-        r'(\d+)\s+(\d+(?:-\d+)?)\s+([A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇ][^\n]+?)\s+([\d.,]+)\s+[\d,.]+\s+[\d,.]+\s+R\$\s*([\d,.]+)\s+([\d,.]+)',
-        re.M
-    )
     itens = []
-    for m in reItem.finditer(txt):
-        nome = m.group(3).strip()
-        qtde_ped = float(m.group(4).replace('.', '').replace(',', '.'))
-        preco = float(m.group(5).replace('.', '').replace(',', '.'))
-        total = float(m.group(6).replace('.', '').replace(',', '.'))
+    for m in _RE_ITEM.finditer(txt):
+        cod = m.group(2)
+        nome = re.sub(r'\s+', ' ', m.group(3)).strip()
+        qtde_ped = _num(m.group(4))
+        preco = _num(m.group(5))
+        total = _num(m.group(6))
+
         pf = match_perfil(nome, produtos)
         emb_tipo = 'CX' if (pf and str(pf.get('unidFat', '')).lower() == 'cx') else 'KG'
-        it = processar_item(m.group(2), nome, emb_tipo, 1, qtde_ped, preco, total, produtos)
+        it = processar_item(cod, nome, emb_tipo, 1, qtde_ped, preco, total, produtos)
         itens.append(it)
 
     if itens:
+        # 'filial' é fallback: o main.py sobrescreve pelo nome oficial ao
+        # casar o CNPJ contra a tabela de filiais do Perfil (M:T).
         filiais.append({'filial': razao or 'TORRE', 'pedidoNum': pedidoNum, 'cnpj': cnpj,
                         'endereco': endereco, 'dataPedido': dataPedido, 'dataEntrega': '',
                         'condPgto': '', 'empresa': 2, 'itens': itens})
