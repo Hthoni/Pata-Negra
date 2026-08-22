@@ -284,6 +284,8 @@
   var SITUACOES = [{ key:'pendente', label:'Pendente' }, { key:'em_rota', label:'Em rota' }];
   function statusKey(rom) { return (rom.status === 'em_rota') ? 'em_rota' : 'pendente'; }
   function regiaoKey(rom) { return (rom.regiao && String(rom.regiao).trim()) || '__sem__'; }
+  var motoristasDisponiveis = [];  // carregada uma vez, via /motoristas
+
   // Simulador de plano de entregas: ids de romaneio selecionados (persiste no navegador).
   var simIds = new Set(JSON.parse(localStorage.getItem('pn_sim_ids') || '[]'));
   function romById(id) { for (var i = 0; i < romaneios.length; i++) { if (romaneios[i].id === id) return romaneios[i]; } return null; }
@@ -736,10 +738,17 @@
   async function salvarEntrega() {
     var ids = Array.from(simIds);
     if (!ids.length) { alert('Selecione ao menos um pedido para salvar a entrega.'); return; }
+    var selMotorista = document.getElementById('ps-motorista');
+    if (!selMotorista || !selMotorista.value) { alert('Selecione o motorista (ou "Indefinido") antes de salvar a entrega.'); return; }
+    var motorista = '', telefoneMotorista = '';
+    if (selMotorista.value !== 'indefinido') {
+      telefoneMotorista = selMotorista.value;
+      motorista = selMotorista.options[selMotorista.selectedIndex].getAttribute('data-nome') || '';
+    }
     var nome = prompt('Nome da entrega (ex.: Caminhão do Juca):');
     if (!nome || !nome.trim()) return;
     try {
-      var resp = await fetch(SERVER_URL + '/entregas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: nome.trim(), pedidoIds: ids }) });
+      var resp = await fetch(SERVER_URL + '/entregas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: nome.trim(), pedidoIds: ids, motorista: motorista, telefoneMotorista: telefoneMotorista }) });
       var d = await resp.json();
       if (resp.status === 409) {
         var lista = (d.conflitos || []).map(function(c) { return '• ' + c.cliente + ' (' + c.filial + ') → ' + c.entrega; }).join('\n');
@@ -795,6 +804,12 @@
         '</div>';
     });
     html += '<div class="ps-total"><span>Total (' + sel.length + ' ped.)</span><b>' + Math.round(tot) + ' kg</b></div>';
+    var optsMotorista = '<option value="" disabled selected>Selecione o motorista...</option>';
+    motoristasDisponiveis.forEach(function(m) {
+      optsMotorista += '<option value="' + m.telefone + '" data-nome="' + m.nome + '">' + m.nome + '</option>';
+    });
+    optsMotorista += '<option value="indefinido">Indefinido</option>';
+    html += '<div class="ps-acoes"><select id="ps-motorista" required style="width:100%;height:34px;border-radius:6px;border:1px solid var(--border, #ccc);font-family:inherit;font-size:13px">' + optsMotorista + '</select></div>';
     html += '<div class="ps-acoes"><button class="ps-btn ps-salvar" onclick="salvarEntrega()">Salvar entrega</button></div>';
     html += '<div class="ps-acoes">' +
       '<button class="ps-btn ps-det" onclick="detalharTotais()">Detalhar totais</button>' +
@@ -1101,8 +1116,16 @@
     document.getElementById('btn-editar').style.display = 'inline-block';
   }
 
+  function carregarMotoristas() {
+    fetch(SERVER_URL + '/motoristas')
+      .then(function(r) { return r.json(); })
+      .then(function(d) { motoristasDisponiveis = d.motoristas || []; })
+      .catch(function() { motoristasDisponiveis = []; });
+  }
+
   carregarZonas();
   carregarRomaneios();
+  carregarMotoristas();
 </script>
 </body>
 </html>
