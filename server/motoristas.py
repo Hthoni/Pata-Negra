@@ -18,12 +18,32 @@ def _normaliza_telefone(tel):
     return re.sub(r'\D', '', str(tel or ''))
 
 
+def _parece_telefone(valor):
+    """True se o valor, uma vez limpo de pontuação, tem cara de telefone
+    (10+ dígitos — DDD+número, com ou sem DDI)."""
+    return len(_normaliza_telefone(valor)) >= 10
+
+
 def ler_motoristas(xlsx_bytes):
-    """Devolve lista [{'nome':, 'telefone':}], na ordem da planilha."""
+    """Devolve lista [{'nome':, 'telefone':}], na ordem da planilha.
+
+    FIX (22/08/2026): a planilha pode vir COM ou SEM linha de cabeçalho —
+    detecta automaticamente olhando se a coluna B da primeira linha tem
+    cara de telefone (nesse caso, é dado de verdade, não cabeçalho, e a
+    leitura começa da linha 1; senão, pula a primeira linha como
+    cabeçalho, como antes)."""
     wb = openpyxl.load_workbook(io.BytesIO(xlsx_bytes), data_only=True)
     ws = wb[wb.sheetnames[0]]
+    linhas = list(ws.iter_rows(values_only=True))
+    if not linhas:
+        return []
+
+    primeira = linhas[0]
+    tem_cabecalho = not (len(primeira) > 1 and _parece_telefone(primeira[1]))
+    dados = linhas[1:] if tem_cabecalho else linhas
+
     out = []
-    for row in ws.iter_rows(min_row=2, values_only=True):
+    for row in dados:
         if not row or not row[0]:
             continue
         nome = str(row[0]).strip()
