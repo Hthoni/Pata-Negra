@@ -111,7 +111,14 @@ def ler_filiais(perfil_bytes):
     Endereço (col P), Cidade (col Q) e Região (col R), usadas pelo fluxo de
     pedido manual e pelo card de Região no PDF de expedição — para clientes
     que não têm essas colunas, ficam como string vazia.
-    Retorna dict {cnpj_normalizado: {'nome', 'numero', 'endereco', 'cidade', 'regiao', 'lat', 'lng'}}.
+
+    NOVO (22/08/2026): colunas U-Z = até 3 pares nome/telefone de
+    encarregado da filial (canal WhatsApp — whatsapp.py). Cada par é
+    opcional (onboarding gradual); só entra na lista se nome E telefone
+    estiverem preenchidos.
+
+    Retorna dict {cnpj_normalizado: {'nome', 'numero', 'endereco', 'cidade',
+    'regiao', 'lat', 'lng', 'encarregados': [{'nome','telefone'}, ...]}}.
     Usado para enriquecer pedidos que só trazem CNPJ (Atacadão) ou
     CNPJ+nome (DOM) com o número de filial cadastrado uma única vez no perfil,
     e para alimentar o dropdown de filiais no fluxo manual."""
@@ -131,16 +138,29 @@ def ler_filiais(perfil_bytes):
         if not cnpj_raw:
             continue
         cnpj_norm = _normaliza_cnpj(cnpj_raw)
-        if cnpj_norm:
-            filiais[cnpj_norm] = {
-                'nome': str(nome or '').strip(),
-                'numero': numero,
-                'endereco': str(endereco or '').strip(),
-                'cidade': str(cidade or '').strip(),
-                'regiao': str(regiao or '').strip(),
-                'lat': _coord(lat),
-                'lng': _coord(lng),
-            }
+        if not cnpj_norm:
+            continue
+
+        # NOVO: até 3 pares nome/telefone de encarregado (U/V, W/X, Y/Z)
+        encarregados = []
+        for i_nome, i_tel in ((20, 21), (22, 23), (24, 25)):
+            if len(r) <= i_tel:
+                continue
+            enc_nome = str(r[i_nome] or '').strip() if r[i_nome] else ''
+            enc_tel = str(r[i_tel] or '').strip() if r[i_tel] else ''
+            if enc_nome and enc_tel:
+                encarregados.append({'nome': enc_nome, 'telefone': enc_tel})
+
+        filiais[cnpj_norm] = {
+            'nome': str(nome or '').strip(),
+            'numero': numero,
+            'endereco': str(endereco or '').strip(),
+            'cidade': str(cidade or '').strip(),
+            'regiao': str(regiao or '').strip(),
+            'lat': _coord(lat),
+            'lng': _coord(lng),
+            'encarregados': encarregados,  # NOVO
+        }
     return filiais
 
 
