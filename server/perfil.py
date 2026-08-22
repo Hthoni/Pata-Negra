@@ -112,13 +112,18 @@ def ler_filiais(perfil_bytes):
     pedido manual e pelo card de Região no PDF de expedição — para clientes
     que não têm essas colunas, ficam como string vazia.
 
-    NOVO (22/08/2026): colunas U-Z = até 3 pares nome/telefone de
-    encarregado da filial (canal WhatsApp — whatsapp.py). Cada par é
-    opcional (onboarding gradual); só entra na lista se nome E telefone
-    estiverem preenchidos.
+    ATUALIZADO (22/08/2026): colunas U em diante = até 3 GRUPOS de 4
+    colunas por encarregado da filial: nome, telefone, data de aniversário,
+    time de futebol (U/V/W/X, Y/Z/AA/AB, AC/AD/AE/AF). Nome+telefone
+    continuam obrigatórios pra o grupo contar (é o que o canal operacional
+    de WhatsApp usa — whatsapp.py); aniversário e time são OPCIONAIS e só
+    servem pra alimentar campos personalizados/segmentação de campanha
+    dentro do próprio Botconversa (uso B da Planta) — nunca são usados em
+    nenhuma lógica do nosso backend.
 
     Retorna dict {cnpj_normalizado: {'nome', 'numero', 'endereco', 'cidade',
-    'regiao', 'lat', 'lng', 'encarregados': [{'nome','telefone'}, ...]}}.
+    'regiao', 'lat', 'lng', 'encarregados': [{'nome','telefone',
+    'dataAniversario','timeFutebol'}, ...]}}.
     Usado para enriquecer pedidos que só trazem CNPJ (Atacadão) ou
     CNPJ+nome (DOM) com o número de filial cadastrado uma única vez no perfil,
     e para alimentar o dropdown de filiais no fluxo manual."""
@@ -141,15 +146,23 @@ def ler_filiais(perfil_bytes):
         if not cnpj_norm:
             continue
 
-        # NOVO: até 3 pares nome/telefone de encarregado (U/V, W/X, Y/Z)
+        # ATUALIZADO: até 3 grupos de 4 colunas por encarregado
+        # (U/V/W/X, Y/Z/AA/AB, AC/AD/AE/AF = nome/telefone/aniversário/time)
         encarregados = []
-        for i_nome, i_tel in ((20, 21), (22, 23), (24, 25)):
-            if len(r) <= i_tel:
+        for i_nome, i_tel, i_aniv, i_time in ((20, 21, 22, 23), (24, 25, 26, 27), (28, 29, 30, 31)):
+            if len(r) <= i_time:
                 continue
             enc_nome = str(r[i_nome] or '').strip() if r[i_nome] else ''
             enc_tel = str(r[i_tel] or '').strip() if r[i_tel] else ''
-            if enc_nome and enc_tel:
-                encarregados.append({'nome': enc_nome, 'telefone': enc_tel})
+            enc_aniv = str(r[i_aniv] or '').strip() if r[i_aniv] else ''
+            enc_time = str(r[i_time] or '').strip() if r[i_time] else ''
+            if enc_nome and enc_tel:  # nome+telefone obrigatórios; aniversário/time opcionais
+                encarregados.append({
+                    'nome': enc_nome,
+                    'telefone': enc_tel,
+                    'dataAniversario': enc_aniv,
+                    'timeFutebol': enc_time,
+                })
 
         filiais[cnpj_norm] = {
             'nome': str(nome or '').strip(),
@@ -159,7 +172,7 @@ def ler_filiais(perfil_bytes):
             'regiao': str(regiao or '').strip(),
             'lat': _coord(lat),
             'lng': _coord(lng),
-            'encarregados': encarregados,  # NOVO
+            'encarregados': encarregados,
         }
     return filiais
 
