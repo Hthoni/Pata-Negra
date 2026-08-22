@@ -27,7 +27,7 @@
 
     /* Filtros (cliente, cor, peso, região) */
     .filtro-wrap { position:relative; }
-    #btn-filtro, #btn-filtro-cor, #btn-filtro-peso, #btn-filtro-regiao, #btn-filtro-situacao { height:38px; min-width:120px; box-sizing:border-box; -webkit-appearance:none; appearance:none; margin:0; font-family:inherit; display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:0 16px; border-radius:var(--radius); border:1px solid var(--border); background:#fff; font-size:14px; cursor:pointer; line-height:1; }
+    #btn-filtro, #btn-filtro-cor, #btn-filtro-peso, #btn-filtro-regiao, #btn-filtro-situacao { height:38px; min-width:96px; box-sizing:border-box; -webkit-appearance:none; appearance:none; margin:0; font-family:inherit; display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:0 12px; border-radius:var(--radius); border:1px solid var(--border); background:#fff; font-size:13px; cursor:pointer; line-height:1; }
     #btn-filtro:hover, #btn-filtro-cor:hover, #btn-filtro-peso:hover, #btn-filtro-regiao:hover, #btn-filtro-situacao:hover { background:var(--bg); }
     #btn-filtro.filtro-ativo, #btn-filtro-cor.filtro-ativo, #btn-filtro-peso.filtro-ativo, #btn-filtro-regiao.filtro-ativo, #btn-filtro-situacao.filtro-ativo { background:var(--accent); color:#fff; border:1px solid var(--accent); }
     #btn-filtro.filtro-ativo:hover, #btn-filtro-cor.filtro-ativo:hover, #btn-filtro-peso.filtro-ativo:hover, #btn-filtro-regiao.filtro-ativo:hover, #btn-filtro-situacao.filtro-ativo:hover { background:#6F1515; }
@@ -217,10 +217,12 @@
       <button id="btn-filtro-situacao" onclick="toggleFiltroSituacao(event)">Situação</button>
       <div class="filtro-dropdown" id="filtro-situacao-dropdown"></div>
     </div>
-    <button id="btn-subir-master" style="margin-left:auto;font-family:inherit;height:34px;padding:0 18px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap" onclick="document.getElementById('inp-master').click()">Subir Master</button>
+    <button id="btn-subir-master" style="margin-left:auto;font-family:inherit;height:34px;padding:0 12px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:5px" onclick="document.getElementById('inp-master').click()">↑ Master</button>
     <input type="file" id="inp-master" accept=".xlsx" style="display:none" onchange="uploadMaster(this)">
-    <button id="btn-subir-faturamento" style="font-family:inherit;height:34px;padding:0 18px;border-radius:8px;border:1px solid var(--accent);background:#fff;color:var(--accent);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap" onclick="document.getElementById('inp-faturamento').click()">Subir Faturamento Avulso</button>
+    <button id="btn-subir-faturamento" style="font-family:inherit;height:34px;padding:0 12px;border-radius:8px;border:1px solid var(--accent);background:#fff;color:var(--accent);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:5px" onclick="document.getElementById('inp-faturamento').click()">↑ Avulso</button>
     <input type="file" id="inp-faturamento" accept=".xlsx" style="display:none" onchange="uploadFaturamentoAvulso(this)">
+    <button id="btn-subir-motoristas" style="font-family:inherit;height:34px;padding:0 12px;border-radius:8px;border:1px solid var(--accent);background:#fff;color:var(--accent);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:5px" onclick="document.getElementById('inp-motoristas').click()">↑ Motoristas</button>
+    <input type="file" id="inp-motoristas" accept=".xlsx" style="display:none" onchange="uploadMotoristas(this)">
   </div>
 
   <div id="loading">
@@ -502,6 +504,28 @@
       alert('Planilha de faturamento avulso atualizada: ' + (d.cnpjs || 0) + ' CNPJs carregados.');
     } catch (e) {
       alert('Erro de conexão ao subir a planilha de faturamento: ' + e.message);
+    } finally {
+      if (btn) btn.textContent = txt;
+    }
+  }
+
+  async function uploadMotoristas(inp) {
+    var f = inp.files[0];
+    if (!f) return;
+    inp.value = '';
+    var btn = inp.previousElementSibling || document.querySelector('.btn-header[onclick*="inp-motoristas"]');
+    var txt = btn ? btn.textContent : '';
+    if (btn) btn.textContent = 'Enviando…';
+    try {
+      var form = new FormData();
+      form.append('motoristas', f);
+      var resp = await fetch(SERVER_URL + '/motoristas', { method: 'POST', body: form });
+      if (resp.status === 404) { alert('A rota /motoristas ainda não está no ar (deploy do backend pendente). Aguarde o deploy terminar e tente de novo.'); return; }
+      var d = await resp.json();
+      if (!resp.ok || d.erro) { alert('Erro ao subir a planilha de motoristas: ' + (d.erro || resp.status)); return; }
+      alert('Planilha de motoristas atualizada: ' + (d.motoristas || 0) + ' motoristas carregados.');
+    } catch (e) {
+      alert('Erro de conexão ao subir a planilha de motoristas: ' + e.message);
     } finally {
       if (btn) btn.textContent = txt;
     }
