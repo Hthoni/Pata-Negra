@@ -559,6 +559,15 @@ def set_fase_entrega(entrega_id):
         else:
             ent.pop('despachadaEm', None)
         salvar_entrega(entrega_id, ent)
+
+        # NOVO (22/08/2026) - dispara as mensagens de despacho (canal WhatsApp)
+        # só quando a entrega REALMENTE sai pra rota, e só se tiver motorista
+        # definido (ver notificar_despacho_entrega -> pula tudo se não tiver).
+        if nova == 'em_rota':
+            try:
+                whatsapp.notificar_despacho_entrega(ent)
+            except Exception as _e:
+                print(f'[WARN] falha ao notificar despacho da entrega {entrega_id}: {_e}')
         return jsonify({'ok': True, 'fase': nova})
     except Exception as e:
         traceback.print_exc()
