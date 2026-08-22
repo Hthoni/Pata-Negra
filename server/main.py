@@ -45,8 +45,11 @@ import importlib
 import pkgutil
 import parsers
 from avulso import ler_faturamento_avulso, calc_item_avulso
+from motoristas import ler_motoristas
+import whatsapp
 
 _CLIENTE_AVULSO_KEY = '_avulso_faturamento'
+_MOTORISTAS_KEY = '_motoristas'
 
 app = Flask(__name__)
 CORS(app)
@@ -426,7 +429,10 @@ def criar_entrega():
 
         eid = f"ENT-{datetime.datetime.utcnow().strftime('%Y%m%d-%H%M%S')}"
         entrega = {'id': eid, 'nome': nome, 'criadaEm': datetime.datetime.utcnow().isoformat(),
-                   'status': 'em_andamento', 'fase': 'planejamento', 'pedidoIds': ids}
+                   'status': 'em_andamento', 'fase': 'planejamento', 'pedidoIds': ids,
+                   # NOVO (22/08/2026) - canal WhatsApp (whatsapp.py)
+                   'motorista': (body.get('motorista') or '').strip(),
+                   'telefoneMotorista': (body.get('telefoneMotorista') or '').strip()}
         salvar_entrega(eid, entrega)
         # marca os pedidos como em_rota, carimbando a entrega
         for pid in ids:
@@ -784,6 +790,51 @@ def processar_avulso():
     except Exception as e:
         traceback.print_exc()
         return jsonify({'erro': str(e)}), 500
+
+
+@app.route('/motoristas', methods=['POST'])
+def upload_motoristas():
+    """Sobe/atualiza a planilha de motoristas (Nome | Telefone)."""
+    f = request.files.get('motoristas') or request.files.get('file')
+    if not f:
+        return jsonify({'erro': 'Envie o arquivo de motoristas'}), 400
+    try:
+        file_bytes = f.read()
+        lista = ler_motoristas(file_bytes)  # valida o formato antes de salvar
+        salvar_perfil(_MOTORISTAS_KEY, file_bytes, f.filename or 'motoristas.xlsx')
+        return jsonify({'ok': True, 'motoristas': len(lista)})
+    except Exception as e:
+        return jsonify({'erro': f'Não consegui ler a planilha: {e}'}), 400
+
+
+@app.route('/motoristas')
+def listar_motoristas_rota():
+    """Lista motoristas cadastrados, pro dropdown de Plano de Entrega."""
+    if not perfil_existe(_MOTORISTAS_KEY):
+        return jsonify({'motoristas': []})
+    try:
+        lista = ler_motoristas(carregar_perfil_bytes(_MOTORISTAS_KEY))
+        return jsonify({'motoristas': lista})
+    except Exception as e:
+        return jsonify({'erro': str(e)}), 500
+
+
+@app.route('/whatsapp/webhook', methods=['POST'])
+def whatsapp_webhook():
+    """Ponto de entrada único do canal WhatsApp (Botconversa -> Bloco de
+    Integração). Recebe {"telefone": "..."}, devolve {"mensagem": "..."}.
+    Sempre devolve algo, mesmo em erro — o Botconversa precisa de
+    resposta síncrona pra continuar o fluxo."""
+    try:
+        body = request.get_json(force=True) or {}
+        telefone = (body.get('telefone') or '').strip()
+        if not telefone:
+            return jsonify({'mensagem': 'Não recebi seu telefone corretamente. Tenta de novo?'})
+        mensagem = whatsapp.processar_mensagem_entrada(telefone)
+        return jsonify({'mensagem': mensagem})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'mensagem': 'Desculpa, tive um problema — tenta de novo em instantes.'})
 
 
 @app.route('/romaneio-pdf/<rid>')
@@ -1161,6 +1212,7 @@ def processar():
             # processando várias filiais do mesmo cliente quase juntas.
             ts = datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')
             rid = f"{cliente}_{ts}"
+            cnpj_norm_wa = fd.get('cnpj', '').replace('.', '').replace('/', '').replace('-', '')
             salvar_romaneio(rid, {
                 'id': rid,
                 'cliente': cliente,
@@ -1178,6 +1230,10 @@ def processar():
                 'pedidoNum': fd.get('pedidoNum', ''),
                 'empresas': emps,
                 'dataEntregaProgramada': data_prog,
+                # NOVO (22/08/2026) - canal WhatsApp (whatsapp.py)
+                'vendedor': meta.get('vendedor', ''),
+                'telefoneVendedor': meta.get('telefone', ''),
+                'encarregados': filiais_map.get(cnpj_norm_wa, {}).get('encarregados', []),
             })
             # Se o pedido foi programado, usa a data programada no campo Data Entrega
             if data_prog:
@@ -1443,6 +1499,10 @@ def processar_manual():
                 'itens': [{'cod': str(i.get('codInterno') or '').strip(), 'nome': str(i.get('nomeProduto') or ''), 'kg': round(_kg_pdf(i), 3)} for i in itens],
                 'pedidoNum': pedido_num,
                 'empresas': _empresas_da_filial(filiais[0], dados),
+                # NOVO (22/08/2026) - canal WhatsApp (whatsapp.py)
+                'vendedor': meta.get('vendedor', ''),
+                'telefoneVendedor': meta.get('telefone', ''),
+                'encarregados': filial_info.get('encarregados', []),
             })
             # Persistir PDF+Excel do romaneio (separados por empresa se dividido)
             if data_prog:
