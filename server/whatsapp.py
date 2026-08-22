@@ -170,6 +170,85 @@ def montar_menu_motorista(nome_motorista):
     )
 
 
+# ── mensagens de DESPACHO (disparadas quando a entrega vira 'em_rota') ──
+def montar_mensagem_pedido_em_rota(nome, cliente, filial):
+    """Mensagem #1 do rascunho — vendedor + cada encarregado da filial."""
+    return (
+        f'Olá {nome}, temos uma entrega da Pata Negra em rota para o cliente:\n'
+        f'{cliente}\n{filial}\n\n'
+        'Para atualizações desta rota, envie a palavra STATUS para este número.\n'
+        'Agradecemos toda ajuda no desembarque.'
+    )
+
+
+def montar_mensagem_lista_motorista(nome_motorista, pedidos):
+    """Mensagem #2 do rascunho — lista do dia pro motorista."""
+    linhas = [f'Olá {nome_motorista}, temos as seguintes entregas hoje:', '']
+    for r in pedidos:
+        cliente = r.get('clienteNome') or r.get('cliente') or ''
+        filial = r.get('filial', '')
+        linhas.append(f'{cliente} / {filial} / Vendedor {r.get("vendedor", "—")} '
+                      f'telefone {r.get("telefoneVendedor", "—")}')
+    linhas.append('')
+    linhas.append('Bom trabalho!')
+    return '\n'.join(linhas)
+
+
+def notificar_despacho_entrega(entrega):
+    """Chamada quando uma entrega passa pra fase 'em_rota' (o botão de
+    despacho). Dispara a mensagem #1 (vendedor + encarregados) pra cada
+    pedido, e a #2 (lista do dia) pro motorista — UMA vez cada.
+
+    Se a entrega estiver com 'Motorista indefinido' (telefoneMotorista
+    vazio), pula TUDO — nenhuma mensagem é disparada pra essa entrega,
+    nem pra vendedor/encarregado, já que elas fazem referência cruzada
+    ao motorista."""
+    if not (entrega.get('telefoneMotorista') or '').strip():
+        return  # motorista indefinido -> nenhum disparo
+
+    idx = {r['id']: r for r in _pedidos_ativos_hoje()}
+    pedidos = [idx[pid] for pid in entrega.get('pedidoIds', []) if pid in idx]
+    if not pedidos:
+        return
+
+    for r in pedidos:
+        alvos = [(r.get('vendedor', ''), r.get('telefoneVendedor', ''))] + \
+                [(e.get('nome', ''), e.get('telefone', '')) for e in (r.get('encarregados') or [])]
+        for nome, tel in alvos:
+            if tel:
+                _enviar_whatsapp(tel, montar_mensagem_pedido_em_rota(
+                    nome, r.get('clienteNome') or r.get('cliente') or '', r.get('filial', '')))
+
+    _enviar_whatsapp(entrega['telefoneMotorista'],
+                     montar_mensagem_lista_motorista(entrega.get('motorista', ''), pedidos))
+
+
+def _enviar_whatsapp(telefone, texto):
+    """Envia mensagem PROATIVA via API do Botconversa (não é resposta a
+    webhook — aqui é o BELLOTAS que inicia o contato).
+
+    ⚠️ PENDENTE: endpoint exato e formato do corpo só aparecem na doc
+    interativa do Botconversa depois de inserir a chave da conta
+    (Configurações → Integrações → Webhook Integration). Ajustar URL e
+    payload abaixo assim que confirmado."""
+    import os
+    import requests
+    token = os.environ.get('BOTCONVERSA_API_KEY', '')
+    if not token:
+        print(f'[WARN] BOTCONVERSA_API_KEY não configurada — mensagem NÃO enviada pra {telefone}')
+        return
+    try:
+        resp = requests.post(
+            'https://backend.botconversa.com.br/api/v1/webhook/SUBSCRIBER_ID/send_message/',  # <- confirmar endpoint real
+            headers={'Authorization': token, 'Content-Type': 'application/json'},
+            json={'phone': telefone, 'message': texto},  # <- confirmar nomes dos campos
+            timeout=10,
+        )
+        resp.raise_for_status()
+    except Exception as e:
+        print(f'[WARN] falha ao enviar WhatsApp pra {telefone}: {e}')
+
+
 def processar_mensagem_entrada(telefone):
     """Ponto de entrada único chamado pelo /whatsapp/webhook."""
     papel, dado = identificar_papel(telefone)
