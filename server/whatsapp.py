@@ -170,6 +170,184 @@ def montar_menu_motorista(nome_motorista):
     )
 
 
+# ── PARTE A: fluxo completo do motorista (menu -> escolher entrega -> confirmar) ──
+_ACOES = {'1': 'chegada', '2': 'conclusao', '3': 'falha'}
+_ACAO_VERBO = {'chegada': 'a chegada', 'conclusao': 'a conclusão', 'falha': 'a falha'}
+
+
+def _pedidos_da_entrega(entrega_id):
+    idx = {r['id']: r for r in _pedidos_ativos_hoje()}
+    e = _entregas_idx().get(entrega_id)
+    if not e:
+        return []
+    return [idx[pid] for pid in e.get('pedidoIds', []) if pid in idx]
+
+
+def _pedidos_pendentes_da_acao(entrega_id, acao):
+    pedidos = _pedidos_da_entrega(entrega_id)
+    if acao == 'chegada':
+        return [r for r in pedidos if not r.get('chegouLocal')]
+    if acao == 'conclusao':
+        return [r for r in pedidos if r.get('chegouLocal')]  # só quem já chegou pode concluir
+    if acao == 'falha':
+        return list(pedidos)  # qualquer pedido ainda em rota pode ser marcado como falha
+    return []
+
+
+def _rotulo_pedido(r):
+    return f"{r.get('clienteNome') or r.get('cliente') or ''} / {r.get('filial', '')}"
+
+
+def montar_lista_escolha(pedidos, acao):
+    linhas = [f'Pra qual entrega você quer informar {_ACAO_VERBO[acao]}?', '']
+    for i, r in enumerate(pedidos, start=1):
+        linhas.append(f'{i}- {_rotulo_pedido(r)}')
+    linhas.append('')
+    linhas.append('Digite o número correspondente.')
+    return '\n'.join(linhas)
+
+
+def montar_confirmacao(acao, r):
+    return (f'Confirma {_ACAO_VERBO[acao]} da entrega pra {_rotulo_pedido(r)}?\n\n'
+            'Responda SIM ou NÃO.')
+
+
+def _aplicar_acao(pedido_id, acao):
+    """Aplica de fato a ação escolhida no romaneio, e devolve o pedido
+    atualizado (ou None se não achou)."""
+    from storage import salvar_romaneio, atualizar_status_romaneio, registrar_desfecho_entrega
+    idx = {r['id']: r for r in listar_romaneios()}
+    r = idx.get(pedido_id)
+    if not r:
+        return None
+
+    if acao == 'chegada':
+        r['chegouLocal'] = True
+        r['chegouLocalEm'] = datetime.datetime.utcnow().isoformat()
+        salvar_romaneio(pedido_id, r)
+        return r
+
+    novo_status = 'entregue' if acao == 'conclusao' else 'falhou'
+    if novo_status == 'falhou':
+        atualizar_status_romaneio(pedido_id, 'pendente', falha=True)
+    else:
+        atualizar_status_romaneio(pedido_id, novo_status)
+
+    entrega_id = r.get('entregaId')
+    if entrega_id:
+        snap = {'cliente': r.get('clienteNome') or r.get('cliente') or '',
+                'filial': r.get('filial', ''), 'kg': r.get('kgPlanejados', 0)}
+        registrar_desfecho_entrega(entrega_id, pedido_id, novo_status, snap)
+
+    idx2 = {rr['id']: rr for rr in listar_romaneios()}
+    return idx2.get(pedido_id, r)
+
+
+def _notificar_cascata(r, acao):
+    """Avisa vendedor + encarregados do pedido quando o motorista confirma
+    chegada/conclusão/falha (cascata do fim do rascunho)."""
+    if acao == 'chegada':
+        texto = f'Atualização: a entrega chegou no local — {_rotulo_pedido(r)}.'
+    elif acao == 'conclusao':
+        texto = f'Atualização: entrega CONCLUÍDA — {_rotulo_pedido(r)}. Obrigado!'
+    else:
+        texto = f'Atenção: FALHA registrada na entrega — {_rotulo_pedido(r)}. Favor verificar.'
+
+    alvos = [(r.get('vendedor', ''), r.get('telefoneVendedor', ''))] + \
+            [(e.get('nome', ''), e.get('telefone', '')) for e in (r.get('encarregados') or [])]
+    for _, tel in alvos:
+        if tel:
+            _enviar_whatsapp(tel, texto)
+
+
+# ── sessão de conversa por telefone (Cloud Storage, reaproveitando o
+# mecanismo de perfil — mesma chave reservada usada em avulso.py/motoristas.py) ──
+def _chave_sessao(telefone):
+    return f'_sessao_wa_{_normaliza_telefone(telefone)}'
+
+
+def _carregar_sessao(telefone):
+    from storage import perfil_existe, carregar_perfil_bytes
+    chave = _chave_sessao(telefone)
+    if not perfil_existe(chave):
+        return {}
+    try:
+        import json
+        return json.loads(carregar_perfil_bytes(chave).decode('utf-8'))
+    except Exception:
+        return {}
+
+
+def _salvar_sessao(telefone, dados):
+    from storage import salvar_perfil
+    import json
+    dados = {**dados, 'atualizadoEm': datetime.datetime.utcnow().isoformat()}
+    salvar_perfil(_chave_sessao(telefone), json.dumps(dados).encode('utf-8'), 'sessao.json')
+
+
+def _limpar_sessao(telefone):
+    _salvar_sessao(telefone, {'estado': None})
+
+
+def _processar_motorista(telefone, nome, entrega_id, texto):
+    sessao = _carregar_sessao(telefone)
+    estado = sessao.get('estado')
+    entrada = (texto or '').strip()
+
+    # sem sessão / conversa nova -> mostra o menu
+    if not estado:
+        _salvar_sessao(telefone, {'estado': 'aguardando_opcao', 'entregaId': entrega_id})
+        return montar_menu_motorista(nome)
+
+    if estado == 'aguardando_opcao':
+        acao = _ACOES.get(entrada)
+        if not acao:
+            return 'Não entendi. ' + montar_menu_motorista(nome)
+        pendentes = _pedidos_pendentes_da_acao(entrega_id, acao)
+        if not pendentes:
+            _limpar_sessao(telefone)
+            return 'Não há nenhuma entrega pendente com essa ação agora.'
+        if len(pendentes) == 1:
+            _salvar_sessao(telefone, {'estado': 'aguardando_confirmacao', 'entregaId': entrega_id,
+                                      'acao': acao, 'pedidoId': pendentes[0]['id']})
+            return montar_confirmacao(acao, pendentes[0])
+        _salvar_sessao(telefone, {'estado': 'aguardando_entrega', 'entregaId': entrega_id, 'acao': acao})
+        return montar_lista_escolha(pendentes, acao)
+
+    if estado == 'aguardando_entrega':
+        acao = sessao.get('acao')
+        pendentes = _pedidos_pendentes_da_acao(entrega_id, acao)
+        try:
+            escolhido = pendentes[int(entrada) - 1]
+        except (ValueError, IndexError):
+            return 'Não entendi. ' + montar_lista_escolha(pendentes, acao)
+        _salvar_sessao(telefone, {'estado': 'aguardando_confirmacao', 'entregaId': entrega_id,
+                                  'acao': acao, 'pedidoId': escolhido['id']})
+        return montar_confirmacao(acao, escolhido)
+
+    if estado == 'aguardando_confirmacao':
+        resp = entrada.upper()
+        acao = sessao.get('acao')
+        pedido_id = sessao.get('pedidoId')
+        if resp == 'SIM':
+            r = _aplicar_acao(pedido_id, acao)
+            _limpar_sessao(telefone)
+            if not r:
+                return 'Não encontrei mais esse pedido — pode ter sido alterado. Digite algo pra ver o menu de novo.'
+            _notificar_cascata(r, acao)
+            return f'Confirmado! {_ACAO_VERBO[acao].capitalize()} foi registrada. Obrigado!'
+        if resp in ('NAO', 'NÃO', 'N'):
+            _limpar_sessao(telefone)
+            return 'Ok, cancelado. Digite algo pra ver o menu de novo.'
+        idx = {r['id']: r for r in _pedidos_da_entrega(entrega_id)}
+        r = idx.get(pedido_id)
+        return 'Não entendi. ' + (montar_confirmacao(acao, r) if r else 'Responda SIM ou NÃO.')
+
+    # estado desconhecido -> reseta
+    _limpar_sessao(telefone)
+    return montar_menu_motorista(nome)
+
+
 # ── mensagens de DESPACHO (disparadas quando a entrega vira 'em_rota') ──
 def montar_mensagem_pedido_em_rota(nome, cliente, filial):
     """Mensagem #1 do rascunho — vendedor + cada encarregado da filial."""
@@ -224,33 +402,52 @@ def notificar_despacho_entrega(entrega):
 
 
 def _enviar_whatsapp(telefone, texto):
-    """Envia mensagem PROATIVA via API do Botconversa (não é resposta a
-    webhook — aqui é o BELLOTAS que inicia o contato).
+    """Envia mensagem PROATIVA via API do Botconversa (endpoint confirmado
+    em 22/08/2026, via Swagger — backend.botconversa.com.br/swagger/).
 
-    ⚠️ PENDENTE: endpoint exato e formato do corpo só aparecem na doc
-    interativa do Botconversa depois de inserir a chave da conta
-    (Configurações → Integrações → Webhook Integration). Ajustar URL e
-    payload abaixo assim que confirmado."""
+    Fluxo em 2 passos, já que só temos o telefone:
+      1. GET .../subscriber/get_by_phone/{telefone}/ -> devolve o
+         subscriber_id (campo 'id' da resposta).
+      2. POST .../subscriber/{subscriber_id}/send_message/ com
+         {"type": "text", "value": texto}.
+
+    Autenticação: header 'API-KEY' (a chave de Configurações →
+    Integrações → seção "API" — NÃO a do Zapier nem a do RD Station,
+    que são chaves separadas dentro da mesma tela)."""
     import os
     import requests
-    token = os.environ.get('BOTCONVERSA_API_KEY', '')
-    if not token:
+
+    api_key = os.environ.get('BOTCONVERSA_API_KEY', '')
+    if not api_key:
         print(f'[WARN] BOTCONVERSA_API_KEY não configurada — mensagem NÃO enviada pra {telefone}')
         return
+
+    base = 'https://backend.botconversa.com.br/api/v1/webhook'
+    headers = {'API-KEY': api_key}
+    tel_limpo = _normaliza_telefone(telefone)  # só dígitos, com DDI 55 (aceito com ou sem '+')
+
     try:
-        resp = requests.post(
-            'https://backend.botconversa.com.br/api/v1/webhook/SUBSCRIBER_ID/send_message/',  # <- confirmar endpoint real
-            headers={'Authorization': token, 'Content-Type': 'application/json'},
-            json={'phone': telefone, 'message': texto},  # <- confirmar nomes dos campos
-            timeout=10,
-        )
-        resp.raise_for_status()
+        resp_id = requests.get(f'{base}/subscriber/get_by_phone/{tel_limpo}/',
+                               headers=headers, timeout=10)
+        resp_id.raise_for_status()
+        subscriber_id = resp_id.json().get('id')
+        if not subscriber_id:
+            print(f'[WARN] Botconversa não achou subscriber pro telefone {telefone}')
+            return
+
+        resp_send = requests.post(f'{base}/subscriber/{subscriber_id}/send_message/',
+                                  headers=headers,
+                                  json={'type': 'text', 'value': texto},
+                                  timeout=10)
+        resp_send.raise_for_status()
     except Exception as e:
         print(f'[WARN] falha ao enviar WhatsApp pra {telefone}: {e}')
 
 
-def processar_mensagem_entrada(telefone):
-    """Ponto de entrada único chamado pelo /whatsapp/webhook."""
+def processar_mensagem_entrada(telefone, texto=''):
+    """Ponto de entrada único chamado pelo /whatsapp/webhook. 'texto' é o
+    que a pessoa acabou de digitar (agora disponível, desde que o ciclo
+    Integração -> Conteúdo/SALVAR -> Integração foi fechado no BC)."""
     papel, dado = identificar_papel(telefone)
     alvo = _normaliza_telefone(telefone)
 
@@ -259,8 +456,9 @@ def processar_mensagem_entrada(telefone):
     if papel == 'encarregado':
         return montar_mensagem_encarregado(dado['nome'], alvo)
     if papel == 'motorista':
-        return montar_menu_motorista(dado['nome'])
+        return _processar_motorista(telefone, dado['nome'], dado['entregaId'], texto)
 
     return ('Não localizei seu número em nenhuma entrega ativa hoje. '
             'Se você é vendedor, encarregado ou motorista da Pata Negra e recebeu essa '
-            'mensagem por engano, entre em contato com o atendimento.')
+            'mensagem por engano, fala com a gente direto: '
+            'https://wa.me/5521990111992')
