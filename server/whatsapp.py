@@ -1,509 +1,491 @@
 """
-Canal WhatsApp — roteamento por telefone e montagem das mensagens de
-status/menu, conforme a Planta (planta_projeto_whatsapp.md) e o rascunho
-original (rascunho_projeto_alertas_whatsapp.docx, 21/08/2026).
-
-Ponto de entrada único (main.py: POST /whatsapp/webhook) recebe SÓ
-{"telefone": "..."} do Botconversa (Bloco de Integração, botão "status
-da entrega" no fluxo) e devolve {"mensagem": "..."} — nenhuma decisão é
-tomada do lado do Botconversa, tudo aqui.
-
-ESCOPO DESTA ENTREGA: a mensagem de ENTRADA — o que a pessoa recebe ao
-clicar no botão / na primeira interação. Cobre:
-  - vendedor  -> lista de status de todas as entregas dele, hoje
-  - encarregado -> status da(s) entrega(s) da filial dele, hoje
-  - motorista -> menu de 3 opções (chegada / conclusão / falha)
-  - desconhecido -> mensagem padrão
-
-AINDA PENDENTE (fora do escopo desta entrega, ver Planta seção 4 e 7):
-  - Os passos SEGUINTES do motorista (escolher o número da entrega,
-    confirmar SIM/NÃO) e o cadastro do encarregado desconhecido
-    dependem de uma SESSÃO por telefone (pra saber "em que ponto da
-    conversa" a pessoa está) — isso por sua vez depende de resolver a
-    captura de "texto" no Botconversa (Bloco de Conteúdo + SALVAR),
-    ainda não fechado do lado de lá.
-  - A cascata de notificação pro vendedor/encarregado quando o
-    motorista confirma chegada/conclusão/falha (fim do docx original).
+Armazenamento de perfis de clientes no Google Cloud Storage.
 """
-import re
+import os
+import json
 import datetime
-from storage import listar_romaneios, listar_entregas
+from concurrent.futures import ThreadPoolExecutor
+from google.cloud import storage as gcs
 
-_STATUS_LEGIVEL = {
-    'em_rota': 'Em rota',
-    'entregue': 'Entregue',
-    'falhou': 'Falha na entrega',
-}
+GCS_BUCKET_NAME = os.environ.get('GCS_BUCKET', 'pata-negra-perfis')
+_gcs_client = None
 
 
-def _normaliza_telefone(tel):
-    """Só dígitos, com DDI 55 se faltar — mesmo padrão usado em avulso.py
-    e no restante do projeto, pra bater com o formato que o WhatsApp usa
-    (DDI+DDD+9+TELEFONE)."""
-    d = re.sub(r'\D', '', str(tel or ''))
-    if d and not d.startswith('55'):
-        d = '55' + d
-    return d
-
-
-def _status_legivel(romaneio):
-    if romaneio.get('chegouLocal'):
-        return 'No local de entrega'
-    return _STATUS_LEGIVEL.get(romaneio.get('status'), romaneio.get('status', ''))
-
-
-# FIX (23/08/2026): _pedidos_ativos_hoje() e _entregas_idx() liam o
-# bucket INTEIRO de romaneios/entregas toda vez que eram chamadas — e
-# várias funções (identificar_papel, montar_mensagem_vendedor,
-# montar_mensagem_encarregado, etc.) chamavam as duas de novo, do zero,
-# dentro do MESMO request. Uma única mensagem de WhatsApp podia disparar
-# 4-6 leituras completas do bucket pra responder. Agora tudo isso é
-# cacheado por request, via _contexto_pedido() abaixo — chamado uma vez
-# só (ou reaproveitado, se já foi chamado antes na mesma execução).
-_cache_contexto = {}
-
-
-def _contexto_pedido():
-    """Lê romaneios + entregas do bucket UMA vez por execução da função
-    (processo), reaproveitando entre todas as chamadas dentro do mesmo
-    request. Evita reler o bucket inteiro várias vezes pra responder uma
-    única mensagem."""
-    if _cache_contexto:
-        return _cache_contexto['romaneios'], _cache_contexto['entregas']
-    romaneios = listar_romaneios()
-    entregas = listar_entregas()
-    _cache_contexto['romaneios'] = romaneios
-    _cache_contexto['entregas'] = entregas
-    return romaneios, entregas
-
-
-def _limpar_cache_contexto():
-    """Chamar depois de qualquer escrita (salvar_romaneio, atualizar
-    status etc.) pra não servir dado desatualizado dentro do mesmo
-    request, e no INÍCIO de cada request novo (main.py deve chamar isso
-    antes de processar_mensagem_entrada)."""
-    _cache_contexto.clear()
-
-
-def _pedidos_ativos_hoje():
-    """Pedidos de entregas DESPACHADAS hoje (fase='em_rota', despachadaEm
-    de hoje) e que ainda estão com status='em_rota' (não entregues/
-    falhados). 'Hoje' é o dia do despacho, não o dia em que o pedido foi
-    originalmente processado."""
-    romaneios, entregas = _contexto_pedido()
-    hoje_iso = datetime.date.today().isoformat()
-    entregas_hoje = [
-        e for e in entregas
-        if e.get('fase') == 'em_rota' and (e.get('despachadaEm') or '').startswith(hoje_iso)
-    ]
-    ids_hoje = set()
-    for e in entregas_hoje:
-        ids_hoje.update(e.get('pedidoIds', []))
-    idx = {r['id']: r for r in romaneios}
-    return [idx[pid] for pid in ids_hoje if pid in idx and idx[pid].get('status') == 'em_rota']
-
-
-def _entregas_idx():
-    _, entregas = _contexto_pedido()
-    return {e['id']: e for e in entregas}
-
-
-def _motorista_da_entrega(romaneio, idx_entregas):
-    eid = romaneio.get('entregaId')
-    e = idx_entregas.get(eid) if eid else None
-    if e:
-        return e.get('motorista', '—'), e.get('telefoneMotorista', '—')
-    return '—', '—'
-
-
-# ── identificação de papel (busca reversa por telefone) ──────────────
-def identificar_papel(telefone):
-    """Telefone -> ('vendedor'|'encarregado'|'motorista'|None, {dados}).
-    Busca só entre pedidos/entregas ATIVOS HOJE (ver _pedidos_ativos_hoje)
-    — vendedor/encarregado de um pedido de ontem que já saiu da rota não
-    deveria mais responder a esse número por essa via."""
-    alvo = _normaliza_telefone(telefone)
-    pedidos = _pedidos_ativos_hoje()
-
-    for r in pedidos:
-        if _normaliza_telefone(r.get('telefoneVendedor', '')) == alvo:
-            return 'vendedor', {'nome': r.get('vendedor', '')}
-        for enc in (r.get('encarregados') or []):
-            if _normaliza_telefone(enc.get('telefone', '')) == alvo:
-                return 'encarregado', {'nome': enc.get('nome', '')}
-
-    _, entregas = _contexto_pedido()
-    for e in entregas:
-        if _normaliza_telefone(e.get('telefoneMotorista', '')) == alvo:
-            if e.get('fase') == 'em_rota':  # só motorista com entrega despachada hoje/ativa
-                return 'motorista', {'nome': e.get('motorista', ''), 'entregaId': e.get('id')}
-
-    return None, {}
-
-
-# ── montagem de mensagem por papel (texto conforme o docx original) ──
-def montar_mensagem_vendedor(nome_vendedor, telefone_alvo):
-    pedidos = [r for r in _pedidos_ativos_hoje()
-               if _normaliza_telefone(r.get('telefoneVendedor', '')) == telefone_alvo]
-    if not pedidos:
-        return f'Olá {nome_vendedor}, não encontrei nenhuma entrega em rota hoje pra você.'
-
-    idx_ent = _entregas_idx()
-    por_motorista = {}
-    for r in pedidos:
-        chave = _motorista_da_entrega(r, idx_ent)
-        por_motorista.setdefault(chave, []).append(r)
-
-    linhas = [f'Olá {nome_vendedor}, segue a relação de entregas e seus status:']
-    for (mot_nome, mot_tel), lista in por_motorista.items():
-        linhas.append('')
-        linhas.append(f'Motorista {mot_nome} telefone - {mot_tel}')
-        for r in lista:
-            cliente = r.get('clienteNome') or r.get('cliente') or ''
-            filial = r.get('filial', '')
-            status = _status_legivel(r)
-            encs = r.get('encarregados') or []
-            if encs:
-                enc_txt = f"{encs[0].get('nome', '—')} / {encs[0].get('telefone', '—')}"
-            else:
-                enc_txt = '— / —'
-            linhas.append(f'{cliente} / {filial} / {status} / {enc_txt}')
-    linhas.append('')
-    linhas.append('Agradecemos toda ajuda no desembarque!')
-    return '\n'.join(linhas)
-
-
-def montar_mensagem_encarregado(nome_encarregado, telefone_alvo):
-    pedidos = [r for r in _pedidos_ativos_hoje()
-               if any(_normaliza_telefone(e.get('telefone', '')) == telefone_alvo
-                      for e in (r.get('encarregados') or []))]
-    if not pedidos:
-        return f'Olá {nome_encarregado}, não encontrei nenhuma entrega em rota hoje pra sua filial.'
-
-    idx_ent = _entregas_idx()
-    linhas = [f'Olá {nome_encarregado}, a entrega abaixo tem o seguinte status:', '']
-    for r in pedidos:
-        cliente = r.get('clienteNome') or r.get('cliente') or ''
-        filial = r.get('filial', '')
-        status = _status_legivel(r)
-        mot_nome, mot_tel = _motorista_da_entrega(r, idx_ent)
-        linhas.append(f'{cliente} / {filial} / {status}')
-        linhas.append('')
-        linhas.append(f'Motorista {mot_nome} telefone - {mot_tel}')
-        linhas.append(f'Vendedor {r.get("vendedor", "—")} telefone {r.get("telefoneVendedor", "—")}')
-        linhas.append('')
-    linhas.append('Agradecemos toda ajuda no desembarque!')
-    return '\n'.join(linhas)
-
-
-def montar_menu_motorista(nome_motorista):
-    return (
-        f'Olá {nome_motorista}! O que você gostaria de fazer?\n\n'
-        '1- Informar chegada ao local de entrega\n'
-        '2- Informar conclusão de entrega\n'
-        '3- Informar falha na entrega\n\n'
-        'Digite o número correspondente.'
-    )
-
-
-# ── PARTE A: fluxo completo do motorista (menu -> escolher entrega -> confirmar) ──
-_ACOES = {'1': 'chegada', '2': 'conclusao', '3': 'falha'}
-_ACAO_VERBO = {'chegada': 'a chegada', 'conclusao': 'a conclusão', 'falha': 'a falha'}
-
-
-def _pedidos_da_entrega(entrega_id):
-    idx = {r['id']: r for r in _pedidos_ativos_hoje()}
-    e = _entregas_idx().get(entrega_id)
-    if not e:
-        return []
-    return [idx[pid] for pid in e.get('pedidoIds', []) if pid in idx]
-
-
-def _pedidos_pendentes_da_acao(entrega_id, acao):
-    pedidos = _pedidos_da_entrega(entrega_id)
-    if acao == 'chegada':
-        return [r for r in pedidos if not r.get('chegouLocal')]
-    if acao == 'conclusao':
-        return [r for r in pedidos if r.get('chegouLocal')]  # só quem já chegou pode concluir
-    if acao == 'falha':
-        return list(pedidos)  # qualquer pedido ainda em rota pode ser marcado como falha
-    return []
-
-
-def _rotulo_pedido(r):
-    return f"{r.get('clienteNome') or r.get('cliente') or ''} / {r.get('filial', '')}"
-
-
-def montar_lista_escolha(pedidos, acao):
-    linhas = [f'Pra qual entrega você quer informar {_ACAO_VERBO[acao]}?', '']
-    for i, r in enumerate(pedidos, start=1):
-        linhas.append(f'{i}- {_rotulo_pedido(r)}')
-    linhas.append('')
-    linhas.append('Digite o número correspondente.')
-    return '\n'.join(linhas)
-
-
-def montar_confirmacao(acao, r):
-    return (f'Confirma {_ACAO_VERBO[acao]} da entrega pra {_rotulo_pedido(r)}?\n\n'
-            'Responda SIM ou NÃO.')
-
-
-def _aplicar_acao(pedido_id, acao):
-    """Aplica de fato a ação escolhida no romaneio, e devolve o pedido
-    atualizado (ou None se não achou)."""
-    from storage import salvar_romaneio, atualizar_status_romaneio, registrar_desfecho_entrega
-    idx = {r['id']: r for r in listar_romaneios()}
-    r = idx.get(pedido_id)
-    if not r:
+def _baixar_json(blob):
+    """Baixa e faz parse de um blob JSON; None em erro (usado no paralelo)."""
+    try:
+        return json.loads(blob.download_as_bytes())
+    except Exception:
         return None
 
-    if acao == 'chegada':
-        r['chegouLocal'] = True
-        r['chegouLocalEm'] = datetime.datetime.utcnow().isoformat()
-        salvar_romaneio(pedido_id, r)
-        return r
 
-    novo_status = 'entregue' if acao == 'conclusao' else 'falhou'
-    if novo_status == 'falhou':
-        atualizar_status_romaneio(pedido_id, 'pendente', falha=True)
-    else:
-        atualizar_status_romaneio(pedido_id, novo_status)
-
-    entrega_id = r.get('entregaId')
-    if entrega_id:
-        snap = {'cliente': r.get('clienteNome') or r.get('cliente') or '',
-                'filial': r.get('filial', ''), 'kg': r.get('kgPlanejados', 0)}
-        registrar_desfecho_entrega(entrega_id, pedido_id, novo_status, snap)
-
-    _limpar_cache_contexto()  # acabamos de escrever -> invalida o cache pra próxima leitura
-    idx2 = {rr['id']: rr for rr in listar_romaneios()}
-    return idx2.get(pedido_id, r)
+def _bucket():
+    global _gcs_client
+    if _gcs_client is None:
+        _gcs_client = gcs.Client()
+    return _gcs_client.bucket(GCS_BUCKET_NAME)
 
 
-def _notificar_cascata(r, acao):
-    """Avisa vendedor + encarregados do pedido quando o motorista confirma
-    chegada/conclusão/falha (cascata do fim do rascunho)."""
-    if acao == 'chegada':
-        texto = f'Atualização: a entrega chegou no local — {_rotulo_pedido(r)}.'
-    elif acao == 'conclusao':
-        texto = f'Atualização: entrega CONCLUÍDA — {_rotulo_pedido(r)}. Obrigado!'
-    else:
-        texto = f'Atenção: FALHA registrada na entrega — {_rotulo_pedido(r)}. Favor verificar.'
-
-    alvos = [(r.get('vendedor', ''), r.get('telefoneVendedor', ''))] + \
-            [(e.get('nome', ''), e.get('telefone', '')) for e in (r.get('encarregados') or [])]
-    for _, tel in alvos:
-        if tel:
-            _enviar_whatsapp(tel, texto)
+def _perfil_blob(cliente):
+    return _bucket().blob(f'perfis/{cliente}.xlsx')
 
 
-# ── sessão de conversa por telefone (Cloud Storage, reaproveitando o
-# mecanismo de perfil — mesma chave reservada usada em avulso.py/motoristas.py) ──
-def _chave_sessao(telefone):
-    return f'_sessao_wa_{_normaliza_telefone(telefone)}'
+def _meta_blob(cliente):
+    return _bucket().blob(f'perfis/{cliente}_meta.json')
 
 
-def _carregar_sessao(telefone):
-    from storage import perfil_existe, carregar_perfil_bytes
-    chave = _chave_sessao(telefone)
-    if not perfil_existe(chave):
-        return {}
+def perfil_existe(cliente):
+    return _perfil_blob(cliente).exists()
+
+
+def salvar_perfil(cliente, file_bytes, filename=None):
+    _perfil_blob(cliente).upload_from_string(
+        file_bytes,
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    if filename:
+        _meta_blob(cliente).upload_from_string(
+            json.dumps({'filename': filename}),
+            content_type='application/json')
+
+
+def carregar_perfil_bytes(cliente):
+    return _perfil_blob(cliente).download_as_bytes()
+
+
+def perfil_filename(cliente):
+    mb = _meta_blob(cliente)
+    if mb.exists():
+        return json.loads(mb.download_as_bytes()).get('filename', '')
+    return ''
+
+
+# ── Tabela mestra de produtos (MASTER.xlsx, no bucket de perfis) ──────────────
+def _master_blob():
+    return _bucket().blob('MASTER.xlsx')
+
+
+def master_existe():
+    return _master_blob().exists()
+
+
+def salvar_master(file_bytes):
+    _master_blob().upload_from_string(
+        file_bytes,
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+def salvar_estoque(dados):
+    """Salva o estoque de produtos acabados como JSON no bucket de perfis.
+    Estrutura: {'itens': {nome_master: kg}, 'atualizadoEm': iso}."""
+    blob = _bucket().blob('ESTOQUE.json')
+    blob.upload_from_string(json.dumps(dados, ensure_ascii=False),
+                            content_type='application/json')
+
+
+def carregar_estoque():
+    """Retorna o estoque salvo, ou {'itens': {}, 'atualizadoEm': None} se não houver."""
+    blob = _bucket().blob('ESTOQUE.json')
+    if not blob.exists():
+        return {'itens': {}, 'atualizadoEm': None}
     try:
-        import json
-        return json.loads(carregar_perfil_bytes(chave).decode('utf-8'))
+        return json.loads(blob.download_as_bytes())
     except Exception:
-        return {}
+        return {'itens': {}, 'atualizadoEm': None}
 
 
-def _salvar_sessao(telefone, dados):
-    from storage import salvar_perfil
-    import json
-    dados = {**dados, 'atualizadoEm': datetime.datetime.utcnow().isoformat()}
-    salvar_perfil(_chave_sessao(telefone), json.dumps(dados).encode('utf-8'), 'sessao.json')
+def carregar_master_bytes():
+    return _master_blob().download_as_bytes()
+# ── Romaneios (bucket separado) ───────────────────────────────────────────────
+GCS_ROMANEIOS_BUCKET = os.environ.get('GCS_ROMANEIOS_BUCKET', 'pata-negra-romaneios')
+_gcs_romaneios_client = None
 
 
-def _limpar_sessao(telefone):
-    _salvar_sessao(telefone, {'estado': None})
+def _romaneios_bucket():
+    global _gcs_romaneios_client
+    if _gcs_romaneios_client is None:
+        _gcs_romaneios_client = gcs.Client()
+    return _gcs_romaneios_client.bucket(GCS_ROMANEIOS_BUCKET)
 
 
-def _processar_motorista(telefone, nome, entrega_id, texto):
-    sessao = _carregar_sessao(telefone)
-    estado = sessao.get('estado')
-    entrada = (texto or '').strip()
-
-    # sem sessão / conversa nova -> mostra o menu
-    if not estado:
-        _salvar_sessao(telefone, {'estado': 'aguardando_opcao', 'entregaId': entrega_id})
-        return montar_menu_motorista(nome)
-
-    if estado == 'aguardando_opcao':
-        acao = _ACOES.get(entrada)
-        if not acao:
-            return 'Não entendi. ' + montar_menu_motorista(nome)
-        pendentes = _pedidos_pendentes_da_acao(entrega_id, acao)
-        if not pendentes:
-            _limpar_sessao(telefone)
-            return 'Não há nenhuma entrega pendente com essa ação agora.'
-        if len(pendentes) == 1:
-            _salvar_sessao(telefone, {'estado': 'aguardando_confirmacao', 'entregaId': entrega_id,
-                                      'acao': acao, 'pedidoId': pendentes[0]['id']})
-            return montar_confirmacao(acao, pendentes[0])
-        _salvar_sessao(telefone, {'estado': 'aguardando_entrega', 'entregaId': entrega_id, 'acao': acao})
-        return montar_lista_escolha(pendentes, acao)
-
-    if estado == 'aguardando_entrega':
-        acao = sessao.get('acao')
-        pendentes = _pedidos_pendentes_da_acao(entrega_id, acao)
-        try:
-            escolhido = pendentes[int(entrada) - 1]
-        except (ValueError, IndexError):
-            return 'Não entendi. ' + montar_lista_escolha(pendentes, acao)
-        _salvar_sessao(telefone, {'estado': 'aguardando_confirmacao', 'entregaId': entrega_id,
-                                  'acao': acao, 'pedidoId': escolhido['id']})
-        return montar_confirmacao(acao, escolhido)
-
-    if estado == 'aguardando_confirmacao':
-        resp = entrada.upper()
-        acao = sessao.get('acao')
-        pedido_id = sessao.get('pedidoId')
-        if resp == 'SIM':
-            r = _aplicar_acao(pedido_id, acao)
-            _limpar_sessao(telefone)
-            if not r:
-                return 'Não encontrei mais esse pedido — pode ter sido alterado. Digite algo pra ver o menu de novo.'
-            _notificar_cascata(r, acao)
-            return f'Confirmado! {_ACAO_VERBO[acao].capitalize()} foi registrada. Obrigado!'
-        if resp in ('NAO', 'NÃO', 'N'):
-            _limpar_sessao(telefone)
-            return 'Ok, cancelado. Digite algo pra ver o menu de novo.'
-        idx = {r['id']: r for r in _pedidos_da_entrega(entrega_id)}
-        r = idx.get(pedido_id)
-        return 'Não entendi. ' + (montar_confirmacao(acao, r) if r else 'Responda SIM ou NÃO.')
-
-    # estado desconhecido -> reseta
-    _limpar_sessao(telefone)
-    return montar_menu_motorista(nome)
-
-
-# ── mensagens de DESPACHO (disparadas quando a entrega vira 'em_rota') ──
-def montar_mensagem_pedido_em_rota(nome, cliente, filial):
-    """Mensagem #1 do rascunho — vendedor + cada encarregado da filial."""
-    return (
-        f'Olá {nome}, temos uma entrega da Pata Negra em rota para o cliente:\n'
-        f'{cliente}\n{filial}\n\n'
-        'Para atualizações desta rota, envie a palavra STATUS para este número.\n'
-        'Agradecemos toda ajuda no desembarque.'
+def salvar_romaneio(romaneio_id, dados):
+    """Salva um JSON de romaneio (pin do mapa) no bucket de romaneios."""
+    blob = _romaneios_bucket().blob(f'{romaneio_id}.json')
+    blob.upload_from_string(
+        json.dumps(dados, ensure_ascii=False),
+        content_type='application/json'
     )
 
 
-def montar_mensagem_lista_motorista(nome_motorista, pedidos):
-    """Mensagem #2 do rascunho — lista do dia pro motorista."""
-    linhas = [f'Olá {nome_motorista}, temos as seguintes entregas hoje:', '']
-    for r in pedidos:
-        cliente = r.get('clienteNome') or r.get('cliente') or ''
-        filial = r.get('filial', '')
-        linhas.append(f'{cliente} / {filial} / Vendedor {r.get("vendedor", "—")} '
-                      f'telefone {r.get("telefoneVendedor", "—")}')
-    linhas.append('')
-    linhas.append('Bom trabalho!')
-    return '\n'.join(linhas)
+def atualizar_status_romaneio(romaneio_id, status, data=None, falha=False):
+    """Atualiza o status do romaneio SEM apagar (pendente/em_rota/entregue/falhou).
+    Preserva a data de inclusao original. Ao voltar para 'pendente' (inclusive
+    quando falha=True), libera o vinculo com a entrega. falha=True registra a
+    ocorrencia (para o historico). Retorna True se o romaneio existia."""
+    blob = _romaneios_bucket().blob(f'{romaneio_id}.json')
+    if not blob.exists():
+        return False
+    dados = json.loads(blob.download_as_bytes())
+    dados['status'] = status
+    dados['statusData'] = data or datetime.datetime.utcnow().isoformat()
+    if status == 'pendente':
+        dados.pop('entregaId', None)
+        dados.pop('entregaNome', None)
+    if falha:
+        dados['falhas'] = int(dados.get('falhas', 0)) + 1
+        dados['ultimaFalhaEm'] = datetime.datetime.utcnow().isoformat()
+    blob.upload_from_string(json.dumps(dados, ensure_ascii=False),
+                            content_type='application/json')
+    return True
 
 
-def notificar_despacho_entrega(entrega):
-    """Chamada quando uma entrega passa pra fase 'em_rota' (o botão de
-    despacho). Dispara a mensagem #1 (vendedor + encarregados) pra cada
-    pedido, e a #2 (lista do dia) pro motorista — UMA vez cada.
-
-    Se a entrega estiver com 'Motorista indefinido' (telefoneMotorista
-    vazio), pula TUDO — nenhuma mensagem é disparada pra essa entrega,
-    nem pra vendedor/encarregado, já que elas fazem referência cruzada
-    ao motorista."""
-    if not (entrega.get('telefoneMotorista') or '').strip():
-        return  # motorista indefinido -> nenhum disparo
-
-    idx = {r['id']: r for r in _pedidos_ativos_hoje()}
-    pedidos = [idx[pid] for pid in entrega.get('pedidoIds', []) if pid in idx]
-    if not pedidos:
-        return
-
-    for r in pedidos:
-        alvos = [(r.get('vendedor', ''), r.get('telefoneVendedor', ''))] + \
-                [(e.get('nome', ''), e.get('telefone', '')) for e in (r.get('encarregados') or [])]
-        for nome, tel in alvos:
-            if tel:
-                _enviar_whatsapp(tel, montar_mensagem_pedido_em_rota(
-                    nome, r.get('clienteNome') or r.get('cliente') or '', r.get('filial', '')))
-
-    _enviar_whatsapp(entrega['telefoneMotorista'],
-                     montar_mensagem_lista_motorista(entrega.get('motorista', ''), pedidos))
+def listar_romaneios():
+    """Lista todos os romaneios. Baixa os JSONs em paralelo (o gargalo era
+    baixar um a um, em série — com centenas de pedidos ficava lento)."""
+    blobs = [b for b in _romaneios_bucket().list_blobs() if b.name.endswith('.json')]
+    if not blobs:
+        return []
+    with ThreadPoolExecutor(max_workers=32) as ex:
+        return [d for d in ex.map(_baixar_json, blobs) if d is not None]
 
 
-def _enviar_whatsapp(telefone, texto):
-    """Envia mensagem PROATIVA via API do Botconversa (endpoint confirmado
-    em 22/08/2026, via Swagger — backend.botconversa.com.br/swagger/).
+def salvar_pedido_pdf(romaneio_id, pdf_bytes):
+    """Salva o PDF da filial associado a um romaneio (mesmo id, extensão .pdf)."""
+    blob = _romaneios_bucket().blob(f'{romaneio_id}.pdf')
+    blob.upload_from_string(pdf_bytes, content_type='application/pdf')
 
-    Fluxo em 2 passos, já que só temos o telefone:
-      1. GET .../subscriber/get_by_phone/{telefone}/ -> devolve o
-         subscriber_id (campo 'id' da resposta).
-      2. POST .../subscriber/{subscriber_id}/send_message/ com
-         {"type": "text", "value": texto}.
 
-    Autenticação: header 'API-KEY' (a chave de Configurações →
-    Integrações → seção "API" — NÃO a do Zapier nem a do RD Station,
-    que são chaves separadas dentro da mesma tela)."""
-    import os
-    import requests
+def carregar_pedido_pdf(romaneio_id):
+    """Retorna os bytes do PDF do romaneio, ou None se não existir."""
+    blob = _romaneios_bucket().blob(f'{romaneio_id}.pdf')
+    if blob.exists():
+        return blob.download_as_bytes()
+    return None
 
-    api_key = os.environ.get('BOTCONVERSA_API_KEY', '')
-    if not api_key:
-        print(f'[WARN] BOTCONVERSA_API_KEY não configurada — mensagem NÃO enviada pra {telefone}')
-        return
 
-    base = 'https://backend.botconversa.com.br/api/v1/webhook'
-    headers = {'API-KEY': api_key}
-    tel_limpo = _normaliza_telefone(telefone)  # só dígitos, com DDI 55 (aceito com ou sem '+')
 
+
+def salvar_pedido_excel(romaneio_id, excel_bytes):
+    """Salva o Excel da filial associado a um romaneio (mesmo id, extensão .xlsx)."""
+    blob = _romaneios_bucket().blob(f'{romaneio_id}.xlsx')
+    blob.upload_from_string(excel_bytes,
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+def carregar_pedido_excel(romaneio_id):
+    """Retorna os bytes do Excel do romaneio, ou None se não existir."""
+    blob = _romaneios_bucket().blob(f'{romaneio_id}.xlsx')
+    if blob.exists():
+        return blob.download_as_bytes()
+    return None
+def deletar_romaneio(romaneio_id):
+    """Deleta um romaneio pelo ID: o .json, e TODOS os arquivos associados
+    (.pdf/.xlsx, incluindo as variantes __e1/__e2 de pedidos divididos
+    Indústria/Distribuidora).
+
+    FIX (23/08/2026): antes só apagava o .pdf sem sufixo, deixando lixo
+    órfão no bucket (o .xlsx nunca era apagado, e pedidos divididos
+    deixavam os arquivos __e1/__e2 pra trás). Retorna True se o .json
+    existia, False se não."""
+    for sufixo in ('', '__e1', '__e2'):
+        for ext in ('.pdf', '.xlsx'):
+            try:
+                blob = _romaneios_bucket().blob(f'{romaneio_id}{sufixo}{ext}')
+                if blob.exists():
+                    blob.delete()
+            except Exception:
+                pass
+    blob = _romaneios_bucket().blob(f'{romaneio_id}.json')
+    if blob.exists():
+        blob.delete()
+        return True
+    return False
+
+
+def limpar_romaneios_entregues(dias_minimo=30):
+    """NOVO (23/08/2026): apaga romaneios com status='entregue' cuja
+    última atualização (statusData, ou dataGeracao como fallback) tem
+    DIAS_MINIMO dias ou mais. NUNCA mexe em 'pendente'/'em_rota' (não
+    importa a idade) — só entregues antigos são candidatos. Criado
+    porque o bucket de romaneios acumulou meses de pedidos entregues, e
+    listar_romaneios() baixa TODOS eles (em paralelo, mas ainda assim)
+    toda vez que qualquer página do sistema carrega — deixando o site
+    inteiro lento conforme o bucket cresce.
+
+    Retorna {'apagados': N, 'mantidos': M, 'total_avaliado': N+M}."""
+    apagados, mantidos = 0, 0
+    limite = datetime.datetime.utcnow() - datetime.timedelta(days=dias_minimo)
+
+    for r in listar_romaneios():
+        if r.get('status') != 'entregue':
+            continue
+        ref = r.get('statusData') or r.get('dataGeracao')
+        if not ref:
+            mantidos += 1
+            continue
+        try:
+            dt = datetime.datetime.fromisoformat(str(ref).replace('Z', ''))
+        except ValueError:
+            mantidos += 1
+            continue
+        if dt <= limite:
+            deletar_romaneio(r['id'])
+            apagados += 1
+        else:
+            mantidos += 1
+
+    return {'apagados': apagados, 'mantidos': mantidos, 'total_avaliado': apagados + mantidos}
+
+
+# ── Geofences / zonas (bucket próprio) ────────────────────────────────────────
+# Dado DURÁVEL (desenhado uma vez, reutilizado por muito tempo) — fica num bucket
+# separado dos romaneios efêmeros, pra poder esvaziar romaneios no console sem
+# perder as zonas. Cada zona é {id, nome, cor, geojson}.
+GCS_GEOFENCES_BUCKET = os.environ.get('GCS_GEOFENCES_BUCKET', 'pata-negra-geofences')
+_gcs_geofences_client = None
+
+
+def _geofences_bucket():
+    global _gcs_geofences_client
+    if _gcs_geofences_client is None:
+        _gcs_geofences_client = gcs.Client()
+    return _gcs_geofences_client.bucket(GCS_GEOFENCES_BUCKET)
+
+
+def salvar_geofence(geofence_id, dados):
+    """Salva (ou sobrescreve) uma zona como JSON no bucket de geofences."""
+    blob = _geofences_bucket().blob(f'{geofence_id}.json')
+    blob.upload_from_string(
+        json.dumps(dados, ensure_ascii=False),
+        content_type='application/json'
+    )
+
+
+def listar_geofences():
+    """Lista todas as zonas salvas. Retorna lista de dicts."""
+    blobs = _geofences_bucket().list_blobs()
+    result = []
+    for blob in blobs:
+        if not blob.name.endswith('.json'):
+            continue
+        try:
+            result.append(json.loads(blob.download_as_bytes()))
+        except Exception:
+            pass
+    return result
+
+
+def deletar_geofence(geofence_id):
+    """Deleta uma zona pelo ID. Retorna True se existia, False se não."""
+    blob = _geofences_bucket().blob(f'{geofence_id}.json')
+    if blob.exists():
+        blob.delete()
+        return True
+    return False
+
+
+# ── Entregas salvas (rotas do dia — bucket próprio) ───────────────────────────
+# Uma entrega agrupa pedidos numa rota nomeada ("Caminhao do Juca"). Dado
+# compartilhado entre dispositivos (por isso no servidor, nao no localStorage).
+# {id, nome, criadaEm, status:'em_andamento', pedidoIds:[...]}
+GCS_ENTREGAS_BUCKET = os.environ.get('GCS_ENTREGAS_BUCKET', 'pata-negra-entregas')
+_gcs_entregas_client = None
+
+
+def _entregas_bucket():
+    global _gcs_entregas_client
+    if _gcs_entregas_client is None:
+        _gcs_entregas_client = gcs.Client()
+    return _gcs_entregas_client.bucket(GCS_ENTREGAS_BUCKET)
+
+
+def salvar_entrega(entrega_id, dados):
+    """Salva (ou sobrescreve) uma entrega como JSON."""
+    blob = _entregas_bucket().blob(f'{entrega_id}.json')
+    blob.upload_from_string(json.dumps(dados, ensure_ascii=False),
+                            content_type='application/json')
+
+
+def carregar_entrega(entrega_id):
+    """Retorna o dict da entrega, ou None se nao existir."""
+    blob = _entregas_bucket().blob(f'{entrega_id}.json')
+    if not blob.exists():
+        return None
+    return json.loads(blob.download_as_bytes())
+
+
+def listar_entregas():
+    """Lista todas as entregas salvas. Baixa os JSONs em paralelo."""
+    blobs = [b for b in _entregas_bucket().list_blobs() if b.name.endswith('.json')]
+    if not blobs:
+        return []
+    with ThreadPoolExecutor(max_workers=32) as ex:
+        return [d for d in ex.map(_baixar_json, blobs) if d is not None]
+
+
+def deletar_entrega(entrega_id):
+    """Remove uma entrega. Retorna True se existia."""
+    blob = _entregas_bucket().blob(f'{entrega_id}.json')
+    if blob.exists():
+        blob.delete()
+        return True
+    return False
+
+
+def registrar_desfecho_entrega(entrega_id, pedido_id, desfecho, snapshot=None):
+    """Registra o desfecho de um pedido dentro da entrega (entregue/falhou).
+    Move o pedido de pedidoIds -> resolvidos[] (guardando um snapshot de
+    cliente/filial/kg para o historico ser auto-suficiente). Se nao sobrar
+    pedido ativo, marca a entrega como 'finalizada'. Retorna
+    (entrega_atualizada | None, finalizada_bool)."""
+    ent = carregar_entrega(entrega_id)
+    if not ent:
+        return None, False
+    ativos = [p for p in ent.get('pedidoIds', []) if p != pedido_id]
+    ent['pedidoIds'] = ativos
+    resolvidos = ent.get('resolvidos', [])
+    reg = {'pedidoId': pedido_id, 'desfecho': desfecho,
+           'quando': datetime.datetime.utcnow().isoformat()}
+    if snapshot:
+        reg.update(snapshot)
+    resolvidos.append(reg)
+    ent['resolvidos'] = resolvidos
+    finalizada = (len(ativos) == 0)
+    if finalizada:
+        ent['status'] = 'finalizada'
+        ent['finalizadaEm'] = datetime.datetime.utcnow().isoformat()
+    salvar_entrega(entrega_id, ent)
+    return ent, finalizada
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Autenticação: usuários, sessões e log de login (JSON no bucket)
+# ─────────────────────────────────────────────────────────────────────
+import hashlib
+import secrets
+
+def _usuarios_blob():
+    return _bucket().blob('auth/usuarios.json')
+
+def _logins_blob():
+    return _bucket().blob('auth/logins.json')
+
+def hash_senha(senha, salt=None):
+    """SHA-256 com salt. Retorna 'salt$hash'."""
+    salt = salt or secrets.token_hex(8)
+    h = hashlib.sha256((salt + str(senha)).encode('utf-8')).hexdigest()
+    return f'{salt}${h}'
+
+def verifica_senha(senha, armazenado):
     try:
-        resp_id = requests.get(f'{base}/subscriber/get_by_phone/{tel_limpo}/',
-                               headers=headers, timeout=4)
-        if resp_id.status_code == 404:
-            # comum: telefone nunca mandou mensagem pro número do Botconversa
-            # antes, então não existe como 'subscriber' ainda -- não é erro
-            # de configuração, é esperado até a pessoa interagir 1x.
-            print(f'[INFO] {telefone} ainda não é subscriber no Botconversa '
-                  f'(precisa mandar mensagem pro número pelo menos 1 vez antes)')
-            return
-        resp_id.raise_for_status()
-        subscriber_id = resp_id.json().get('id')
-        if not subscriber_id:
-            print(f'[WARN] Botconversa não achou subscriber pro telefone {telefone}')
-            return
+        salt, _ = str(armazenado).split('$', 1)
+    except ValueError:
+        return False
+    return secrets.compare_digest(hash_senha(senha, salt), armazenado)
 
-        resp_send = requests.post(f'{base}/subscriber/{subscriber_id}/send_message/',
-                                  headers=headers,
-                                  json={'type': 'text', 'value': texto},
-                                  timeout=4)
-        resp_send.raise_for_status()
-    except Exception as e:
-        print(f'[WARN] falha ao enviar WhatsApp pra {telefone}: {e}')
+def carregar_usuarios():
+    """Lista de usuários. Cria o admin inicial se o arquivo não existir."""
+    b = _usuarios_blob()
+    if not b.exists():
+        inicial = [{
+            'usuario': 'hthoni',
+            'senhaHash': hash_senha('Belldelta41!'),
+            'papel': 'admin',
+            'ativo': True,
+            'codRepresentante': '',
+            'nome': 'Henrique (admin)'
+        }]
+        b.upload_from_string(json.dumps(inicial, ensure_ascii=False, indent=2),
+                             content_type='application/json')
+        return inicial
+    return json.loads(b.download_as_bytes().decode('utf-8'))
+
+def salvar_usuarios(lista):
+    _usuarios_blob().upload_from_string(
+        json.dumps(lista, ensure_ascii=False, indent=2),
+        content_type='application/json')
+
+def registrar_login(usuario, ok):
+    """Append de um registro de login (quem, quando, sucesso)."""
+    b = _logins_blob()
+    logs = []
+    if b.exists():
+        try: logs = json.loads(b.download_as_bytes().decode('utf-8'))
+        except Exception: logs = []
+    logs.append({
+        'usuario': usuario,
+        'quando': datetime.datetime.utcnow().isoformat() + 'Z',
+        'ok': bool(ok)
+    })
+    logs = logs[-5000:]  # mantém os últimos 5000
+    b.upload_from_string(json.dumps(logs, ensure_ascii=False),
+                         content_type='application/json')
+
+# Sessões: token AUTO-VALIDÁVEL, assinado com HMAC. NÃO depende de memória
+# do processo — qualquer instância do Cloud Run valida qualquer token e não
+# desloga em restart/deploy (era a causa do "algumas páginas pedem login de
+# novo": sessão em memória + várias instâncias). Formato do token:
+#   base64url(payload_json) + '.' + base64url(hmac_sha256).
+import hmac
+import base64
+
+SESSAO_HORAS = 2
+_secret_cache = None
 
 
-def processar_mensagem_entrada(telefone, texto=''):
-    """Ponto de entrada único chamado pelo /whatsapp/webhook. 'texto' é o
-    que a pessoa acabou de digitar (agora disponível, desde que o ciclo
-    Integração -> Conteúdo/SALVAR -> Integração foi fechado no BC)."""
-    _limpar_cache_contexto()  # request novo -> começa com dado fresco
-    papel, dado = identificar_papel(telefone)
-    alvo = _normaliza_telefone(telefone)
+def _session_secret():
+    """Segredo p/ assinar tokens. Guardado no bucket (auth/session_secret),
+    gerado uma única vez e cacheado em memória — compartilhado por todas as
+    instâncias, então o token vale em qualquer uma."""
+    global _secret_cache
+    if _secret_cache is not None:
+        return _secret_cache
+    blob = _bucket().blob('auth/session_secret')
+    if blob.exists():
+        _secret_cache = blob.download_as_bytes()
+    else:
+        _secret_cache = secrets.token_bytes(32)
+        try:
+            blob.upload_from_string(_secret_cache, content_type='application/octet-stream')
+        except Exception:
+            pass
+    return _secret_cache
 
-    if papel == 'vendedor':
-        return montar_mensagem_vendedor(dado['nome'], alvo)
-    if papel == 'encarregado':
-        return montar_mensagem_encarregado(dado['nome'], alvo)
-    if papel == 'motorista':
-        return _processar_motorista(telefone, dado['nome'], dado['entregaId'], texto)
 
-    return ('Não localizei seu número em nenhuma entrega ativa hoje. '
-            'Se você é vendedor, encarregado ou motorista da Pata Negra e recebeu essa '
-            'mensagem por engano, fala com a gente direto: '
-            'https://wa.me/5521990111992')
+def _b64e(b):
+    return base64.urlsafe_b64encode(b).decode('ascii').rstrip('=')
+
+
+def _b64d(s):
+    return base64.urlsafe_b64decode(s + '=' * (-len(s) % 4))
+
+
+def _assina(payload_b64):
+    return _b64e(hmac.new(_session_secret(), payload_b64.encode('ascii'),
+                          hashlib.sha256).digest())
+
+
+def criar_sessao(usuario, papel, codRep):
+    exp = datetime.datetime.utcnow() + datetime.timedelta(hours=SESSAO_HORAS)
+    payload = {'usuario': usuario, 'papel': papel,
+               'codRepresentante': codRep, 'exp': exp.isoformat()}
+    p = _b64e(json.dumps(payload, ensure_ascii=False).encode('utf-8'))
+    return p + '.' + _assina(p)
+
+
+def validar_sessao(token):
+    try:
+        p, sig = str(token).split('.', 1)
+        if not secrets.compare_digest(sig, _assina(p)):
+            return None
+        dados = json.loads(_b64d(p).decode('utf-8'))
+        if datetime.datetime.utcnow() > datetime.datetime.fromisoformat(dados['exp']):
+            return None
+        return dados
+    except Exception:
+        return None
+
+
+def encerrar_sessao(token):
+    # Token stateless: logout é client-side (remove do localStorage) e o token
+    # expira sozinho em SESSAO_HORAS. Nada a revogar no servidor.
+    return
