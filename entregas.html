@@ -46,6 +46,9 @@
     .card-info { flex:1; min-width:0; display:flex; flex-direction:column; justify-content:center; }
     .card-nome { font-weight:700; font-size:21px; line-height:1.1; margin-bottom:4px; }
     .card-meta { font-size:13px; color:#666; }
+    .card-motorista { font-size:13px; color:#666; margin-top:3px; }
+    .card-motorista select { font-family:inherit; font-size:12.5px; border:1px solid #ddd; border-radius:5px; padding:2px 6px; max-width:220px; }
+    .cm-label { color:#999; }
     .card-meta b { color:var(--text); }
 
     .card-idade { width:150px; flex-shrink:0; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; border-radius:12px; padding:8px 10px; }
@@ -192,6 +195,41 @@
     return pedidosDaEntrega(ent).reduce(function(s, r) { return s + (Number(r.kgPlanejados) || 0); }, 0);
   }
 
+  var motoristasDisponiveis = [];
+  var motoristaOcupadoPor = {};  // telefone normalizado -> entregaId
+
+  function carregarMotoristas() {
+    return fetch(SERVER_URL + '/motoristas')
+      .then(function(r) { return r.json(); })
+      .then(function(d) { motoristasDisponiveis = d.motoristas || []; })
+      .catch(function() { motoristasDisponiveis = []; });
+  }
+
+  function recalcularOcupacaoMotoristas() {
+    motoristaOcupadoPor = {};
+    entregas.forEach(function(e) {
+      if (e.status === 'finalizada') return;
+      var tel = (e.telefoneMotorista || '').replace(/\D/g, '');
+      if (tel) motoristaOcupadoPor[tel] = e.id;
+    });
+  }
+
+  function editarMotoristaEntrega(entregaId, selectEl) {
+    var telefone = selectEl.value;
+    var nome = telefone ? (selectEl.options[selectEl.selectedIndex].getAttribute('data-nome') || '') : '';
+    selectEl.disabled = true;
+    fetch(SERVER_URL + '/entregas/' + entregaId + '/motorista', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ motorista: nome, telefoneMotorista: telefone })
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.erro) { alert('Erro: ' + d.erro); selectEl.disabled = false; return; }
+        carregar();  // recarrega tudo -- reflete qualquer entrega liberada por conflito
+      })
+      .catch(function(e) { alert('Erro de conexão: ' + e.message); selectEl.disabled = false; });
+  }
+
   function render() {
     var lista = document.getElementById('lista');
     document.getElementById('loading').style.display = 'none';
@@ -200,6 +238,7 @@
     document.getElementById('total-badge').textContent =
       entregas.length + ' entrega' + (entregas.length !== 1 ? 's' : '') + ' em andamento';
 
+    recalcularOcupacaoMotoristas();
     var ord = entregas.slice().sort(function(a, b) { return horasDe(b.criadaEm) - horasDe(a.criadaEm); });
 
     var html = '';
@@ -210,6 +249,19 @@
       var aberto = isAberto(ent.id) ? ' aberto' : '';
       var caret = isAberto(ent.id) ? '&#9662;' : '&#9656;';
 
+      // NOVO (23/08/2026): dropdown de motorista, editável direto no card --
+      // esconde quem já está ocupado noutra entrega (exceto o próprio já
+      // atribuído a esta).
+      var telAtual = (ent.telefoneMotorista || '').replace(/\D/g, '');
+      var optsMotorista = '<option value="">Indefinido</option>';
+      motoristasDisponiveis.forEach(function(m) {
+        var telM = (m.telefone || '').replace(/\D/g, '');
+        var ocupadoPorOutro = motoristaOcupadoPor[telM] && motoristaOcupadoPor[telM] !== ent.id;
+        if (ocupadoPorOutro) return;
+        optsMotorista += '<option value="' + m.telefone + '" data-nome="' + escapeAttr(m.nome) + '"' +
+          (telM === telAtual ? ' selected' : '') + '>' + escapeHtml(m.nome) + '</option>';
+      });
+
       html += '<div class="card ' + c.cls + aberto + '" id="ent-' + ent.id + '">';
       html += '<div class="card-topo" onclick="toggleAberto(\'' + ent.id + '\')">' +
         '<span class="caret">' + caret + '</span>' +
@@ -217,6 +269,10 @@
           '<div class="card-nome">' + escapeHtml(ent.nome) + '</div>' +
           '<div class="card-meta"><b>' + peds.length + '</b> pedido' + (peds.length !== 1 ? 's' : '') +
             ' &nbsp;&middot;&nbsp; <b>' + fmtKg(pesoEntrega(ent)) + '</b></div>' +
+          '<div class="card-motorista" onclick="event.stopPropagation()">' +
+            '<span class="cm-label">Motorista:</span> ' +
+            '<select onchange="editarMotoristaEntrega(\'' + ent.id + '\', this)">' + optsMotorista + '</select>' +
+          '</div>' +
         '</div>' +
         '<div class="card-idade" style="background:' + c.bg + ';color:' + c.txt + '">' +
           '<span class="fase">' + c.label + '</span><span class="horas">' + Math.round(h) + 'h</span>' +
@@ -425,6 +481,7 @@
     }
   }
 
+  carregarMotoristas();
   carregar();
 </script>
 </body>
