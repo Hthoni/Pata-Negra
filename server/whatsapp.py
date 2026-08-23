@@ -566,7 +566,6 @@ def processar_mensagem_entrada(telefone, texto=''):
     if papel == 'motorista':
         return _processar_motorista(telefone, dado['nome'], dado['entregaId'], texto)
 
-    return ('Não localizei seu número em nenhuma entrega ativa hoje. '
+    return (f'Não localizei seu número em nenhuma entrega ativa hoje.{_QUEBRA}'
             'Se você é vendedor, encarregado ou motorista da Pata Negra e recebeu essa '
-            'mensagem por engano, fala com a gente direto: '
-            'https://wa.me/5521990111992')
+            'mensagem por engano, fala com a gente direto: (21) 99011-1992')
