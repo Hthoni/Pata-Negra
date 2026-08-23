@@ -386,12 +386,21 @@ def _processar_motorista(telefone, nome, entrega_id, texto):
 
 
 # ── mensagens de DESPACHO (disparadas quando a entrega vira 'em_rota') ──
-def montar_mensagem_pedido_em_rota(nome, cliente, filial):
-    """Mensagem #1 do rascunho — vendedor + cada encarregado da filial."""
+def montar_mensagem_pedido_em_rota(nome, cliente, filial, vendedor_nome='', vendedor_telefone=''):
+    """Mensagem #1 do rascunho — vendedor + cada encarregado da filial.
+
+    FIX (23/08/2026): quebras de linha duplas entre blocos (pedido
+    anterior) + telefone do vendedor incluído (pedido novo) — antes essa
+    mensagem não trazia nenhuma info de vendedor, mesmo pro encarregado
+    que precisa saber quem contatar."""
+    linha_vendedor = ''
+    if vendedor_nome or vendedor_telefone:
+        linha_vendedor = f'\n\nVendedor: {vendedor_nome or "—"} - {vendedor_telefone or "—"}'
     return (
-        f'Olá {nome}, temos uma entrega da Pata Negra em rota para o cliente:\n'
-        f'{cliente}\n{filial}\n\n'
-        'Para atualizações desta rota, envie a palavra STATUS para este número.\n'
+        f'Olá {nome}, temos uma entrega da Pata Negra em rota para o cliente:\n\n'
+        f'{cliente}\n{filial}'
+        f'{linha_vendedor}\n\n'
+        'Para atualizações desta rota, envie a palavra STATUS para este número.\n\n'
         'Agradecemos toda ajuda no desembarque.'
     )
 
@@ -431,7 +440,8 @@ def notificar_despacho_entrega(entrega):
         for nome, tel in alvos:
             if tel:
                 _enviar_whatsapp(tel, montar_mensagem_pedido_em_rota(
-                    nome, r.get('clienteNome') or r.get('cliente') or '', r.get('filial', '')))
+                    nome, r.get('clienteNome') or r.get('cliente') or '', r.get('filial', ''),
+                    vendedor_nome=r.get('vendedor', ''), vendedor_telefone=r.get('telefoneVendedor', '')))
 
     telefone_motorista = (entrega.get('telefoneMotorista') or '').strip()
     if telefone_motorista:
