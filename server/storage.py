@@ -201,19 +201,26 @@ def deletar_romaneio(romaneio_id):
     return False
 
 
-def limpar_romaneios_entregues(dias_minimo=30):
+def limpar_romaneios_entregues(dias_minimo=30, limite_por_chamada=200):
     """NOVO (23/08/2026): apaga romaneios com status='entregue' cuja
     última atualização (statusData, ou dataGeracao como fallback) tem
     DIAS_MINIMO dias ou mais. NUNCA mexe em 'pendente'/'em_rota' (não
-    importa a idade) — só entregues antigos são candidatos. Criado
-    porque o bucket de romaneios acumulou meses de pedidos entregues, e
-    listar_romaneios() baixa TODOS eles (em paralelo, mas ainda assim)
-    toda vez que qualquer página do sistema carrega — deixando o site
-    inteiro lento conforme o bucket cresce.
+    importa a idade) — só entregues antigos são candidatos.
 
-    Retorna {'apagados': N, 'mantidos': M, 'total_avaliado': N+M}."""
-    apagados, mantidos = 0, 0
+    FIX (23/08/2026, mesma noite): a versão anterior apagava um por um,
+    em SÉRIE — cada deletar_romaneio() já faz até 7 chamadas de rede
+    (json + pdf/xlsx + variantes __e1/__e2), então apagar várias centenas
+    de pedidos serializado podia levar minutos, travando a requisição
+    HTTP inteira (foi isso que aconteceu: o curl nunca voltou). Agora
+    apaga em PARALELO (mesmo padrão de listar_romaneios/listar_entregas,
+    32 workers), e limita a UMA quantidade máxima por chamada (padrão
+    200) — pra nunca travar uma requisição por tempo indefinido; chame
+    de novo se sobrar mais candidato que o limite.
+
+    Retorna {'apagados': N, 'mantidos': M, 'total_avaliado': N+M,
+    'restantes_proxima_chamada': R}."""
     limite = datetime.datetime.utcnow() - datetime.timedelta(days=dias_minimo)
+    candidatos, mantidos = [], 0
 
     for r in listar_romaneios():
         if r.get('status') != 'entregue':
@@ -228,12 +235,23 @@ def limpar_romaneios_entregues(dias_minimo=30):
             mantidos += 1
             continue
         if dt <= limite:
-            deletar_romaneio(r['id'])
-            apagados += 1
+            candidatos.append(r['id'])
         else:
             mantidos += 1
 
-    return {'apagados': apagados, 'mantidos': mantidos, 'total_avaliado': apagados + mantidos}
+    lote = candidatos[:limite_por_chamada]
+    restantes = max(0, len(candidatos) - len(lote))
+
+    if lote:
+        with ThreadPoolExecutor(max_workers=32) as ex:
+            list(ex.map(deletar_romaneio, lote))
+
+    return {
+        'apagados': len(lote),
+        'mantidos': mantidos,
+        'total_avaliado': len(lote) + mantidos,
+        'restantes_proxima_chamada': restantes,
+    }
 
 
 # ── Geofences / zonas (bucket próprio) ────────────────────────────────────────
