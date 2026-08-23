@@ -132,11 +132,16 @@ def identificar_papel(telefone):
             if _normaliza_telefone(enc.get('telefone', '')) == alvo:
                 return 'encarregado', {'nome': enc.get('nome', '')}
 
+    # FIX (23/08/2026, revisão 2): o motorista pode ter MAIS DE UMA
+    # entrega ativa ao mesmo tempo (várias viagens no mesmo dia) -- não
+    # amarra mais num único 'entregaId'. Aqui só confirma que ele é
+    # motorista de alguma entrega ativa (pra pegar o nome); a lista real
+    # de pedidos pendentes é buscada por telefone, agregando TODAS as
+    # entregas dele (ver _pedidos_do_motorista).
     _, entregas = _contexto_pedido()
     for e in entregas:
-        if _normaliza_telefone(e.get('telefoneMotorista', '')) == alvo:
-            if e.get('fase') == 'em_rota':  # só motorista com entrega despachada hoje/ativa
-                return 'motorista', {'nome': e.get('motorista', ''), 'entregaId': e.get('id')}
+        if _normaliza_telefone(e.get('telefoneMotorista', '')) == alvo and e.get('fase') == 'em_rota':
+            return 'motorista', {'nome': e.get('motorista', '')}
 
     return None, {}
 
@@ -221,6 +226,18 @@ _ACOES = {'1': 'chegada', '2': 'conclusao', '3': 'falha'}
 _ACAO_VERBO = {'chegada': 'a chegada', 'conclusao': 'a conclusão', 'falha': 'a falha'}
 
 
+def _pedidos_do_motorista(telefone):
+    """Todos os pedidos ativos hoje, de TODAS as entregas do motorista
+    (por telefone) -- um motorista pode ter mais de uma entrega/viagem
+    ativa no mesmo dia."""
+    alvo = _normaliza_telefone(telefone)
+    _, entregas = _contexto_pedido()
+    ids_dele = {e['id'] for e in entregas
+                if _normaliza_telefone(e.get('telefoneMotorista', '')) == alvo
+                and e.get('fase') == 'em_rota'}
+    return [r for r in _pedidos_ativos_hoje() if r.get('entregaId') in ids_dele]
+
+
 def _pedidos_da_entrega(entrega_id):
     idx = {r['id']: r for r in _pedidos_ativos_hoje()}
     e = _entregas_idx().get(entrega_id)
@@ -229,8 +246,8 @@ def _pedidos_da_entrega(entrega_id):
     return [idx[pid] for pid in e.get('pedidoIds', []) if pid in idx]
 
 
-def _pedidos_pendentes_da_acao(entrega_id, acao):
-    pedidos = _pedidos_da_entrega(entrega_id)
+def _pedidos_pendentes_da_acao(telefone, acao):
+    pedidos = _pedidos_do_motorista(telefone)
     if acao == 'chegada':
         return [r for r in pedidos if not r.get('chegouLocal')]
     if acao == 'conclusao':
@@ -336,46 +353,45 @@ def _limpar_sessao(telefone):
     _salvar_sessao(telefone, {'estado': None})
 
 
-def _processar_motorista(telefone, nome, entrega_id, texto):
+def _processar_motorista(telefone, nome, texto):
+    """FIX (23/08/2026, revisão 2): não amarra mais numa única
+    entrega_id -- agrega pedidos de TODAS as entregas ativas do
+    motorista, por telefone (ver _pedidos_do_motorista). Motorista com
+    2+ viagens no mesmo dia vê tudo junto na lista de escolha."""
     sessao = _carregar_sessao(telefone)
     estado = sessao.get('estado')
     entrada = (texto or '').strip()
 
     # sem sessão / conversa nova -> mostra o menu
     if not estado:
-        _salvar_sessao(telefone, {'estado': 'aguardando_opcao', 'entregaId': entrega_id})
+        _salvar_sessao(telefone, {'estado': 'aguardando_opcao'})
         return montar_menu_motorista(nome)
 
     if estado == 'aguardando_opcao':
         acao = _ACOES.get(entrada)
         if not acao:
             return 'Não entendi. ' + montar_menu_motorista(nome)
-        todos_da_entrega = _pedidos_da_entrega(entrega_id)
-        pendentes = _pedidos_pendentes_da_acao(entrega_id, acao)
-        # LOG DE DIAGNÓSTICO (23/08/2026)
-        print(f'[INFO] _processar_motorista(aguardando_opcao): entregaId={entrega_id!r} acao={acao!r} '
-              f'total_pedidos_da_entrega={len(todos_da_entrega)} '
-              f'ids={[p.get("id") for p in todos_da_entrega]} '
-              f'chegouLocal={[p.get("chegouLocal") for p in todos_da_entrega]} '
-              f'pendentes_encontrados={len(pendentes)}')
+        pendentes = _pedidos_pendentes_da_acao(telefone, acao)
+        print(f'[INFO] _processar_motorista(aguardando_opcao): telefone={telefone!r} acao={acao!r} '
+              f'pendentes_encontrados={len(pendentes)} ids={[p.get("id") for p in pendentes]}')
         if not pendentes:
             _limpar_sessao(telefone)
             return 'Não há nenhuma entrega pendente com essa ação agora.'
         if len(pendentes) == 1:
-            _salvar_sessao(telefone, {'estado': 'aguardando_confirmacao', 'entregaId': entrega_id,
+            _salvar_sessao(telefone, {'estado': 'aguardando_confirmacao',
                                       'acao': acao, 'pedidoId': pendentes[0]['id']})
             return montar_confirmacao(acao, pendentes[0])
-        _salvar_sessao(telefone, {'estado': 'aguardando_entrega', 'entregaId': entrega_id, 'acao': acao})
+        _salvar_sessao(telefone, {'estado': 'aguardando_entrega', 'acao': acao})
         return montar_lista_escolha(pendentes, acao)
 
     if estado == 'aguardando_entrega':
         acao = sessao.get('acao')
-        pendentes = _pedidos_pendentes_da_acao(entrega_id, acao)
+        pendentes = _pedidos_pendentes_da_acao(telefone, acao)
         try:
             escolhido = pendentes[int(entrada) - 1]
         except (ValueError, IndexError):
             return 'Não entendi. ' + montar_lista_escolha(pendentes, acao)
-        _salvar_sessao(telefone, {'estado': 'aguardando_confirmacao', 'entregaId': entrega_id,
+        _salvar_sessao(telefone, {'estado': 'aguardando_confirmacao',
                                   'acao': acao, 'pedidoId': escolhido['id']})
         return montar_confirmacao(acao, escolhido)
 
@@ -393,7 +409,7 @@ def _processar_motorista(telefone, nome, entrega_id, texto):
         if resp in ('NAO', 'NÃO', 'N'):
             _limpar_sessao(telefone)
             return 'Ok, cancelado. Digite algo pra ver o menu de novo.'
-        idx = {r['id']: r for r in _pedidos_da_entrega(entrega_id)}
+        idx = {r['id']: r for r in _pedidos_do_motorista(telefone)}
         r = idx.get(pedido_id)
         return 'Não entendi. ' + (montar_confirmacao(acao, r) if r else 'Responda SIM ou NÃO.')
 
@@ -592,7 +608,7 @@ def processar_mensagem_entrada(telefone, texto=''):
     if papel == 'encarregado':
         return montar_mensagem_encarregado(dado['nome'], alvo)
     if papel == 'motorista':
-        return _processar_motorista(telefone, dado['nome'], dado['entregaId'], texto)
+        return _processar_motorista(telefone, dado['nome'], texto)
 
     return (f'Não localizei seu número em nenhuma entrega ativa hoje.{_QUEBRA}'
             'Se você é vendedor, encarregado ou motorista da Pata Negra e recebeu essa '
