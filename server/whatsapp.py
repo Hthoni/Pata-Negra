@@ -396,36 +396,75 @@ def _processar_motorista(telefone, nome, entrega_id, texto):
 
 
 # ── mensagens de DESPACHO (disparadas quando a entrega vira 'em_rota') ──
-def montar_mensagem_pedido_em_rota(nome, cliente, filial, vendedor_nome='', vendedor_telefone=''):
-    """Mensagem #1 do rascunho — vendedor + cada encarregado da filial.
+def _linha_pessoa(rotulo, nome, telefone):
+    """Uma linha 'Rótulo: nome - telefone', ou None se telefone vazio —
+    princípio usado em toda mensagem cruzada (vendedor/encarregado/
+    motorista): sem telefone, nem o nome aparece, fica limpo."""
+    if not telefone:
+        return None
+    return f'{rotulo}: {nome or "—"} - {telefone}'
 
-    FIX (23/08/2026): quebras de linha duplas entre blocos (pedido
-    anterior) + telefone do vendedor incluído (pedido novo) — antes essa
-    mensagem não trazia nenhuma info de vendedor, mesmo pro encarregado
-    que precisa saber quem contatar."""
-    linha_vendedor = ''
-    if vendedor_nome or vendedor_telefone:
-        linha_vendedor = f'\n\nVendedor: {vendedor_nome or "—"} - {vendedor_telefone or "—"}'
+
+# espaço de largura zero na linha "vazia" — o Botconversa/WhatsApp colapsa
+# \n\n puro (testado, confirmado); com o \u200b a linha deixa de ser
+# vazia de verdade e a quebra sobrevive, mantendo aparência de linha em branco.
+_QUEBRA = '\n\u200b\n'
+
+
+def montar_mensagem_pedido_em_rota(nome, cliente, filial, papel,
+                                   vendedor_nome='', vendedor_telefone='',
+                                   encarregados=None, motorista_nome='', motorista_telefone=''):
+    """Mensagem #1 do rascunho — despachada pra vendedor, cada
+    encarregado, e (junto com a lista) o motorista. 'papel' é
+    'vendedor'|'encarregado'|'motorista' — quem está RECEBENDO, pra
+    saber quais dos outros 2 mostrar (nunca mostra info de si mesmo).
+    Cada linha cruzada só aparece se tiver telefone (ver _linha_pessoa) —
+    inclui o caso 'motorista indefinido': sem telefoneMotorista, a linha
+    de motorista simplesmente não aparece pra ninguém."""
+    linhas_extra = []
+    if papel != 'vendedor':
+        l = _linha_pessoa('Vendedor', vendedor_nome, vendedor_telefone)
+        if l:
+            linhas_extra.append(l)
+    if papel != 'encarregado':
+        for e in (encarregados or []):
+            l = _linha_pessoa('Encarregado', e.get('nome'), e.get('telefone'))
+            if l:
+                linhas_extra.append(l)
+    if papel != 'motorista':
+        l = _linha_pessoa('Motorista', motorista_nome, motorista_telefone)
+        if l:
+            linhas_extra.append(l)
+
+    bloco_extra = (_QUEBRA + '\n'.join(linhas_extra)) if linhas_extra else ''
     return (
-        f'Olá {nome}, temos uma entrega da Pata Negra em rota para o cliente:\n\n'
+        f'Olá {nome}, temos uma entrega da Pata Negra em rota para o cliente:{_QUEBRA}'
         f'{cliente}\n{filial}'
-        f'{linha_vendedor}\n\n'
-        'Para atualizações desta rota, envie a palavra STATUS para este número.\n\n'
+        f'{bloco_extra}{_QUEBRA}'
+        f'Para atualizações desta rota, envie a palavra STATUS para este número.{_QUEBRA}'
         'Agradecemos toda ajuda no desembarque.'
     )
 
 
 def montar_mensagem_lista_motorista(nome_motorista, pedidos):
-    """Mensagem #2 do rascunho — lista do dia pro motorista."""
-    linhas = [f'Olá {nome_motorista}, temos as seguintes entregas hoje:', '']
+    """Mensagem #2 do rascunho — lista do dia pro motorista, com
+    vendedor + encarregado(s) de cada parada (omitidos quando sem
+    telefone — mesmo princípio de _linha_pessoa)."""
+    blocos = []
     for r in pedidos:
         cliente = r.get('clienteNome') or r.get('cliente') or ''
         filial = r.get('filial', '')
-        linhas.append(f'{cliente} / {filial} / Vendedor {r.get("vendedor", "—")} '
-                      f'telefone {r.get("telefoneVendedor", "—")}')
-    linhas.append('')
-    linhas.append('Bom trabalho!')
-    return '\n'.join(linhas)
+        linhas_parada = [f'{cliente} / {filial}']
+        l = _linha_pessoa('Vendedor', r.get('vendedor'), r.get('telefoneVendedor'))
+        if l:
+            linhas_parada.append(l)
+        for e in (r.get('encarregados') or []):
+            l = _linha_pessoa('Encarregado', e.get('nome'), e.get('telefone'))
+            if l:
+                linhas_parada.append(l)
+        blocos.append('\n'.join(linhas_parada))
+    corpo = _QUEBRA.join(blocos)
+    return f'Olá {nome_motorista}, temos as seguintes entregas hoje:{_QUEBRA}{corpo}{_QUEBRA}Bom trabalho!'
 
 
 def notificar_despacho_entrega(entrega):
@@ -445,13 +484,16 @@ def notificar_despacho_entrega(entrega):
         return
 
     for r in pedidos:
-        alvos = [(r.get('vendedor', ''), r.get('telefoneVendedor', ''))] + \
-                [(e.get('nome', ''), e.get('telefone', '')) for e in (r.get('encarregados') or [])]
-        for nome, tel in alvos:
+        mot_nome, mot_tel = _motorista_da_entrega(r, _entregas_idx())
+        alvos = [(r.get('vendedor', ''), r.get('telefoneVendedor', ''), 'vendedor')] + \
+                [(e.get('nome', ''), e.get('telefone', ''), 'encarregado') for e in (r.get('encarregados') or [])]
+        for nome, tel, papel in alvos:
             if tel:
                 _enviar_whatsapp(tel, montar_mensagem_pedido_em_rota(
-                    nome, r.get('clienteNome') or r.get('cliente') or '', r.get('filial', ''),
-                    vendedor_nome=r.get('vendedor', ''), vendedor_telefone=r.get('telefoneVendedor', '')))
+                    nome, r.get('clienteNome') or r.get('cliente') or '', r.get('filial', ''), papel,
+                    vendedor_nome=r.get('vendedor', ''), vendedor_telefone=r.get('telefoneVendedor', ''),
+                    encarregados=r.get('encarregados'),
+                    motorista_nome=mot_nome, motorista_telefone=mot_tel))
 
     telefone_motorista = (entrega.get('telefoneMotorista') or '').strip()
     if telefone_motorista:
