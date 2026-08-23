@@ -178,19 +178,62 @@ def carregar_pedido_excel(romaneio_id):
         return blob.download_as_bytes()
     return None
 def deletar_romaneio(romaneio_id):
-    """Deleta um romaneio pelo ID (JSON + PDF). Retorna True se o JSON existia, False se não."""
-    # apaga o PDF associado se existir (best-effort; soft-delete do bucket cobre recuperação)
-    try:
-        pdf_blob = _romaneios_bucket().blob(f'{romaneio_id}.pdf')
-        if pdf_blob.exists():
-            pdf_blob.delete()
-    except Exception:
-        pass
+    """Deleta um romaneio pelo ID: o .json, e TODOS os arquivos associados
+    (.pdf/.xlsx, incluindo as variantes __e1/__e2 de pedidos divididos
+    Indústria/Distribuidora).
+
+    FIX (23/08/2026): antes só apagava o .pdf sem sufixo, deixando lixo
+    órfão no bucket (o .xlsx nunca era apagado, e pedidos divididos
+    deixavam os arquivos __e1/__e2 pra trás). Retorna True se o .json
+    existia, False se não."""
+    for sufixo in ('', '__e1', '__e2'):
+        for ext in ('.pdf', '.xlsx'):
+            try:
+                blob = _romaneios_bucket().blob(f'{romaneio_id}{sufixo}{ext}')
+                if blob.exists():
+                    blob.delete()
+            except Exception:
+                pass
     blob = _romaneios_bucket().blob(f'{romaneio_id}.json')
     if blob.exists():
         blob.delete()
         return True
     return False
+
+
+def limpar_romaneios_entregues(dias_minimo=30):
+    """NOVO (23/08/2026): apaga romaneios com status='entregue' cuja
+    última atualização (statusData, ou dataGeracao como fallback) tem
+    DIAS_MINIMO dias ou mais. NUNCA mexe em 'pendente'/'em_rota' (não
+    importa a idade) — só entregues antigos são candidatos. Criado
+    porque o bucket de romaneios acumulou meses de pedidos entregues, e
+    listar_romaneios() baixa TODOS eles (em paralelo, mas ainda assim)
+    toda vez que qualquer página do sistema carrega — deixando o site
+    inteiro lento conforme o bucket cresce.
+
+    Retorna {'apagados': N, 'mantidos': M, 'total_avaliado': N+M}."""
+    apagados, mantidos = 0, 0
+    limite = datetime.datetime.utcnow() - datetime.timedelta(days=dias_minimo)
+
+    for r in listar_romaneios():
+        if r.get('status') != 'entregue':
+            continue
+        ref = r.get('statusData') or r.get('dataGeracao')
+        if not ref:
+            mantidos += 1
+            continue
+        try:
+            dt = datetime.datetime.fromisoformat(str(ref).replace('Z', ''))
+        except ValueError:
+            mantidos += 1
+            continue
+        if dt <= limite:
+            deletar_romaneio(r['id'])
+            apagados += 1
+        else:
+            mantidos += 1
+
+    return {'apagados': apagados, 'mantidos': mantidos, 'total_avaliado': apagados + mantidos}
 
 
 # ── Geofences / zonas (bucket próprio) ────────────────────────────────────────
