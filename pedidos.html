@@ -217,7 +217,7 @@
       <button id="btn-filtro-situacao" onclick="toggleFiltroSituacao(event)">Situação</button>
       <div class="filtro-dropdown" id="filtro-situacao-dropdown"></div>
     </div>
-    <button id="btn-subir-master" title="Subir Master" style="margin-left:auto;font-family:inherit;height:34px;padding:0 8px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:#fff;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:3px" onclick="document.getElementById('inp-master').click()">↑ Master</button>
+    <button id="btn-subir-master" title="Subir Master" style="margin-left:auto;font-family:inherit;height:34px;padding:0 8px;border-radius:6px;border:1px solid var(--accent);background:var(--accent-lt);color:var(--accent);font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:3px" onclick="document.getElementById('inp-master').click()">↑ Master</button>
     <input type="file" id="inp-master" accept=".xlsx" style="display:none" onchange="uploadMaster(this)">
     <button id="btn-subir-faturamento" title="Subir Faturamento Avulso" style="font-family:inherit;height:34px;padding:0 8px;border-radius:6px;border:1px solid var(--accent);background:#fff;color:var(--accent);font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:3px" onclick="document.getElementById('inp-faturamento').click()">↑ Avulso</button>
     <input type="file" id="inp-faturamento" accept=".xlsx" style="display:none" onchange="uploadFaturamentoAvulso(this)">
@@ -881,10 +881,27 @@
   };
 
   function carregarMotoristas() {
-    fetch(SERVER_URL + '/motoristas')
-      .then(function(r) { return r.json(); })
-      .then(function(d) { motoristasDisponiveis = d.motoristas || []; })
-      .catch(function() { motoristasDisponiveis = []; });
+    // FIX (23/08/2026): motoristas já atribuídos a OUTRA entrega ativa
+    // (planejamento ou em rota) somem do dropdown -- evita escalar o
+    // mesmo motorista duas vezes sem querer.
+    Promise.all([
+      fetch(SERVER_URL + '/motoristas').then(function(r){ return r.json(); }),
+      fetch(SERVER_URL + '/entregas?fase=planejamento').then(function(r){ return r.json(); }),
+      fetch(SERVER_URL + '/entregas?fase=em_rota').then(function(r){ return r.json(); }),
+    ]).then(function(resultados) {
+      var todos = (resultados[0].motoristas || []);
+      var entPlan = (resultados[1].entregas || resultados[1] || []);
+      var entRota = (resultados[2].entregas || resultados[2] || []);
+      var ocupados = {};
+      entPlan.concat(entRota).forEach(function(e) {
+        if (e.status === 'finalizada') return;
+        var tel = (e.telefoneMotorista || '').replace(/\D/g, '');
+        if (tel) ocupados[tel] = true;
+      });
+      motoristasDisponiveis = todos.filter(function(m) {
+        return !ocupados[(m.telefone || '').replace(/\D/g, '')];
+      });
+    }).catch(function() { motoristasDisponiveis = []; });
   }
 
   carregar();
