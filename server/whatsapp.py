@@ -480,7 +480,14 @@ def notificar_despacho_entrega(entrega):
     #1 normalmente."""
     idx = {r['id']: r for r in _pedidos_ativos_hoje()}
     pedidos = [idx[pid] for pid in entrega.get('pedidoIds', []) if pid in idx]
+    # LOG DE DIAGNÓSTICO (23/08/2026) -- sempre imprime, mesmo quando não
+    # acha nada, pra dar visibilidade real no Cloud Run Logs em vez de
+    # falhar em silêncio absoluto.
+    print(f'[INFO] notificar_despacho_entrega: entrega={entrega.get("id")} '
+          f'pedidoIds={entrega.get("pedidoIds")} telefoneMotorista={entrega.get("telefoneMotorista")!r} '
+          f'pedidos_ativos_hoje_encontrados={len(pedidos)}')
     if not pedidos:
+        print('[WARN] notificar_despacho_entrega: nenhum pedido ativo encontrado pra essa entrega -- nada será enviado')
         return
 
     for r in pedidos:
