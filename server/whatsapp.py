@@ -350,7 +350,14 @@ def _processar_motorista(telefone, nome, entrega_id, texto):
         acao = _ACOES.get(entrada)
         if not acao:
             return 'Não entendi. ' + montar_menu_motorista(nome)
+        todos_da_entrega = _pedidos_da_entrega(entrega_id)
         pendentes = _pedidos_pendentes_da_acao(entrega_id, acao)
+        # LOG DE DIAGNÓSTICO (23/08/2026)
+        print(f'[INFO] _processar_motorista(aguardando_opcao): entregaId={entrega_id!r} acao={acao!r} '
+              f'total_pedidos_da_entrega={len(todos_da_entrega)} '
+              f'ids={[p.get("id") for p in todos_da_entrega]} '
+              f'chegouLocal={[p.get("chegouLocal") for p in todos_da_entrega]} '
+              f'pendentes_encontrados={len(pendentes)}')
         if not pendentes:
             _limpar_sessao(telefone)
             return 'Não há nenhuma entrega pendente com essa ação agora.'
