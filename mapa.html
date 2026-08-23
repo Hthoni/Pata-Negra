@@ -1117,10 +1117,27 @@
   }
 
   function carregarMotoristas() {
-    fetch(SERVER_URL + '/motoristas')
-      .then(function(r) { return r.json(); })
-      .then(function(d) { motoristasDisponiveis = d.motoristas || []; })
-      .catch(function() { motoristasDisponiveis = []; });
+    // FIX (23/08/2026): motoristas já atribuídos a OUTRA entrega ativa
+    // (planejamento ou em rota) somem do dropdown -- evita escalar o
+    // mesmo motorista duas vezes sem querer.
+    Promise.all([
+      fetch(SERVER_URL + '/motoristas').then(function(r){ return r.json(); }),
+      fetch(SERVER_URL + '/entregas?fase=planejamento').then(function(r){ return r.json(); }),
+      fetch(SERVER_URL + '/entregas?fase=em_rota').then(function(r){ return r.json(); }),
+    ]).then(function(resultados) {
+      var todos = (resultados[0].motoristas || []);
+      var entPlan = (resultados[1].entregas || resultados[1] || []);
+      var entRota = (resultados[2].entregas || resultados[2] || []);
+      var ocupados = {};
+      entPlan.concat(entRota).forEach(function(e) {
+        if (e.status === 'finalizada') return;
+        var tel = (e.telefoneMotorista || '').replace(/\D/g, '');
+        if (tel) ocupados[tel] = true;
+      });
+      motoristasDisponiveis = todos.filter(function(m) {
+        return !ocupados[(m.telefone || '').replace(/\D/g, '')];
+      });
+    }).catch(function() { motoristasDisponiveis = []; });
   }
 
   carregarZonas();
