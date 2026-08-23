@@ -524,6 +524,14 @@ def _enviar_whatsapp(telefone, texto):
     import os
     import requests
 
+    # LOG DE DIAGNÓSTICO (23/08/2026): antes essa função só logava em
+    # caso de erro/404 -- se tudo "desse certo" do ponto de vista da
+    # nossa chamada (API respondeu 200), não sobrava rastro nenhum,
+    # deixando impossível distinguir "não tentou" de "tentou e a API
+    # aceitou" quando a mensagem mesmo assim não chegava. Agora loga
+    # TODO caminho, inclusive sucesso.
+    print(f'[INFO] _enviar_whatsapp: iniciando envio pra {telefone}')
+
     api_key = os.environ.get('BOTCONVERSA_API_KEY', '')
     if not api_key:
         print(f'[WARN] BOTCONVERSA_API_KEY não configurada — mensagem NÃO enviada pra {telefone}')
@@ -536,6 +544,7 @@ def _enviar_whatsapp(telefone, texto):
     try:
         resp_id = requests.get(f'{base}/subscriber/get_by_phone/{tel_limpo}/',
                                headers=headers, timeout=4)
+        print(f'[INFO] _enviar_whatsapp: get_by_phone({tel_limpo}) -> status={resp_id.status_code}')
         if resp_id.status_code == 404:
             # comum: telefone nunca mandou mensagem pro número do Botconversa
             # antes, então não existe como 'subscriber' ainda -- não é erro
@@ -546,14 +555,19 @@ def _enviar_whatsapp(telefone, texto):
         resp_id.raise_for_status()
         subscriber_id = resp_id.json().get('id')
         if not subscriber_id:
-            print(f'[WARN] Botconversa não achou subscriber pro telefone {telefone}')
+            print(f'[WARN] Botconversa não achou subscriber pro telefone {telefone} '
+                  f'(resposta: {resp_id.text[:200]})')
             return
+        print(f'[INFO] _enviar_whatsapp: subscriber_id={subscriber_id} pra {telefone}')
 
         resp_send = requests.post(f'{base}/subscriber/{subscriber_id}/send_message/',
                                   headers=headers,
                                   json={'type': 'text', 'value': texto},
                                   timeout=4)
+        print(f'[INFO] _enviar_whatsapp: send_message -> status={resp_send.status_code} '
+              f'resposta={resp_send.text[:200]}')
         resp_send.raise_for_status()
+        print(f'[INFO] _enviar_whatsapp: SUCESSO enviando pra {telefone}')
     except Exception as e:
         print(f'[WARN] falha ao enviar WhatsApp pra {telefone}: {e}')
 
