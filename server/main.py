@@ -830,20 +830,29 @@ def listar_motoristas_rota():
 
 @app.route('/whatsapp/webhook', methods=['POST'])
 def whatsapp_webhook():
-    """Ponto de entrada único do canal WhatsApp (Botconversa -> Bloco de
-    Integração). Recebe {"telefone": "..."}, devolve {"mensagem": "..."}.
-    Sempre devolve algo, mesmo em erro — o Botconversa precisa de
-    resposta síncrona pra continuar o fluxo."""
+    """### DEBUG TEMPORÁRIO (22/08/2026) ###
+    Devolve na resposta do WhatsApp exatamente os campos que chegaram no
+    corpo da requisição -- pra confirmar se o Botconversa já está mandando
+    'texto' além de 'telefone'. Depois de confirmar, trocar de volta pela
+    versão real (comentada logo abaixo)."""
     try:
         body = request.get_json(force=True) or {}
-        telefone = (body.get('telefone') or '').strip()
-        if not telefone:
-            return jsonify({'mensagem': 'Não recebi seu telefone corretamente. Tenta de novo?'})
-        mensagem = whatsapp.processar_mensagem_entrada(telefone)
-        return jsonify({'mensagem': mensagem})
+        campos_recebidos = ', '.join(f'{k}={v!r}' for k, v in body.items())
+        return jsonify({'mensagem': f'[DEBUG] Recebi: {campos_recebidos or "(corpo vazio)"}'})
     except Exception as e:
-        traceback.print_exc()
-        return jsonify({'mensagem': 'Desculpa, tive um problema — tenta de novo em instantes.'})
+        return jsonify({'mensagem': f'[DEBUG] Erro lendo o corpo: {e}'})
+
+    # ### VERSÃO REAL (voltar pra essa depois de confirmar o teste) ###
+    # try:
+    #     body = request.get_json(force=True) or {}
+    #     telefone = (body.get('telefone') or '').strip()
+    #     if not telefone:
+    #         return jsonify({'mensagem': 'Não recebi seu telefone corretamente. Tenta de novo?'})
+    #     mensagem = whatsapp.processar_mensagem_entrada(telefone)
+    #     return jsonify({'mensagem': mensagem})
+    # except Exception as e:
+    #     traceback.print_exc()
+    #     return jsonify({'mensagem': 'Desculpa, tive um problema — tenta de novo em instantes.'})
 
 
 @app.route('/romaneio-pdf/<rid>')
