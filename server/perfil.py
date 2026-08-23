@@ -57,8 +57,8 @@ def ler_perfil(perfil_bytes):
         'empresa': pdata[0][9] if pdata[0][9] else 2,
         'codVend': str(pdata[2][6]) if pdata[2][6] else '',
         'codCond': str(pdata[3][6]) if pdata[3][6] else '',
-        'vendedor': pdata[2][8] or '',
-        'telefone': pdata[2][9] or '',
+        'vendedor': _cel_para_texto(pdata[2][8]),
+        'telefone': _cel_para_texto(pdata[2][9]),
         # Campos de cabeçalho (linhas 3-6, coluna C) — usados pelos clientes
         # 'Central' (sem tabela de filiais M:N:O): CNPJ/Filial/Endereço únicos,
         # preenchidos direto aqui em vez de vir de uma seleção de loja.
@@ -83,6 +83,24 @@ def ler_perfil(perfil_bytes):
             'obs': str(r[9] or '').strip(),
         })
     return meta, produtos
+
+
+
+def _cel_para_texto(v):
+    """Converte valor de célula do Excel pra texto de forma segura.
+
+    FIX (23/08/2026): se a célula estiver formatada como número decimal
+    (float) em vez de texto -- comum em telefone, já que alguém pode
+    digitar sem formatar a célula como texto primeiro -- str(v) direto
+    preserva o '.0' do float (ex.: 21973231111.0 -> '21973231111.0'),
+    o que corrompe o telefone na hora de limpar caracteres não-numéricos
+    (o '.0' vira um '0' grudado no final, um dígito a mais, número
+    inválido). Detecta esse caso e converte pra int primeiro."""
+    if v is None:
+        return ''
+    if isinstance(v, float) and v.is_integer():
+        return str(int(v))
+    return str(v).strip()
 
 
 def _normaliza_cnpj(cnpj):
@@ -148,14 +166,17 @@ def ler_filiais(perfil_bytes):
 
         # ATUALIZADO: até 3 grupos de 4 colunas por encarregado
         # (U/V/W/X, Y/Z/AA/AB, AC/AD/AE/AF = nome/telefone/aniversário/time)
+        # FIX (23/08/2026): telefone usa _cel_para_texto (mesma proteção
+        # do telefone do vendedor) -- célula numérica sem formatação de
+        # texto corromperia o telefone (".0" de float virando dígito extra).
         encarregados = []
         for i_nome, i_tel, i_aniv, i_time in ((20, 21, 22, 23), (24, 25, 26, 27), (28, 29, 30, 31)):
             if len(r) <= i_time:
                 continue
-            enc_nome = str(r[i_nome] or '').strip() if r[i_nome] else ''
-            enc_tel = str(r[i_tel] or '').strip() if r[i_tel] else ''
-            enc_aniv = str(r[i_aniv] or '').strip() if r[i_aniv] else ''
-            enc_time = str(r[i_time] or '').strip() if r[i_time] else ''
+            enc_nome = _cel_para_texto(r[i_nome])
+            enc_tel = _cel_para_texto(r[i_tel])
+            enc_aniv = _cel_para_texto(r[i_aniv])
+            enc_time = _cel_para_texto(r[i_time])
             if enc_nome and enc_tel:  # nome+telefone obrigatórios; aniversário/time opcionais
                 encarregados.append({
                     'nome': enc_nome,
