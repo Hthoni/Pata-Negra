@@ -174,6 +174,10 @@ def montar_mensagem_vendedor(nome_vendedor, telefone_alvo):
 
 
 def montar_mensagem_encarregado(nome_encarregado, telefone_alvo):
+    """FIX (23/08/2026): reescrita pra agrupar por motorista (mesmo
+    padrão já usado em montar_mensagem_vendedor) — antes repetia
+    'Motorista ... telefone' e linhas em branco pra CADA pedido, ficando
+    poluído quando havia mais de um pedido ativo pra mesma filial."""
     pedidos = [r for r in _pedidos_ativos_hoje()
                if any(_normaliza_telefone(e.get('telefone', '')) == telefone_alvo
                       for e in (r.get('encarregados') or []))]
@@ -181,17 +185,23 @@ def montar_mensagem_encarregado(nome_encarregado, telefone_alvo):
         return f'Olá {nome_encarregado}, não encontrei nenhuma entrega em rota hoje pra sua filial.'
 
     idx_ent = _entregas_idx()
-    linhas = [f'Olá {nome_encarregado}, a entrega abaixo tem o seguinte status:', '']
+    por_motorista = {}
     for r in pedidos:
-        cliente = r.get('clienteNome') or r.get('cliente') or ''
-        filial = r.get('filial', '')
-        status = _status_legivel(r)
-        mot_nome, mot_tel = _motorista_da_entrega(r, idx_ent)
-        linhas.append(f'{cliente} / {filial} / {status}')
+        chave = _motorista_da_entrega(r, idx_ent)
+        por_motorista.setdefault(chave, []).append(r)
+
+    linhas = [f'Olá {nome_encarregado}, segue o status:']
+    for (mot_nome, mot_tel), lista in por_motorista.items():
         linhas.append('')
         linhas.append(f'Motorista {mot_nome} telefone - {mot_tel}')
-        linhas.append(f'Vendedor {r.get("vendedor", "—")} telefone {r.get("telefoneVendedor", "—")}')
-        linhas.append('')
+        for r in lista:
+            cliente = r.get('clienteNome') or r.get('cliente') or ''
+            filial = r.get('filial', '')
+            status = _status_legivel(r)
+            vend_nome = r.get('vendedor', '—')
+            vend_tel = r.get('telefoneVendedor', '—')
+            linhas.append(f'{cliente} / {filial} / {status} / Vendedor {vend_nome} - {vend_tel}')
+    linhas.append('')
     linhas.append('Agradecemos toda ajuda no desembarque!')
     return '\n'.join(linhas)
 
