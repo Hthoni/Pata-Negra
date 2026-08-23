@@ -14,6 +14,19 @@ import re
 import openpyxl
 
 
+def _cel_para_texto(v):
+    """Converte valor de célula do Excel pra texto de forma segura.
+    Célula formatada como número decimal (float) representando um
+    inteiro preservaria o '.0' com str(v) direto (ex.: telefone
+    5521993822539.0), corrompendo o dado na hora de limpar caracteres
+    não-numéricos. Detecta esse caso e converte pra int primeiro."""
+    if v is None:
+        return ''
+    if isinstance(v, float) and v.is_integer():
+        return str(int(v))
+    return str(v).strip()
+
+
 def _normaliza_telefone(tel):
     return re.sub(r'\D', '', str(tel or ''))
 
@@ -46,8 +59,8 @@ def ler_motoristas(xlsx_bytes):
     for row in dados:
         if not row or not row[0]:
             continue
-        nome = str(row[0]).strip()
-        telefone = str(row[1] or '').strip() if len(row) > 1 else ''
+        nome = _cel_para_texto(row[0])
+        telefone = _cel_para_texto(row[1]) if len(row) > 1 else ''
         if nome:
             out.append({'nome': nome, 'telefone': telefone})
     return out
