@@ -46,6 +46,7 @@ import pkgutil
 import parsers
 from avulso import ler_faturamento_avulso, calc_item_avulso
 from motoristas import ler_motoristas
+from storage import limpar_romaneios_entregues
 import whatsapp
 
 _CLIENTE_AVULSO_KEY = '_avulso_faturamento'
@@ -830,29 +831,45 @@ def listar_motoristas_rota():
 
 @app.route('/whatsapp/webhook', methods=['POST'])
 def whatsapp_webhook():
-    """### DEBUG TEMPORÁRIO (22/08/2026) ###
-    Devolve na resposta do WhatsApp exatamente os campos que chegaram no
-    corpo da requisição -- pra confirmar se o Botconversa já está mandando
-    'texto' além de 'telefone'. Depois de confirmar, trocar de volta pela
-    versão real (comentada logo abaixo)."""
+    """Ponto de entrada único do canal WhatsApp (Botconversa -> Bloco de
+    Integração, que agora fecha o ciclo: Integração -> Conteúdo (exibe
+    resposta + SALVA a próxima mensagem em 'texto') -> volta pra
+    Integração). Recebe {"telefone": "...", "texto": "..."}, devolve
+    {"mensagem": "..."}. Sempre devolve algo, mesmo em erro — o
+    Botconversa precisa de resposta síncrona pra continuar o fluxo."""
     try:
         body = request.get_json(force=True) or {}
-        campos_recebidos = ', '.join(f'{k}={v!r}' for k, v in body.items())
-        return jsonify({'mensagem': f'[DEBUG] Recebi: {campos_recebidos or "(corpo vazio)"}'})
+        telefone = (body.get('telefone') or '').strip()
+        texto = (body.get('texto') or '').strip()
+        if not telefone:
+            return jsonify({'mensagem': 'Não recebi seu telefone corretamente. Tenta de novo?'})
+        mensagem = whatsapp.processar_mensagem_entrada(telefone, texto)
+        return jsonify({'mensagem': mensagem})
     except Exception as e:
-        return jsonify({'mensagem': f'[DEBUG] Erro lendo o corpo: {e}'})
+        traceback.print_exc()
+        return jsonify({'mensagem': 'Desculpa, tive um problema — tenta de novo em instantes.'})
 
-    # ### VERSÃO REAL (voltar pra essa depois de confirmar o teste) ###
-    # try:
-    #     body = request.get_json(force=True) or {}
-    #     telefone = (body.get('telefone') or '').strip()
-    #     if not telefone:
-    #         return jsonify({'mensagem': 'Não recebi seu telefone corretamente. Tenta de novo?'})
-    #     mensagem = whatsapp.processar_mensagem_entrada(telefone)
-    #     return jsonify({'mensagem': mensagem})
-    # except Exception as e:
-    #     traceback.print_exc()
-    #     return jsonify({'mensagem': 'Desculpa, tive um problema — tenta de novo em instantes.'})
+
+@app.route('/romaneios/limpar', methods=['POST'])
+def limpar_romaneios_rota():
+    """Apaga romaneios 'entregue' com N+ dias. Chamar como:
+    POST /romaneios/limpar?confirmar=sim&dias=30
+    (dias >= 7, obrigatório; sem ?confirmar=sim não faz nada, só avisa)."""
+    if request.args.get('confirmar') != 'sim':
+        return jsonify({'erro': 'Chame com ?confirmar=sim&dias=N pra confirmar a limpeza '
+                                '(ex.: /romaneios/limpar?confirmar=sim&dias=30).'}), 400
+    try:
+        dias = int(request.args.get('dias', 30))
+    except ValueError:
+        return jsonify({'erro': 'dias precisa ser um número'}), 400
+    if dias < 7:
+        return jsonify({'erro': 'Por segurança, dias mínimo é 7.'}), 400
+    try:
+        resultado = limpar_romaneios_entregues(dias_minimo=dias)
+        return jsonify({'ok': True, **resultado})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'erro': str(e)}), 500
 
 
 @app.route('/romaneio-pdf/<rid>')
