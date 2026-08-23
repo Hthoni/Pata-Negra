@@ -429,11 +429,17 @@ def criar_entrega():
             return jsonify({'erro': 'Há pedidos já em outra entrega', 'conflitos': conflitos}), 409
 
         eid = f"ENT-{datetime.datetime.utcnow().strftime('%Y%m%d-%H%M%S')}"
+        telefone_motorista_novo = (body.get('telefoneMotorista') or '').strip()
+        # NOVO (23/08/2026) - trava de conflito: motorista não pode estar em
+        # 2 entregas ativas ao mesmo tempo. Libera qualquer outra entrega
+        # que já tivesse esse motorista, ANTES de criar esta.
+        if telefone_motorista_novo:
+            _liberar_motorista_conflito(telefone_motorista_novo, exceto_id=eid)
         entrega = {'id': eid, 'nome': nome, 'criadaEm': datetime.datetime.utcnow().isoformat(),
                    'status': 'em_andamento', 'fase': 'planejamento', 'pedidoIds': ids,
                    # NOVO (22/08/2026) - canal WhatsApp (whatsapp.py)
                    'motorista': (body.get('motorista') or '').strip(),
-                   'telefoneMotorista': (body.get('telefoneMotorista') or '').strip()}
+                   'telefoneMotorista': telefone_motorista_novo}
         salvar_entrega(eid, entrega)
         # marca os pedidos como em_rota, carimbando a entrega
         for pid in ids:
@@ -870,6 +876,51 @@ def limpar_romaneios_rota():
     except Exception as e:
         traceback.print_exc()
         return jsonify({'erro': str(e)}), 500
+
+
+def _liberar_motorista_conflito(telefone_motorista, exceto_id):
+    """Um motorista não pode estar em duas entregas ativas ao mesmo
+    tempo. Se telefone_motorista já está atribuído a alguma OUTRA
+    entrega ativa (não finalizada), libera essa outra (motorista vira
+    'Indefinido') antes de atribuir à nova/editada — evita duplicidade
+    sem travar o operador com um erro, só resolve automaticamente."""
+    if not telefone_motorista:
+        return []
+    alvo = re.sub(r'\D', '', telefone_motorista)
+    liberadas = []
+    for e in listar_entregas():
+        if e.get('id') == exceto_id or e.get('status') == 'finalizada':
+            continue
+        tel_e = re.sub(r'\D', '', e.get('telefoneMotorista') or '')
+        if tel_e and tel_e == alvo:
+            e['motorista'] = ''
+            e['telefoneMotorista'] = ''
+            salvar_entrega(e['id'], e)
+            liberadas.append(e['id'])
+    return liberadas
+
+
+@app.route('/entregas/<entrega_id>/motorista', methods=['POST'])
+def editar_motorista_entrega(entrega_id):
+    """Edita o motorista de uma entrega já criada, ainda em planejamento
+    (o operador corrige/define antes de despachar). Resolve conflito
+    automaticamente se o motorista escolhido já estiver noutra entrega."""
+    body = request.get_json(silent=True) or {}
+    motorista = (body.get('motorista') or '').strip()
+    telefone = (body.get('telefoneMotorista') or '').strip()
+    idx = {e['id']: e for e in listar_entregas()}
+    ent = idx.get(entrega_id)
+    if not ent:
+        return jsonify({'erro': 'Entrega não encontrada'}), 404
+
+    liberadas = []
+    if telefone:
+        liberadas = _liberar_motorista_conflito(telefone, exceto_id=entrega_id)
+
+    ent['motorista'] = motorista
+    ent['telefoneMotorista'] = telefone
+    salvar_entrega(entrega_id, ent)
+    return jsonify({'ok': True, 'entregasLiberadas': liberadas})
 
 
 @app.route('/romaneio-pdf/<rid>')
