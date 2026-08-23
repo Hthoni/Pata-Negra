@@ -52,25 +52,60 @@ def _status_legivel(romaneio):
     return _STATUS_LEGIVEL.get(romaneio.get('status'), romaneio.get('status', ''))
 
 
+# FIX (23/08/2026): _pedidos_ativos_hoje() e _entregas_idx() liam o
+# bucket INTEIRO de romaneios/entregas toda vez que eram chamadas — e
+# várias funções (identificar_papel, montar_mensagem_vendedor,
+# montar_mensagem_encarregado, etc.) chamavam as duas de novo, do zero,
+# dentro do MESMO request. Uma única mensagem de WhatsApp podia disparar
+# 4-6 leituras completas do bucket pra responder. Agora tudo isso é
+# cacheado por request, via _contexto_pedido() abaixo — chamado uma vez
+# só (ou reaproveitado, se já foi chamado antes na mesma execução).
+_cache_contexto = {}
+
+
+def _contexto_pedido():
+    """Lê romaneios + entregas do bucket UMA vez por execução da função
+    (processo), reaproveitando entre todas as chamadas dentro do mesmo
+    request. Evita reler o bucket inteiro várias vezes pra responder uma
+    única mensagem."""
+    if _cache_contexto:
+        return _cache_contexto['romaneios'], _cache_contexto['entregas']
+    romaneios = listar_romaneios()
+    entregas = listar_entregas()
+    _cache_contexto['romaneios'] = romaneios
+    _cache_contexto['entregas'] = entregas
+    return romaneios, entregas
+
+
+def _limpar_cache_contexto():
+    """Chamar depois de qualquer escrita (salvar_romaneio, atualizar
+    status etc.) pra não servir dado desatualizado dentro do mesmo
+    request, e no INÍCIO de cada request novo (main.py deve chamar isso
+    antes de processar_mensagem_entrada)."""
+    _cache_contexto.clear()
+
+
 def _pedidos_ativos_hoje():
     """Pedidos de entregas DESPACHADAS hoje (fase='em_rota', despachadaEm
     de hoje) e que ainda estão com status='em_rota' (não entregues/
     falhados). 'Hoje' é o dia do despacho, não o dia em que o pedido foi
     originalmente processado."""
+    romaneios, entregas = _contexto_pedido()
     hoje_iso = datetime.date.today().isoformat()
     entregas_hoje = [
-        e for e in listar_entregas()
+        e for e in entregas
         if e.get('fase') == 'em_rota' and (e.get('despachadaEm') or '').startswith(hoje_iso)
     ]
     ids_hoje = set()
     for e in entregas_hoje:
         ids_hoje.update(e.get('pedidoIds', []))
-    idx = {r['id']: r for r in listar_romaneios()}
+    idx = {r['id']: r for r in romaneios}
     return [idx[pid] for pid in ids_hoje if pid in idx and idx[pid].get('status') == 'em_rota']
 
 
 def _entregas_idx():
-    return {e['id']: e for e in listar_entregas()}
+    _, entregas = _contexto_pedido()
+    return {e['id']: e for e in entregas}
 
 
 def _motorista_da_entrega(romaneio, idx_entregas):
@@ -97,7 +132,8 @@ def identificar_papel(telefone):
             if _normaliza_telefone(enc.get('telefone', '')) == alvo:
                 return 'encarregado', {'nome': enc.get('nome', '')}
 
-    for e in listar_entregas():
+    _, entregas = _contexto_pedido()
+    for e in entregas:
         if _normaliza_telefone(e.get('telefoneMotorista', '')) == alvo:
             if e.get('fase') == 'em_rota':  # só motorista com entrega despachada hoje/ativa
                 return 'motorista', {'nome': e.get('motorista', ''), 'entregaId': e.get('id')}
@@ -239,6 +275,7 @@ def _aplicar_acao(pedido_id, acao):
                 'filial': r.get('filial', ''), 'kg': r.get('kgPlanejados', 0)}
         registrar_desfecho_entrega(entrega_id, pedido_id, novo_status, snap)
 
+    _limpar_cache_contexto()  # acabamos de escrever -> invalida o cache pra próxima leitura
     idx2 = {rr['id']: rr for rr in listar_romaneios()}
     return idx2.get(pedido_id, r)
 
@@ -428,7 +465,14 @@ def _enviar_whatsapp(telefone, texto):
 
     try:
         resp_id = requests.get(f'{base}/subscriber/get_by_phone/{tel_limpo}/',
-                               headers=headers, timeout=10)
+                               headers=headers, timeout=4)
+        if resp_id.status_code == 404:
+            # comum: telefone nunca mandou mensagem pro número do Botconversa
+            # antes, então não existe como 'subscriber' ainda -- não é erro
+            # de configuração, é esperado até a pessoa interagir 1x.
+            print(f'[INFO] {telefone} ainda não é subscriber no Botconversa '
+                  f'(precisa mandar mensagem pro número pelo menos 1 vez antes)')
+            return
         resp_id.raise_for_status()
         subscriber_id = resp_id.json().get('id')
         if not subscriber_id:
@@ -438,7 +482,7 @@ def _enviar_whatsapp(telefone, texto):
         resp_send = requests.post(f'{base}/subscriber/{subscriber_id}/send_message/',
                                   headers=headers,
                                   json={'type': 'text', 'value': texto},
-                                  timeout=10)
+                                  timeout=4)
         resp_send.raise_for_status()
     except Exception as e:
         print(f'[WARN] falha ao enviar WhatsApp pra {telefone}: {e}')
@@ -448,6 +492,7 @@ def processar_mensagem_entrada(telefone, texto=''):
     """Ponto de entrada único chamado pelo /whatsapp/webhook. 'texto' é o
     que a pessoa acabou de digitar (agora disponível, desde que o ciclo
     Integração -> Conteúdo/SALVAR -> Integração foi fechado no BC)."""
+    _limpar_cache_contexto()  # request novo -> começa com dado fresco
     papel, dado = identificar_papel(telefone)
     alvo = _normaliza_telefone(telefone)
 
