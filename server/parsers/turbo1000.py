@@ -3,10 +3,27 @@ Parser Turbo 1000 — sistema DOJÃO, multi-filial.
 Layout: cabeçalho com filial/endereço/pedido, tabela com colunas
 Item | Cód | Produto | Embal | Qtde | Cód.EAN | Cód.Fab | Valor N.F. | ... | Valor
 Qtde = kg totais (KG) ou nº caixas (CX). Valor N.F. = preço por kg ou por cx.
+
+FIX (24/08/2026):
+1) Embalagem só aceitava (KG|CX-N) — o pedido nº 154316 trouxe um item
+   ("INGREDIENTES P/ FEIJOADA...") com embalagem "UN" (unidade), tipo
+   nunca visto nesse parser. Adicionado como terceira opção.
+2) Esse mesmo item tem o nome quebrado em 2 linhas no PDF (o
+   pdfplumber extrai "INGREDIENTES P/ FEIJOADA PATA NEGRA" numa linha e
+   "PCT 500g" na linha seguinte, junto com o resquício de um código EAN
+   que também quebrou). O perfil cadastra o nome COMPLETO, incluindo
+   "PCT 500g" — sem mesclar, o match falhava.
+   Em vez de mesclar sempre (arriscado: no fim da página, a linha
+   seguinte pode ser lixo de rodapé, tipo "Condição de Pagamento..."),
+   só mescla quando isso resulta num match de VERDADE no perfil — tenta
+   o nome puro primeiro; só tenta com a linha seguinte colada (removendo
+   um resquício numérico solto no final, resto de EAN quebrado) se o
+   nome puro não bateu com nada. Nunca inventa nome, só confirma contra
+   o que já está cadastrado.
 """
 import re, io
 import pdfplumber
-from perfil import processar_item
+from perfil import processar_item, match_perfil
 
 __cliente_nome__ = "Turbo 1000"
 
@@ -18,7 +35,7 @@ ITEM_RE = re.compile(
     r'^\s*(\d+)\s+'
     r'(\d+)\s+'
     r'(.+?)\s+'
-    r'(KG|CX-\d+)\s+'
+    r'(KG|CX-\d+|UN)\s+'
     r'(\d+)\s+'
     r'(?:\d+\s+)?'
     r'(?:\d+\s+)?'
@@ -27,6 +44,21 @@ ITEM_RE = re.compile(
     r'([\d.,]+)\s*$',
     re.IGNORECASE
 )
+
+
+def _mescla_continuacao(nome_atual, prox_linha):
+    """Cola a linha seguinte no nome, removendo um resquício numérico
+    solto no final (sobra de EAN quebrado em 2 linhas) — só chamada
+    quando o nome puro não bateu com nada no perfil (ver parse())."""
+    prox_linha = (prox_linha or '').strip()
+    if not prox_linha or re.match(r'^\d+\s+\d+\s', prox_linha):
+        return None  # linha vazia ou já é o próximo item -> não é continuação
+    partes = prox_linha.split()
+    while partes and partes[-1].isdigit():
+        partes.pop()
+    complemento = ' '.join(partes)
+    return f'{nome_atual} {complemento}'.strip() if complemento else None
+
 
 def parse(pdf_bytes, produtos):
     texto = ''
@@ -56,7 +88,7 @@ def parse(pdf_bytes, produtos):
             break
 
     itens = []
-    for ln in linhas:
+    for i, ln in enumerate(linhas):
         m = ITEM_RE.match(ln)
         if not m: continue
         cod_cli  = int(m.group(2))
@@ -66,6 +98,15 @@ def parse(pdf_bytes, produtos):
         preco    = _limpa_float(m.group(6))
         total    = _limpa_float(m.group(7))
         emb_tipo = 'CX' if emb.startswith('CX') else 'KG'
+
+        # nome puro não bateu -> tenta mesclar com a linha seguinte (nome
+        # quebrado em 2 linhas), só usa se isso resultar num match real
+        if not match_perfil(nome_raw, produtos):
+            prox = linhas[i + 1] if i + 1 < len(linhas) else ''
+            candidato = _mescla_continuacao(nome_raw, prox)
+            if candidato and match_perfil(candidato, produtos):
+                nome_raw = candidato
+
         it = processar_item(cod_cli, nome_raw, emb_tipo, qtde, qtde, preco, total, produtos)
         itens.append(it)
 
