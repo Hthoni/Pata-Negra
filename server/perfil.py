@@ -130,18 +130,17 @@ def ler_filiais(perfil_bytes):
     pedido manual e pelo card de Região no PDF de expedição — para clientes
     que não têm essas colunas, ficam como string vazia.
 
-    ATUALIZADO (22/08/2026): colunas U em diante = até 3 GRUPOS de 4
-    colunas por encarregado da filial: nome, telefone, data de aniversário,
-    time de futebol (U/V/W/X, Y/Z/AA/AB, AC/AD/AE/AF). Nome+telefone
-    continuam obrigatórios pra o grupo contar (é o que o canal operacional
-    de WhatsApp usa — whatsapp.py); aniversário e time são OPCIONAIS e só
-    servem pra alimentar campos personalizados/segmentação de campanha
-    dentro do próprio Botconversa (uso B da Planta) — nunca são usados em
-    nenhuma lógica do nosso backend.
+    ATUALIZADO (23/08/2026, revertido): colunas U em diante = até 3
+    PARES nome/telefone por encarregado da filial (U/V, W/X, Y/Z — logo
+    depois da coluna T de Longitude). Removidos data de aniversário e
+    time de futebol (chegaram a existir por uma versão, mas esse dado
+    passou a ser tratado inteiramente do lado do Botconversa — é lá que
+    os disparos segmentados por campanha acontecem, não faz sentido
+    duplicar aqui). Nome+telefone continuam obrigatórios pra o par
+    contar.
 
     Retorna dict {cnpj_normalizado: {'nome', 'numero', 'endereco', 'cidade',
-    'regiao', 'lat', 'lng', 'encarregados': [{'nome','telefone',
-    'dataAniversario','timeFutebol'}, ...]}}.
+    'regiao', 'lat', 'lng', 'encarregados': [{'nome','telefone'}, ...]}}.
     Usado para enriquecer pedidos que só trazem CNPJ (Atacadão) ou
     CNPJ+nome (DOM) com o número de filial cadastrado uma única vez no perfil,
     e para alimentar o dropdown de filiais no fluxo manual."""
@@ -164,26 +163,20 @@ def ler_filiais(perfil_bytes):
         if not cnpj_norm:
             continue
 
-        # ATUALIZADO: até 3 grupos de 4 colunas por encarregado
-        # (U/V/W/X, Y/Z/AA/AB, AC/AD/AE/AF = nome/telefone/aniversário/time)
-        # FIX (23/08/2026): telefone usa _cel_para_texto (mesma proteção
-        # do telefone do vendedor) -- célula numérica sem formatação de
-        # texto corromperia o telefone (".0" de float virando dígito extra).
+        # ATUALIZADO (23/08/2026, revertido): até 3 pares nome/telefone
+        # por encarregado (U/V, W/X, Y/Z) -- sem aniversário/time, esse
+        # dado fica só do lado do Botconversa agora. Telefone usa
+        # _cel_para_texto (mesma proteção do telefone do vendedor) --
+        # célula numérica sem formatação de texto corromperia o telefone
+        # (".0" de float virando dígito extra).
         encarregados = []
-        for i_nome, i_tel, i_aniv, i_time in ((20, 21, 22, 23), (24, 25, 26, 27), (28, 29, 30, 31)):
-            if len(r) <= i_time:
+        for i_nome, i_tel in ((20, 21), (22, 23), (24, 25)):
+            if len(r) <= i_tel:
                 continue
             enc_nome = _cel_para_texto(r[i_nome])
             enc_tel = _cel_para_texto(r[i_tel])
-            enc_aniv = _cel_para_texto(r[i_aniv])
-            enc_time = _cel_para_texto(r[i_time])
-            if enc_nome and enc_tel:  # nome+telefone obrigatórios; aniversário/time opcionais
-                encarregados.append({
-                    'nome': enc_nome,
-                    'telefone': enc_tel,
-                    'dataAniversario': enc_aniv,
-                    'timeFutebol': enc_time,
-                })
+            if enc_nome and enc_tel:  # nome+telefone obrigatórios
+                encarregados.append({'nome': enc_nome, 'telefone': enc_tel})
 
         filiais[cnpj_norm] = {
             'nome': str(nome or '').strip(),
