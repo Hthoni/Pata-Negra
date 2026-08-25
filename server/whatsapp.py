@@ -226,16 +226,31 @@ _ACOES = {'1': 'chegada', '2': 'conclusao', '3': 'falha'}
 _ACAO_VERBO = {'chegada': 'a chegada', 'conclusao': 'a conclusão', 'falha': 'a falha'}
 
 
+def _id_base(pedido_id):
+    """Pedido splitado Indústria/Distribuidora (__e1/__e2) = mesma entrega
+    física, 2 romaneios. Usado pra agrupar na lista e aplicar ação nos
+    dois de uma vez (FIX 25/08/2026)."""
+    m = re.match(r'^(.*)__e[12]$', pedido_id)
+    return m.group(1) if m else pedido_id
+
+
 def _pedidos_do_motorista(telefone):
     """Todos os pedidos ativos hoje, de TODAS as entregas do motorista
     (por telefone) -- um motorista pode ter mais de uma entrega/viagem
-    ativa no mesmo dia."""
+    ativa no mesmo dia. Splits Indústria/Distribuidora (__e1/__e2) contam
+    como UM pedido só (FIX 25/08/2026: antes apareciam como 2 linhas
+    idênticas na lista, e confirmar uma deixava a outra presa em "em
+    rota")."""
     alvo = _normaliza_telefone(telefone)
     _, entregas = _contexto_pedido()
     ids_dele = {e['id'] for e in entregas
                 if _normaliza_telefone(e.get('telefoneMotorista', '')) == alvo
                 and e.get('fase') == 'em_rota'}
-    return [r for r in _pedidos_ativos_hoje() if r.get('entregaId') in ids_dele]
+    todos = [r for r in _pedidos_ativos_hoje() if r.get('entregaId') in ids_dele]
+    vistos = {}
+    for r in todos:
+        vistos.setdefault(_id_base(r['id']), r)
+    return list(vistos.values())
 
 
 def _pedidos_da_entrega(entrega_id):
@@ -277,30 +292,39 @@ def montar_confirmacao(acao, r):
 
 def _aplicar_acao(pedido_id, acao):
     """Aplica de fato a ação escolhida no romaneio, e devolve o pedido
-    atualizado (ou None se não achou)."""
+    atualizado (ou None se não achou). Splits Indústria/Distribuidora
+    (__e1/__e2) recebem a MESMA ação nos dois de uma vez (FIX 25/08/2026:
+    antes só o pedido_id escolhido mudava, e o irmão ficava preso em
+    'em rota')."""
     from storage import salvar_romaneio, atualizar_status_romaneio, registrar_desfecho_entrega
     idx = {r['id']: r for r in listar_romaneios()}
     r = idx.get(pedido_id)
     if not r:
         return None
 
+    base = _id_base(pedido_id)
+    irmaos_ids = [rid for rid in idx if _id_base(rid) == base]
+
     if acao == 'chegada':
-        r['chegouLocal'] = True
-        r['chegouLocalEm'] = datetime.datetime.utcnow().isoformat()
-        salvar_romaneio(pedido_id, r)
-        return r
+        for rid in irmaos_ids:
+            rr = idx[rid]
+            rr['chegouLocal'] = True
+            rr['chegouLocalEm'] = datetime.datetime.utcnow().isoformat()
+            salvar_romaneio(rid, rr)
+        return idx[pedido_id]
 
     novo_status = 'entregue' if acao == 'conclusao' else 'falhou'
-    if novo_status == 'falhou':
-        atualizar_status_romaneio(pedido_id, 'pendente', falha=True)
-    else:
-        atualizar_status_romaneio(pedido_id, novo_status)
-
-    entrega_id = r.get('entregaId')
-    if entrega_id:
-        snap = {'cliente': r.get('clienteNome') or r.get('cliente') or '',
-                'filial': r.get('filial', ''), 'kg': r.get('kgPlanejados', 0)}
-        registrar_desfecho_entrega(entrega_id, pedido_id, novo_status, snap)
+    for rid in irmaos_ids:
+        if novo_status == 'falhou':
+            atualizar_status_romaneio(rid, 'pendente', falha=True)
+        else:
+            atualizar_status_romaneio(rid, novo_status)
+        rr = idx[rid]
+        entrega_id = rr.get('entregaId')
+        if entrega_id:
+            snap = {'cliente': rr.get('clienteNome') or rr.get('cliente') or '',
+                    'filial': rr.get('filial', ''), 'kg': rr.get('kgPlanejados', 0)}
+            registrar_desfecho_entrega(entrega_id, rid, novo_status, snap)
 
     _limpar_cache_contexto()  # acabamos de escrever -> invalida o cache pra próxima leitura
     idx2 = {rr['id']: rr for rr in listar_romaneios()}
