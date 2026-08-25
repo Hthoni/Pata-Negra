@@ -20,6 +20,13 @@ FIX (24/08/2026):
    um resquício numérico solto no final, resto de EAN quebrado) se o
    nome puro não bateu com nada. Nunca inventa nome, só confirma contra
    o que já está cadastrado.
+
+FIX (25/08/2026):
+3) Item UN caía no 'else KG' do emb_tipo — pacotes viravam kg 1:1 (40
+   pacotes de "PCT 500g" = 40kg, errado). Corrigido pra repassar
+   emb_tipo='UN' de verdade; processar_item converte puxando o peso do
+   nome do produto (500g -> 0,5kg/un, fallback 1000g). 40 x 0,5kg = 20kg,
+   confere com o pedido real (nº 154316).
 """
 import re, io
 import pdfplumber
@@ -97,7 +104,12 @@ def parse(pdf_bytes, produtos):
         qtde     = int(m.group(5))
         preco    = _limpa_float(m.group(6))
         total    = _limpa_float(m.group(7))
-        emb_tipo = 'CX' if emb.startswith('CX') else 'KG'
+        # emb_tipo: CX = qtde de caixas (kg = qtde x kgCx); UN = qtde de
+        # pacotes/unidades (processar_item extrai o peso do nome, ex. "500g",
+        # fallback 1000g); senão KG (qtde já é kg). BUG (25/08/2026): UN
+        # estava caindo no 'else KG', tratando pacotes como se já fossem kg
+        # (40 pacotes de 500g virava 40kg em vez de 20kg).
+        emb_tipo = 'CX' if emb.startswith('CX') else ('UN' if emb == 'UN' else 'KG')
 
         # nome puro não bateu -> tenta mesclar com a linha seguinte (nome
         # quebrado em 2 linhas), só usa se isso resultar num match real
