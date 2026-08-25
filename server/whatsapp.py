@@ -500,7 +500,18 @@ def notificar_despacho_entrega(entrega):
     menciona o motorista em lugar nenhum, não tem motivo pra depender
     dele. Agora só a mensagem #2 (lista do motorista) é pulada quando
     não há motorista definido; vendedor/encarregado sempre recebem a
-    #1 normalmente."""
+    #1 normalmente.
+
+    FIX (24/08/2026): essa função é chamada direto de set_fase_entrega
+    (main.py) -- um caminho DIFERENTE de processar_mensagem_entrada (que
+    já limpava o cache no início). Se o processo do Cloud Run já tinha
+    usado o cache antes (outra mensagem de WhatsApp, ou outro despacho
+    na mesma execução), essa chamada usava dado VELHO -- a entrega recém
+    criada/despachada nem aparecia ainda. Resultado real visto em
+    produção: 1ª entrega despachada (processo "limpo") funcionou, as
+    2 seguintes (mesmo processo, cache já povoado) não encontraram
+    pedido nenhum. Limpa o cache aqui também, sempre, no início."""
+    _limpar_cache_contexto()
     idx = {r['id']: r for r in _pedidos_ativos_hoje()}
     pedidos = [idx[pid] for pid in entrega.get('pedidoIds', []) if pid in idx]
     # LOG DE DIAGNÓSTICO (23/08/2026) -- sempre imprime, mesmo quando não
