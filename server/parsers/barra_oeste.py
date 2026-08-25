@@ -42,9 +42,14 @@ def parse(pdf_bytes, produtos):
     end_m = re.search(r'Endereço:\s*(.+?)CEP', txt)
     endereco = end_m.group(1).strip() if end_m else ''
 
-    # itens: Seq  Cód(-DV opcional)  Nome  Qtde  IPI%  Peso  R$ Preço/Kg  Total
+    # itens: Seq  Cód(-DV opcional)  Nome  Peso  R$ Preço/Kg  Total
+    # Layout enxuto (24/08/2026): cliente removeu as colunas Qtde/IPI% que
+    # existiam antes entre Nome e Peso (mesma migração que Zona Sul/Torre já
+    # fizeram). Ancorado pela DIREITA: Peso é o número imediatamente seguido
+    # de "R$" — funciona tanto no layout novo (sem Qtde/IPI%) quanto no
+    # antigo, já que Qtde/IPI% não são seguidos de "R$".
     reItem = re.compile(
-        r'(\d+)\s+(\d+(?:-\d+)?)\s+([A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇ][^\n]+?)\s+([\d.,]+)\s+[\d,.]+\s+[\d,.]+\s+R\$\s*([\d,.]+)\s+([\d,.]+)',
+        r'(\d+)\s+(\d+(?:-\d+)?)\s+([A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇ][^\n]+?)\s+([\d.,]+)\s+R\$\s*([\d,.]+)\s+([\d,.]+)',
         re.M
     )
     itens = []
@@ -59,7 +64,7 @@ def parse(pdf_bytes, produtos):
         itens.append(it)
 
     if itens:
-        filiais.append({'filial': razao or 'O BOM', 'pedidoNum': pedidoNum, 'cnpj': cnpj,
+        filiais.append({'filial': razao or 'SUPERMERCADO BARRA OESTE', 'pedidoNum': pedidoNum, 'cnpj': cnpj,
                         'endereco': endereco, 'dataPedido': dataPedido, 'dataEntrega': '',
                         'condPgto': '', 'empresa': 2, 'itens': itens})
     return filiais
