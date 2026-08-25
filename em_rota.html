@@ -47,6 +47,8 @@
     .card-nome { font-weight:700; font-size:21px; line-height:1.1; margin-bottom:4px; }
     .card-meta { font-size:13px; color:#666; }
     .card-meta b { color:var(--text); }
+    .card-motorista { font-size:13px; color:#666; margin-top:3px; }
+    .cm-label { color:#999; }
 
     .card-idade { width:150px; flex-shrink:0; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; border-radius:12px; padding:8px 10px; }
     .card-idade .fase { display:block; font-size:12px; font-weight:700; }
@@ -217,6 +219,8 @@
           '<div class="card-nome">' + escapeHtml(ent.nome) + '</div>' +
           '<div class="card-meta"><b>' + peds.length + '</b> pedido' + (peds.length !== 1 ? 's' : '') +
             ' &nbsp;&middot;&nbsp; <b>' + fmtKg(pesoEntrega(ent)) + '</b></div>' +
+          '<div class="card-motorista"><span class="cm-label">Motorista:</span> ' +
+            (ent.motorista ? escapeHtml(ent.motorista) : 'Indefinido') + '</div>' +
         '</div>' +
         '<div class="card-idade" style="background:' + c.bg + ';color:' + c.txt + '">' +
           '<span class="fase">' + c.label + '</span><span class="horas">' + Math.round(h) + 'h</span>' +
