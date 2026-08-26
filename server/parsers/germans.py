@@ -99,52 +99,70 @@ def _parse_item(ln, prox):
 def parse(pdf_bytes, produtos):
     filiais = []
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-        n_pags = len(pdf.pages)
-        for pi in range(0, n_pags, 2):
-            txt1 = pdf.pages[pi].extract_text() or ''
-            txt2 = pdf.pages[pi + 1].extract_text() if pi + 1 < n_pags else ''
-            lines = txt1.split('\n')
-            txt_all = txt1 + '\n' + txt2
+        paginas_txt = [(p.extract_text() or '') for p in pdf.pages]
 
-            def fm(pat, txt=txt_all):
-                m = re.search(pat, txt, re.I)
-                return m.group(1).strip() if m else ''
+    # Agrupa páginas pelo Nº do pedido repetido no cabeçalho. FIX
+    # (26/08/2026): mesmo bug achado no dom_atacarejo.py -- "2 págs por
+    # pedido" era só o caso comum, não uma garantia. Pedido que estourasse
+    # de 2 páginas tinha itens da 3ª página cortados silenciosamente (nunca
+    # escaneados). Agrupa dinamicamente e escaneia itens em TODAS as
+    # páginas do grupo, não só a primeira.
+    grupos = []
+    pedido_atual = None
+    for txt in paginas_txt:
+        m = re.search(r'(\d{5,7}/[ML])', txt)
+        num = m.group(1) if m else None
+        if num and num == pedido_atual:
+            grupos[-1].append(txt)
+        else:
+            grupos.append([txt])
+            pedido_atual = num
 
-            pedidoNum = fm(r'(\d{5,7}/[ML])')
-            dataPedido = fm(r'Data da emiss[aã]o\s+([\d/]+)')
-            dataEntrega = fm(r'Previs[aã]o de entrega\s+([\d/]+)')
-            condPgto = fm(r'Prazo para pagamento\s+(\d+)')
-            if condPgto:
-                condPgto += ' dias'
+    for paginas in grupos:
+        txt1 = paginas[0]
+        txt_all = '\n'.join(paginas)
+        lines = txt1.split('\n')          # cabeçalho/filial só na 1ª página
+        lines_itens = txt_all.split('\n')  # itens podem estar em qualquer página do grupo
 
-            cnpj = ''
-            for ln in lines:
-                found = re.findall(r'\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}', ln)
-                if len(found) >= 2:
-                    cnpj = found[1]; break
-                elif len(found) == 1 and CNPJ_INDUSTRIA not in found[0] and CNPJ_DISTRIBUIDORA not in found[0]:
-                    cnpj = found[0]; break
+        def fm(pat, txt=txt_all):
+            m = re.search(pat, txt, re.I)
+            return m.group(1).strip() if m else ''
 
-            cnpj_forn = fm(r'CNPJ\s+([\d./\- ]+?)\s+Inscri')
-            empresa = 1 if CNPJ_INDUSTRIA.replace('.', '') in cnpj_forn.replace('.', '').replace('-', '').replace(' ', '') else 2
+        pedidoNum = fm(r'(\d{5,7}/[ML])')
+        dataPedido = fm(r'Data da emiss[aã]o\s+([\d/]+)')
+        dataEntrega = fm(r'Previs[aã]o de entrega\s+([\d/]+)')
+        condPgto = fm(r'Prazo para pagamento\s+(\d+)')
+        if condPgto:
+            condPgto += ' dias'
 
-            filial_m = re.search(r'COMESTIVEI?\s+(.+?)$', txt1, re.M)
-            filial = filial_m.group(1).strip() if filial_m else 'CAMPEAO - CORDOVIL'
-            endereco = 'RUA CORDOVIL-1000, PARADA DE LUCAS'
+        cnpj = ''
+        for ln in lines:
+            found = re.findall(r'\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}', ln)
+            if len(found) >= 2:
+                cnpj = found[1]; break
+            elif len(found) == 1 and CNPJ_INDUSTRIA not in found[0] and CNPJ_DISTRIBUIDORA not in found[0]:
+                cnpj = found[0]; break
 
-            itens = []
-            for i, ln in enumerate(lines):
-                prox = lines[i + 1].strip() if i + 1 < len(lines) else ''
-                d = _parse_item(ln.strip(), prox)
-                if not d:
-                    continue
-                # kg já é físico -> passa como KG p/ processar_item não multiplicar
-                it = processar_item(d['cod'], d['nome'], 'KG', 1, d['kg'], d['preco'], d['total'], produtos)
-                it['empresa'] = empresa
-                itens.append(it)
+        cnpj_forn = fm(r'CNPJ\s+([\d./\- ]+?)\s+Inscri')
+        empresa = 1 if CNPJ_INDUSTRIA.replace('.', '') in cnpj_forn.replace('.', '').replace('-', '').replace(' ', '') else 2
 
-            if itens:
-                filiais.append({'filial': filial, 'pedidoNum': pedidoNum, 'cnpj': cnpj,
-                                'endereco': endereco, 'dataPedido': dataPedido, 'dataEntrega': dataEntrega,
-                                'condPgto': condPgto, 'empresa': empresa, 'itens': itens})
+        filial_m = re.search(r'COMESTIVEI?\s+(.+?)$', txt1, re.M)
+        filial = filial_m.group(1).strip() if filial_m else 'CAMPEAO - CORDOVIL'
+        endereco = 'RUA CORDOVIL-1000, PARADA DE LUCAS'
+
+        itens = []
+        for i, ln in enumerate(lines_itens):
+            prox = lines_itens[i + 1].strip() if i + 1 < len(lines_itens) else ''
+            d = _parse_item(ln.strip(), prox)
+            if not d:
+                continue
+            # kg já é físico -> passa como KG p/ processar_item não multiplicar
+            it = processar_item(d['cod'], d['nome'], 'KG', 1, d['kg'], d['preco'], d['total'], produtos)
+            it['empresa'] = empresa
+            itens.append(it)
+
+        if itens:
+            filiais.append({'filial': filial, 'pedidoNum': pedidoNum, 'cnpj': cnpj,
+                            'endereco': endereco, 'dataPedido': dataPedido, 'dataEntrega': dataEntrega,
+                            'condPgto': condPgto, 'empresa': empresa, 'itens': itens})
     return filiais
