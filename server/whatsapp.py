@@ -27,7 +27,9 @@ AINDA PENDENTE (fora do escopo desta entrega, ver Planta seção 4 e 7):
 """
 import re
 import datetime
-from storage import listar_romaneios, listar_entregas
+from storage import (listar_romaneios, listar_entregas,
+                     enfileirar_mensagem_loja, listar_fila_lojas, remover_da_fila_lojas,
+                     carregar_ultimo_envio_loja, salvar_ultimo_envio_loja)
 
 _STATUS_LEGIVEL = {
     'em_rota': 'Em rota',
@@ -514,6 +516,60 @@ def montar_mensagem_lista_motorista(nome_motorista, pedidos):
     return f'Olá {nome_motorista}, temos as seguintes entregas hoje:{_QUEBRA}{corpo}{_QUEBRA}Bom trabalho!'
 
 
+# Brasília não tem mais horário de verão desde 2019 -> offset fixo.
+_FUSO_BRASILIA = datetime.timedelta(hours=-3)
+_ESPACAMENTO_MINIMO_LOJA = datetime.timedelta(minutes=2)
+
+
+def _agora_brasilia():
+    return datetime.datetime.utcnow() + _FUSO_BRASILIA
+
+
+def _agendar_mensagem_loja(telefone, texto):
+    """Enfileira o alerta de mercadoria a caminho pro encarregado/gerente
+    de loja (26/08/2026) -- NÃO manda na hora. Garante que não entra na
+    fila com horário antes das 8:00 (Brasília); o espaçamento mínimo de
+    2 min entre disparos é aplicado depois, em processar_fila_lojas, na
+    hora de efetivamente mandar (não aqui no agendamento)."""
+    agora_br = _agora_brasilia()
+    hoje_8h_br = agora_br.replace(hour=8, minute=0, second=0, microsecond=0)
+    agendado_br = max(agora_br, hoje_8h_br)
+    agendado_utc = agendado_br - _FUSO_BRASILIA
+    msg_id = f'{int(datetime.datetime.utcnow().timestamp() * 1000)}_{telefone}'
+    enfileirar_mensagem_loja(msg_id, {
+        'telefone': telefone,
+        'texto': texto,
+        'agendado_para': agendado_utc.isoformat(),
+    })
+
+
+def processar_fila_lojas():
+    """Chamada periodicamente por um Cloud Scheduler batendo num endpoint
+    do main.py. Manda NO MÁXIMO 1 mensagem por chamada -- o espaçamento
+    mínimo de 2 min é garantido comparando com o horário do ÚLTIMO envio
+    REAL (não com a frequência do Scheduler), então funciona mesmo se o
+    Scheduler rodar mais rápido ou mais devagar que isso."""
+    pendentes = listar_fila_lojas()
+    if not pendentes:
+        return {'enviado': False, 'motivo': 'fila vazia'}
+
+    agora = datetime.datetime.utcnow()
+    ultimo_iso = carregar_ultimo_envio_loja()
+    if ultimo_iso and (agora - datetime.datetime.fromisoformat(ultimo_iso)) < _ESPACAMENTO_MINIMO_LOJA:
+        return {'enviado': False, 'motivo': 'espaçamento mínimo entre disparos ainda não passou'}
+
+    prontos = [m for m in pendentes if m.get('agendado_para', '') <= agora.isoformat()]
+    if not prontos:
+        return {'enviado': False, 'motivo': 'nenhuma mensagem da fila com horário já chegado'}
+    prontos.sort(key=lambda m: m.get('agendado_para', ''))
+    msg = prontos[0]
+
+    _enviar_whatsapp(msg['telefone'], msg['texto'])
+    salvar_ultimo_envio_loja(agora.isoformat())
+    remover_da_fila_lojas(msg['_msg_id'])
+    return {'enviado': True, 'telefone': msg['telefone']}
+
+
 def notificar_despacho_entrega(entrega):
     """Chamada quando uma entrega passa pra fase 'em_rota' (o botão de
     despacho). Dispara a mensagem #1 (vendedor + encarregados) pra cada
@@ -553,12 +609,22 @@ def notificar_despacho_entrega(entrega):
         alvos = [(r.get('vendedor', ''), r.get('telefoneVendedor', ''), 'vendedor')] + \
                 [(e.get('nome', ''), e.get('telefone', ''), 'encarregado') for e in (r.get('encarregados') or [])]
         for nome, tel, papel in alvos:
-            if tel:
-                _enviar_whatsapp(tel, montar_mensagem_pedido_em_rota(
-                    nome, r.get('clienteNome') or r.get('cliente') or '', r.get('filial', ''), papel,
-                    vendedor_nome=r.get('vendedor', ''), vendedor_telefone=r.get('telefoneVendedor', ''),
-                    encarregados=r.get('encarregados'),
-                    motorista_nome=mot_nome, motorista_telefone=mot_tel))
+            if not tel:
+                continue
+            texto = montar_mensagem_pedido_em_rota(
+                nome, r.get('clienteNome') or r.get('cliente') or '', r.get('filial', ''), papel,
+                vendedor_nome=r.get('vendedor', ''), vendedor_telefone=r.get('telefoneVendedor', ''),
+                encarregados=r.get('encarregados'),
+                motorista_nome=mot_nome, motorista_telefone=mot_tel)
+            if papel == 'encarregado':
+                # Encarregado/gerente de loja: NÃO manda na hora -- vai pra
+                # fila (ver _agendar_mensagem_loja) pra respeitar o horário
+                # mínimo (8:00) e o espaçamento entre disparos (26/08/2026:
+                # não incomodar o encarregado cedo demais nem em rajada).
+                # Vendedor e motorista continuam disparando imediato.
+                _agendar_mensagem_loja(tel, texto)
+            else:
+                _enviar_whatsapp(tel, texto)
 
     telefone_motorista = (entrega.get('telefoneMotorista') or '').strip()
     if telefone_motorista:
