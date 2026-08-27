@@ -507,3 +507,68 @@ def encerrar_sessao(token):
     # Token stateless: logout é client-side (remove do localStorage) e o token
     # expira sozinho em SESSAO_HORAS. Nada a revogar no servidor.
     return
+
+
+# --- Fila de mensagens pra encarregados/gerentes de loja (26/08/2026) ---
+# Alerta de "mercadoria a caminho" pro encarregado NÃO pode chegar cedo
+# demais (incomoda) nem em rajada (vários de uma vez). Guardado no bucket
+# de perfis (compartilhado, baixo volume) sob o prefixo fila_lojas/.
+# Um Cloud Scheduler bate periodicamente num endpoint que chama
+# whatsapp.processar_fila_lojas(), que manda NO MÁXIMO 1 mensagem por
+# chamada, respeitando o espaçamento mínimo (ver _fila_lojas_controle_blob).
+
+def _fila_lojas_prefix():
+    return 'fila_lojas/'
+
+
+def enfileirar_mensagem_loja(msg_id, dados):
+    """Grava uma mensagem pendente pro encarregado de loja. 'dados' deve
+    trazer pelo menos {telefone, texto, agendado_para (ISO)}."""
+    blob = _bucket().blob(f'{_fila_lojas_prefix()}{msg_id}.json')
+    blob.upload_from_string(json.dumps(dados, ensure_ascii=False),
+                            content_type='application/json')
+
+
+def listar_fila_lojas():
+    """Lista as mensagens pendentes na fila (não enviadas ainda)."""
+    blobs = [b for b in _bucket().list_blobs(prefix=_fila_lojas_prefix())
+             if b.name.endswith('.json') and not b.name.endswith('_controle.json')]
+    if not blobs:
+        return []
+    resultado = []
+    for b in blobs:
+        d = _baixar_json(b)
+        if d is not None:
+            d['_msg_id'] = b.name[len(_fila_lojas_prefix()):-len('.json')]
+            resultado.append(d)
+    return resultado
+
+
+def remover_da_fila_lojas(msg_id):
+    """Remove uma mensagem da fila (já enviada, ou cancelada)."""
+    blob = _bucket().blob(f'{_fila_lojas_prefix()}{msg_id}.json')
+    if blob.exists():
+        blob.delete()
+        return True
+    return False
+
+
+def _fila_lojas_controle_blob():
+    return _bucket().blob(f'{_fila_lojas_prefix()}_controle.json')
+
+
+def carregar_ultimo_envio_loja():
+    """ISO string do horário do último envio real a um encarregado de
+    loja (usado pra garantir o espaçamento mínimo entre disparos), ou
+    None se nunca enviou nada ainda."""
+    blob = _fila_lojas_controle_blob()
+    if not blob.exists():
+        return None
+    d = _baixar_json(blob)
+    return d.get('ultimo_envio') if d else None
+
+
+def salvar_ultimo_envio_loja(timestamp_iso):
+    _fila_lojas_controle_blob().upload_from_string(
+        json.dumps({'ultimo_envio': timestamp_iso}, ensure_ascii=False),
+        content_type='application/json')
