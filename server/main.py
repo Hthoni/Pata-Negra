@@ -856,6 +856,21 @@ def whatsapp_webhook():
         return jsonify({'mensagem': 'Desculpa, tive um problema — tenta de novo em instantes.'})
 
 
+@app.route('/cron/fila-lojas', methods=['GET', 'POST'])
+def cron_fila_lojas():
+    """Chamado periodicamente por um Cloud Scheduler (26/08/2026) — manda
+    no máximo 1 mensagem pendente da fila de encarregados/gerentes de loja
+    por chamada (ver whatsapp.processar_fila_lojas: nunca antes das 8:00,
+    espaçamento mínimo de 2 min entre disparos). Idempotente e seguro de
+    chamar a qualquer momento, mesmo com a fila vazia."""
+    try:
+        resultado = whatsapp.processar_fila_lojas()
+        return jsonify(resultado)
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'erro': str(e)}), 500
+
+
 @app.route('/romaneios/limpar', methods=['POST'])
 def limpar_romaneios_rota():
     """Apaga romaneios 'entregue' com N+ dias. Chamar como:
