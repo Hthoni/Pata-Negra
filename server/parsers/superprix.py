@@ -42,9 +42,14 @@ def parse(pdf_bytes, produtos):
     end_m = re.search(r'Endereço:\s*(.+?)CEP', txt)
     endereco = end_m.group(1).strip() if end_m else ''
 
-    # itens: Seq  Cód(-DV opcional)  Nome  Qtde  IPI%  Peso  R$ Preço/Kg  Total
+    # itens: Seq  Cód(-DV opcional)  Nome  Peso  R$ Preço/Kg  Total
+    # Layout enxuto (27/08/2026): cliente removeu as colunas Qtde/IPI% que
+    # existiam antes entre Nome e Peso (mesma migração que Barra Oeste/Zona
+    # Sul/Torre já fizeram). Ancorado pela DIREITA: Peso é o número
+    # imediatamente seguido de "R$" — funciona tanto no layout novo (sem
+    # Qtde/IPI%) quanto no antigo.
     reItem = re.compile(
-        r'(\d+)\s+(\d+(?:-\d+)?)\s+([A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇ][^\n]+?)\s+([\d.,]+)\s+[\d,.]+\s+[\d,.]+\s+R\$\s*([\d,.]+)\s+([\d,.]+)',
+        r'(\d+)\s+(\d+(?:-\d+)?)\s+([A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇ][^\n]+?)\s+([\d.,]+)\s+R\$\s*([\d,.]+)\s+([\d,.]+)',
         re.M
     )
     itens = []
