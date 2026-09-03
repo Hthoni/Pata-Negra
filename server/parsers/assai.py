@@ -12,6 +12,17 @@ que o CNPJ_RE já tolerava (\\s* ao redor de / e -), só faltava aplicar a
 mesma tolerância aqui. Sem o nome batendo, a filial caía no fallback
 genérico 'ASSAÍ' — os itens em si processavam normal, só o nome da loja
 ficava errado no romaneio/PDF/mapa.
+
+FIX (03/09/2026): removida a limpeza de sufixo "FRAC KG"/"KG" do nome
+do produto (re.sub que existia aqui antes). O perfil atual do Assaí já
+padronizou os nomes COM esse sufixo incluído (ex.: "BACON PATA NEGRA
+FRAC KG" é o nome de verdade, não "BACON PATA NEGRA" + unidade solta)
+— a limpeza antiga, que fazia sentido numa versão anterior do perfil
+sem esse sufixo, virou o oposto do que precisa agora e quebrava 134 de
+150 itens de um pedido real (22322611/L, 03/09/2026) com "Produto não
+cadastrado", mesmo o produto estando cadastrado — só que sob o nome
+COM "FRAC KG", que a limpeza arrancava antes de comparar. Sem a
+limpeza, os 150 itens batem 100%.
 """
 
 __cliente_nome__ = "Assaí"
@@ -66,7 +77,7 @@ def parse(pdf_bytes, produtos):
             re.M)
         itens = []
         for m in reItem.finditer(txt):
-            nome_raw = re.sub(r'\s+(FRAC\s*KG|KG)\s*$', '', re.sub(r'\s+', ' ', m.group(2))).strip()
+            nome_raw = re.sub(r'\s+', ' ', m.group(2)).strip()
             qtde_ped = float(m.group(5).replace('.', '').replace(',', '.'))
             preco = float(m.group(6).replace('.', '').replace(',', '.'))
             total = float(m.group(7).replace('.', '').replace(',', '.'))
