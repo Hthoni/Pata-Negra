@@ -70,7 +70,7 @@
     .meta-valor { font-weight:600; }
 
     .estado-col { display:flex; flex-direction:column; justify-content:space-between; align-items:flex-end; gap:7px; flex-shrink:0; height:67px; width:180px; overflow:hidden; }
-    .estado-col-baixo { display:flex; flex-direction:row; align-items:center; justify-content:flex-end; gap:8px; width:100%; overflow:hidden; }
+    .estado-col-cima { display:flex; flex-direction:row; align-items:center; justify-content:flex-end; gap:8px; width:100%; overflow:hidden; }
     .btn-apagar { height:30px; width:90px; border:1px solid var(--accent); border-radius:var(--radius); font-size:11px; font-weight:700; letter-spacing:.3px; cursor:pointer; font-family:inherit; background:#fff; color:var(--accent); padding:0; white-space:nowrap; display:flex; align-items:center; justify-content:center; text-align:center; flex-shrink:0; box-sizing:border-box; }
     .btn-apagar:hover { background:var(--accent); color:#fff; }
     .entrega-regiao { font-size:12px; font-weight:700; color:var(--accent); text-align:right; line-height:1.1; white-space:nowrap; align-self:center; max-width:85px; overflow:hidden; text-overflow:ellipsis; }
@@ -452,11 +452,11 @@
           '</div>' +
         '</div>' +
         '<div class="estado-col">' +
-          '<button class="btn-apagar" onclick="apagarPedido(event,\'' + rom.id + '\',\'' + (rom.clienteNome||rom.cliente) + '\')">APAGAR</button>' +
-          '<div class="estado-col-baixo">' + reg +
-            '<div class="badge-idade" style="background:' + c.bg + ';color:' + c.txt + '">' +
-              '<span class="fase">' + c.label + '</span><span class="horas">' + (isDormente(rom) ? '' : Math.round(horas) + 'h') + '</span>' +
-            '</div>' +
+          '<div class="estado-col-cima">' + reg +
+            '<button class="btn-apagar" onclick="apagarPedido(event,\'' + rom.id + '\',\'' + (rom.clienteNome||rom.cliente) + '\')">APAGAR</button>' +
+          '</div>' +
+          '<div class="badge-idade" style="background:' + c.bg + ';color:' + c.txt + '">' +
+            '<span class="fase">' + c.label + '</span><span class="horas">' + (isDormente(rom) ? '' : Math.round(horas) + 'h') + '</span>' +
           '</div>' +
         '</div>' +
         '<div class="card-acoes">' +
