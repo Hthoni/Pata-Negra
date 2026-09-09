@@ -59,21 +59,21 @@
     .card-entrega.vermelho { border-left-color:#e74c3c; }
     .card-entrega.dormente { border-left-color:#cfcfcf; }
 
-    .entrega-info { flex:1; min-width:0; display:flex; flex-direction:column; justify-content:flex-start; }
+    .entrega-info { flex:1; min-width:0; display:flex; flex-direction:column; justify-content:flex-start; overflow:hidden; }
     .entrega-titulo { font-weight:700; font-size:22px; line-height:1.1; margin-bottom:2px; }
     .entrega-sub { font-size:13px; color:#1a1a1a; font-weight:600; margin-bottom:7px; }
     .entrega-sub .num { color:#1a1a1a; font-weight:700; }
     .entrega-sub .num.vazio { color:transparent; }
-    .entrega-meta { display:flex; gap:16px; flex-wrap:nowrap; white-space:nowrap; }
+    .entrega-meta { display:flex; gap:10px 16px; flex-wrap:wrap; }
     .meta-item { font-size:12px; }
     .meta-label { color:#888; }
     .meta-valor { font-weight:600; }
 
-    .estado-col { display:flex; flex-direction:column; justify-content:space-between; align-items:flex-end; gap:7px; flex-shrink:0; height:67px; width:210px; overflow:hidden; }
+    .estado-col { display:flex; flex-direction:column; justify-content:space-between; align-items:flex-end; gap:7px; flex-shrink:0; height:67px; width:180px; overflow:hidden; }
     .estado-col-baixo { display:flex; flex-direction:row; align-items:center; justify-content:flex-end; gap:8px; width:100%; overflow:hidden; }
-    .btn-apagar { height:30px; width:100px; border:1px solid var(--accent); border-radius:var(--radius); font-size:11px; font-weight:700; letter-spacing:.3px; cursor:pointer; font-family:inherit; background:#fff; color:var(--accent); padding:0; white-space:nowrap; display:flex; align-items:center; justify-content:center; text-align:center; flex-shrink:0; box-sizing:border-box; }
+    .btn-apagar { height:30px; width:90px; border:1px solid var(--accent); border-radius:var(--radius); font-size:11px; font-weight:700; letter-spacing:.3px; cursor:pointer; font-family:inherit; background:#fff; color:var(--accent); padding:0; white-space:nowrap; display:flex; align-items:center; justify-content:center; text-align:center; flex-shrink:0; box-sizing:border-box; }
     .btn-apagar:hover { background:var(--accent); color:#fff; }
-    .entrega-regiao { font-size:13px; font-weight:700; color:var(--accent); text-align:right; line-height:1.1; white-space:nowrap; align-self:center; max-width:110px; overflow:hidden; text-overflow:ellipsis; }
+    .entrega-regiao { font-size:12px; font-weight:700; color:var(--accent); text-align:right; line-height:1.1; white-space:nowrap; align-self:center; max-width:85px; overflow:hidden; text-overflow:ellipsis; }
     .entrega-regiao.sem { color:#bbb; font-weight:500; font-style:italic; }
 
     .card-entrega.no-sim { opacity:.5; }
@@ -82,7 +82,7 @@
     .badge-idade .fase { font-size:9px; font-weight:700; white-space:nowrap; }
     .badge-idade .horas { font-size:13px; font-weight:800; white-space:nowrap; }
 
-    .card-acoes { display:grid; grid-template-columns:1fr 1fr; grid-auto-rows:30px; gap:7px; flex-shrink:0; width:210px; position:relative; align-content:center; }
+    .card-acoes { display:grid; grid-template-columns:1fr 1fr; grid-auto-rows:30px; gap:7px; flex-shrink:0; width:190px; position:relative; align-content:center; }
     .card-acoes button { height:30px; width:100%; border:1px solid var(--accent); border-radius:var(--radius); font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; font-family:inherit; transition:background .13s; display:flex; align-items:center; justify-content:center; gap:4px; padding:0 8px; overflow:hidden; text-overflow:ellipsis; }
     .btn-sim { border-color:var(--accent); background:#fff; color:var(--accent); }
     .btn-sim:hover { background:var(--accent-lt); }
