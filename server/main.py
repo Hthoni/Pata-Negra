@@ -46,7 +46,7 @@ import pkgutil
 import parsers
 from avulso import ler_faturamento_avulso, calc_item_avulso
 from motoristas import ler_motoristas
-from storage import limpar_romaneios_entregues
+from storage import limpar_romaneios_entregues, arquivar_romaneios_entregues, buscar_romaneio_historico, _arquivar_um_romaneio, listar_romaneios_historico, deletar_romaneio_completo
 import whatsapp
 
 _CLIENTE_AVULSO_KEY = '_avulso_faturamento'
@@ -163,6 +163,17 @@ def simular_totais():
         return jsonify({'erro': 'Nenhum pedido selecionado'}), 400
     try:
         idx = {r['id']: r for r in listar_romaneios()}
+        # FIX (09/09/2026): desde que romaneios entregues são arquivados NA
+        # HORA (não ficam mais no bucket ativo), "Detalhar totais" de uma
+        # entrega já finalizada não achava mais nada aqui -- completa com o
+        # histórico só pros IDs que faltaram (não escaneia o histórico à toa
+        # quando tudo já foi achado no ativo).
+        faltantes = [rid for rid in ids if rid not in idx]
+        if faltantes:
+            hist_idx = {r['id']: r for r in listar_romaneios_historico()}
+            for rid in faltantes:
+                if rid in hist_idx:
+                    idx[rid] = hist_idx[rid]
         agregado = {}     # nome_master -> kg
         sem_codigo = {}   # nome_cliente -> kg (itens sem codigo ou nao mapeados)
         pedidos_incl = []
@@ -358,6 +369,16 @@ def set_status_romaneio(romaneio_id):
             resultado = novo
         if not ok:
             return jsonify({'erro': 'Romaneio não encontrado'}), 404
+
+        # NOVO (09/09/2026): assim que vira 'entregue', arquiva NA HORA pro
+        # bucket de histórico -- não espera limpeza periódica nenhuma. O
+        # bucket ativo (que listar_romaneios() varre o tempo todo) nunca
+        # mais acumula pedido entregue, e nada se perde (só muda de lugar).
+        if novo == 'entregue':
+            try:
+                _arquivar_um_romaneio(romaneio_id)
+            except Exception as _e:
+                print(f'[WARN] falha ao arquivar romaneio {romaneio_id} na hora: {_e}')
 
         # se estava numa entrega e o desfecho é definitivo, registra e arquiva se esvaziou
         finalizada = False
@@ -866,6 +887,74 @@ def cron_fila_lojas():
     try:
         resultado = whatsapp.processar_fila_lojas()
         return jsonify(resultado)
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'erro': str(e)}), 500
+
+
+@app.route('/romaneios/arquivar', methods=['POST'])
+def arquivar_romaneios_rota():
+    """NOVO (09/09/2026) -- substitui /romaneios/limpar como forma
+    preferida de aliviar o bucket: MOVE (nunca apaga) romaneios
+    'entregue' antigos pro bucket de histórico separado. Chamar como:
+    POST /romaneios/arquivar?confirmar=sim&dias=30
+    (dias >= 7, obrigatório; sem ?confirmar=sim não faz nada, só avisa)."""
+    if request.args.get('confirmar') != 'sim':
+        return jsonify({'erro': 'Chame com ?confirmar=sim&dias=N pra confirmar o arquivamento '
+                                '(ex.: /romaneios/arquivar?confirmar=sim&dias=30).'}), 400
+    try:
+        dias = int(request.args.get('dias', 30))
+    except ValueError:
+        return jsonify({'erro': 'dias precisa ser um número'}), 400
+    if dias < 7:
+        return jsonify({'erro': 'Por segurança, dias mínimo é 7.'}), 400
+    try:
+        resultado = arquivar_romaneios_entregues(dias_minimo=dias)
+        return jsonify({'ok': True, **resultado})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'erro': str(e)}), 500
+
+
+@app.route('/romaneios/historico/<romaneio_id>')
+def buscar_romaneio_historico_rota(romaneio_id):
+    """Consulta pontual de um romaneio já arquivado (não aparece na
+    listagem ativa, que é sempre só pendente/em_rota/entregue recente)."""
+    try:
+        r = buscar_romaneio_historico(romaneio_id)
+        if not r:
+            return jsonify({'erro': 'Não encontrado no histórico'}), 404
+        return jsonify(r)
+    except Exception as e:
+        return jsonify({'erro': str(e)}), 500
+
+
+@app.route('/romaneios/historico')
+def listar_romaneios_historico_rota():
+    """Lista TODOS os romaneios já arquivados -- a tela de 'Ver
+    Entregas' passa a chamar essa rota em vez de /romaneios."""
+    try:
+        out = listar_romaneios_historico()
+        for r in out:
+            r.pop('itens', None)  # mesmo padrão de payload leve do /romaneios
+        return jsonify(out)
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'erro': str(e)}), 500
+
+
+@app.route('/romaneio/<romaneio_id>/apagar', methods=['POST'])
+def apagar_romaneio_de_vez_rota(romaneio_id):
+    """Apaga um romaneio DE VEZ -- ativo ou já arquivado, não importa.
+    Diferente de marcar 'entregue' (que move pro histórico): isso apaga
+    mesmo. Pedido explícito: existia só o 'apagar de mentira' (marcar
+    entregue) e faltava um apagar de verdade, com confirmação (a
+    confirmação é feita no frontend antes de chamar essa rota)."""
+    try:
+        ok = deletar_romaneio_completo(romaneio_id)
+        if not ok:
+            return jsonify({'erro': 'Romaneio não encontrado (nem ativo, nem no histórico)'}), 404
+        return jsonify({'ok': True})
     except Exception as e:
         traceback.print_exc()
         return jsonify({'erro': str(e)}), 500
