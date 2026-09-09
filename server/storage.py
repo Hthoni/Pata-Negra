@@ -107,6 +107,145 @@ def _romaneios_bucket():
     return _gcs_romaneios_client.bucket(GCS_ROMANEIOS_BUCKET)
 
 
+# ── Histórico (bucket SEPARADO, pra onde entregues antigos são movidos) ──────
+# NOVO (09/09/2026): antes só existia limpar_romaneios_entregues (apagava
+# de vez). Depois de um caso real de precisar consultar um pedido já
+# apagado, a decisão foi: nunca mais apagar histórico -- MOVER pra um
+# bucket dedicado, fora do caminho que listar_romaneios() varre o tempo
+# todo (é isso que mantém o site rápido), mas sem perder o dado de vez.
+GCS_HISTORICO_BUCKET = os.environ.get('GCS_HISTORICO_BUCKET', 'pata-negra-historico')
+_gcs_historico_client = None
+
+
+def _historico_bucket():
+    global _gcs_historico_client
+    if _gcs_historico_client is None:
+        _gcs_historico_client = gcs.Client()
+    return _gcs_historico_client.bucket(GCS_HISTORICO_BUCKET)
+
+
+def _arquivar_um_romaneio(romaneio_id):
+    """Move (copia + apaga da origem) todos os arquivos de UM romaneio
+    (.json/.pdf/.xlsx, incluindo variantes __e1/__e2 de pedido dividido
+    Indústria/Distribuidora) do bucket ATIVO pro bucket de HISTÓRICO. A
+    cópia acontece no lado do servidor do GCS (bucket.copy_blob) -- não
+    baixa/reenvia o conteúdo por aqui, mais rápido e mais barato."""
+    origem = _romaneios_bucket()
+    destino = _historico_bucket()
+    algum_movido = False
+    for sufixo in ('', '__e1', '__e2'):
+        for ext in ('.json', '.pdf', '.xlsx'):
+            nome = f'{romaneio_id}{sufixo}{ext}'
+            try:
+                blob = origem.blob(nome)
+                if blob.exists():
+                    origem.copy_blob(blob, destino, nome)
+                    blob.delete()
+                    algum_movido = True
+            except Exception:
+                pass
+    return algum_movido
+
+
+def arquivar_romaneios_entregues(dias_minimo=30, limite_por_chamada=200):
+    """Move (NUNCA apaga) romaneios 'entregue' com DIAS_MINIMO dias ou
+    mais pro bucket de histórico. Mesma lógica de filtro/paralelismo/
+    limite por chamada de limpar_romaneios_entregues (ver essa função
+    pra mais contexto) -- só troca "apagar" por "mover".
+
+    Retorna {'arquivados': N, 'mantidos': M, 'total_avaliado': N+M,
+    'restantes_proxima_chamada': R}."""
+    limite = datetime.datetime.utcnow() - datetime.timedelta(days=dias_minimo)
+    candidatos, mantidos = [], 0
+
+    for r in listar_romaneios():
+        if r.get('status') != 'entregue':
+            continue
+        ref = r.get('statusData') or r.get('dataGeracao')
+        if not ref:
+            mantidos += 1
+            continue
+        try:
+            dt = datetime.datetime.fromisoformat(str(ref).replace('Z', ''))
+        except ValueError:
+            mantidos += 1
+            continue
+        if dt <= limite:
+            candidatos.append(r['id'])
+        else:
+            mantidos += 1
+
+    lote = candidatos[:limite_por_chamada]
+    restantes = max(0, len(candidatos) - len(lote))
+
+    if lote:
+        with ThreadPoolExecutor(max_workers=32) as ex:
+            list(ex.map(_arquivar_um_romaneio, lote))
+
+    return {
+        'arquivados': len(lote),
+        'mantidos': mantidos,
+        'total_avaliado': len(lote) + mantidos,
+        'restantes_proxima_chamada': restantes,
+    }
+
+
+def listar_romaneios_historico():
+    """Lista TODOS os romaneios já arquivados (bucket de histórico) --
+    em paralelo, mesmo padrão de listar_romaneios(). Usado pela tela de
+    'Ver Entregas', que agora lê direto daqui, não do bucket ativo."""
+    blobs = [b for b in _historico_bucket().list_blobs() if b.name.endswith('.json')]
+    def _baixar(b):
+        try:
+            return json.loads(b.download_as_bytes().decode('utf-8'))
+        except Exception:
+            return None
+    with ThreadPoolExecutor(max_workers=32) as ex:
+        resultados = list(ex.map(_baixar, blobs))
+    return [r for r in resultados if r is not None]
+
+
+def deletar_romaneio_completo(romaneio_id):
+    """Apaga um romaneio DE VEZ (todos os arquivos, .json/.pdf/.xlsx +
+    variantes __e1/__e2), não importa se ele está no bucket ATIVO ou já
+    ARQUIVADO no histórico -- tenta os dois. Diferente de 'marcar como
+    entregue' (que move, não apaga): isso é apagar de verdade, pra
+    quando um pedido foi criado por engano e precisa sumir de vez.
+    Retorna True se achou e apagou algo em qualquer um dos dois lugares."""
+    apagado_ativo = deletar_romaneio(romaneio_id)
+    apagado_historico = False
+    for sufixo in ('', '__e1', '__e2'):
+        for ext in ('.json', '.pdf', '.xlsx'):
+            try:
+                blob = _historico_bucket().blob(f'{romaneio_id}{sufixo}{ext}')
+                if blob.exists():
+                    blob.delete()
+                    apagado_historico = True
+            except Exception:
+                pass
+    return apagado_ativo or apagado_historico
+
+
+def buscar_romaneio_historico(romaneio_id):
+    """Lê um romaneio JSON do bucket de HISTÓRICO (consulta pontual, não
+    listagem em massa -- é só pra quando alguém precisa achar um pedido
+    específico já arquivado)."""
+    blob = _historico_bucket().blob(f'{romaneio_id}.json')
+    if not blob.exists():
+        return None
+    return json.loads(blob.download_as_bytes().decode('utf-8'))
+
+
+def baixar_pdf_historico(romaneio_id):
+    blob = _historico_bucket().blob(f'{romaneio_id}.pdf')
+    return blob.download_as_bytes() if blob.exists() else None
+
+
+def baixar_excel_historico(romaneio_id):
+    blob = _historico_bucket().blob(f'{romaneio_id}.xlsx')
+    return blob.download_as_bytes() if blob.exists() else None
+
+
 def salvar_romaneio(romaneio_id, dados):
     """Salva um JSON de romaneio (pin do mapa) no bucket de romaneios."""
     blob = _romaneios_bucket().blob(f'{romaneio_id}.json')
@@ -507,68 +646,3 @@ def encerrar_sessao(token):
     # Token stateless: logout é client-side (remove do localStorage) e o token
     # expira sozinho em SESSAO_HORAS. Nada a revogar no servidor.
     return
-
-
-# --- Fila de mensagens pra encarregados/gerentes de loja (26/08/2026) ---
-# Alerta de "mercadoria a caminho" pro encarregado NÃO pode chegar cedo
-# demais (incomoda) nem em rajada (vários de uma vez). Guardado no bucket
-# de perfis (compartilhado, baixo volume) sob o prefixo fila_lojas/.
-# Um Cloud Scheduler bate periodicamente num endpoint que chama
-# whatsapp.processar_fila_lojas(), que manda NO MÁXIMO 1 mensagem por
-# chamada, respeitando o espaçamento mínimo (ver _fila_lojas_controle_blob).
-
-def _fila_lojas_prefix():
-    return 'fila_lojas/'
-
-
-def enfileirar_mensagem_loja(msg_id, dados):
-    """Grava uma mensagem pendente pro encarregado de loja. 'dados' deve
-    trazer pelo menos {telefone, texto, agendado_para (ISO)}."""
-    blob = _bucket().blob(f'{_fila_lojas_prefix()}{msg_id}.json')
-    blob.upload_from_string(json.dumps(dados, ensure_ascii=False),
-                            content_type='application/json')
-
-
-def listar_fila_lojas():
-    """Lista as mensagens pendentes na fila (não enviadas ainda)."""
-    blobs = [b for b in _bucket().list_blobs(prefix=_fila_lojas_prefix())
-             if b.name.endswith('.json') and not b.name.endswith('_controle.json')]
-    if not blobs:
-        return []
-    resultado = []
-    for b in blobs:
-        d = _baixar_json(b)
-        if d is not None:
-            d['_msg_id'] = b.name[len(_fila_lojas_prefix()):-len('.json')]
-            resultado.append(d)
-    return resultado
-
-
-def remover_da_fila_lojas(msg_id):
-    """Remove uma mensagem da fila (já enviada, ou cancelada)."""
-    blob = _bucket().blob(f'{_fila_lojas_prefix()}{msg_id}.json')
-    if blob.exists():
-        blob.delete()
-        return True
-    return False
-
-
-def _fila_lojas_controle_blob():
-    return _bucket().blob(f'{_fila_lojas_prefix()}_controle.json')
-
-
-def carregar_ultimo_envio_loja():
-    """ISO string do horário do último envio real a um encarregado de
-    loja (usado pra garantir o espaçamento mínimo entre disparos), ou
-    None se nunca enviou nada ainda."""
-    blob = _fila_lojas_controle_blob()
-    if not blob.exists():
-        return None
-    d = _baixar_json(blob)
-    return d.get('ultimo_envio') if d else None
-
-
-def salvar_ultimo_envio_loja(timestamp_iso):
-    _fila_lojas_controle_blob().upload_from_string(
-        json.dumps({'ultimo_envio': timestamp_iso}, ensure_ascii=False),
-        content_type='application/json')
