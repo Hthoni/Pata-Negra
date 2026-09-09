@@ -69,7 +69,10 @@
     .meta-label { color:#888; }
     .meta-valor { font-weight:600; }
 
-    .estado-col { display:flex; flex-direction:row; align-items:stretch; justify-content:flex-end; gap:14px; flex-shrink:0; }
+    .estado-col { display:flex; flex-direction:column; justify-content:space-between; align-items:flex-end; gap:7px; flex-shrink:0; height:67px; }
+    .estado-col-baixo { display:flex; flex-direction:row; align-items:stretch; justify-content:flex-end; gap:14px; }
+    .btn-apagar { height:30px; border:1px solid var(--accent); border-radius:var(--radius); font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; background:#fff; color:var(--accent); padding:0 14px; white-space:nowrap; display:flex; align-items:center; justify-content:center; gap:4px; }
+    .btn-apagar:hover { background:var(--accent); color:#fff; }
     .entrega-regiao { font-size:18px; font-weight:700; color:var(--accent); text-align:right; line-height:1.1; white-space:nowrap; align-self:flex-start; margin-top:4px; }
     .entrega-regiao.sem { color:#bbb; font-weight:500; font-style:italic; }
 
@@ -373,6 +376,18 @@
     return str;
   }
 
+  function apagarPedido(event, id, nome) {
+    event.stopPropagation();
+    if (!confirm('Apagar DE VEZ o pedido de "' + nome + '"?\n\nEssa ação não pode ser desfeita — diferente de "Entregue" (que só arquiva), isso remove o pedido de verdade.')) return;
+    fetch(SERVER_URL + '/romaneio/' + id + '/apagar', { method: 'POST' })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.erro) { alert('Erro: ' + d.erro); return; }
+        carregar();
+      })
+      .catch(function(e) { alert('Erro de conexão: ' + e.message); });
+  }
+
   function carregar() {
     document.getElementById('loading').style.display = 'block';
     document.getElementById('lista').innerHTML = '';
@@ -436,9 +451,12 @@
             '<div class="meta-item"><span class="meta-label">Gerado: </span><span class="meta-valor">' + formatarData(rom.dataGeracao) + '</span></div>' +
           '</div>' +
         '</div>' +
-        '<div class="estado-col">' + reg +
-          '<div class="badge-idade" style="background:' + c.bg + ';color:' + c.txt + '">' +
-            '<span class="fase">' + c.label + '</span><span class="horas">' + (isDormente(rom) ? '' : Math.round(horas) + 'h') + '</span>' +
+        '<div class="estado-col">' +
+          '<button class="btn-apagar" onclick="apagarPedido(event,\'' + rom.id + '\',\'' + (rom.clienteNome||rom.cliente) + '\')">🗑 Apagar</button>' +
+          '<div class="estado-col-baixo">' + reg +
+            '<div class="badge-idade" style="background:' + c.bg + ';color:' + c.txt + '">' +
+              '<span class="fase">' + c.label + '</span><span class="horas">' + (isDormente(rom) ? '' : Math.round(horas) + 'h') + '</span>' +
+            '</div>' +
           '</div>' +
         '</div>' +
         '<div class="card-acoes">' +
