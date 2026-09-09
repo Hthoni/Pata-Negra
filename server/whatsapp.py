@@ -27,9 +27,7 @@ AINDA PENDENTE (fora do escopo desta entrega, ver Planta seção 4 e 7):
 """
 import re
 import datetime
-from storage import (listar_romaneios, listar_entregas,
-                     enfileirar_mensagem_loja, listar_fila_lojas, remover_da_fila_lojas,
-                     carregar_ultimo_envio_loja, salvar_ultimo_envio_loja)
+from storage import listar_romaneios, listar_entregas
 
 _STATUS_LEGIVEL = {
     'em_rota': 'Em rota',
@@ -228,31 +226,16 @@ _ACOES = {'1': 'chegada', '2': 'conclusao', '3': 'falha'}
 _ACAO_VERBO = {'chegada': 'a chegada', 'conclusao': 'a conclusão', 'falha': 'a falha'}
 
 
-def _id_base(pedido_id):
-    """Pedido splitado Indústria/Distribuidora (__e1/__e2) = mesma entrega
-    física, 2 romaneios. Usado pra agrupar na lista e aplicar ação nos
-    dois de uma vez (FIX 25/08/2026)."""
-    m = re.match(r'^(.*)__e[12]$', pedido_id)
-    return m.group(1) if m else pedido_id
-
-
 def _pedidos_do_motorista(telefone):
     """Todos os pedidos ativos hoje, de TODAS as entregas do motorista
     (por telefone) -- um motorista pode ter mais de uma entrega/viagem
-    ativa no mesmo dia. Splits Indústria/Distribuidora (__e1/__e2) contam
-    como UM pedido só (FIX 25/08/2026: antes apareciam como 2 linhas
-    idênticas na lista, e confirmar uma deixava a outra presa em "em
-    rota")."""
+    ativa no mesmo dia."""
     alvo = _normaliza_telefone(telefone)
     _, entregas = _contexto_pedido()
     ids_dele = {e['id'] for e in entregas
                 if _normaliza_telefone(e.get('telefoneMotorista', '')) == alvo
                 and e.get('fase') == 'em_rota'}
-    todos = [r for r in _pedidos_ativos_hoje() if r.get('entregaId') in ids_dele]
-    vistos = {}
-    for r in todos:
-        vistos.setdefault(_id_base(r['id']), r)
-    return list(vistos.values())
+    return [r for r in _pedidos_ativos_hoje() if r.get('entregaId') in ids_dele]
 
 
 def _pedidos_da_entrega(entrega_id):
@@ -294,39 +277,36 @@ def montar_confirmacao(acao, r):
 
 def _aplicar_acao(pedido_id, acao):
     """Aplica de fato a ação escolhida no romaneio, e devolve o pedido
-    atualizado (ou None se não achou). Splits Indústria/Distribuidora
-    (__e1/__e2) recebem a MESMA ação nos dois de uma vez (FIX 25/08/2026:
-    antes só o pedido_id escolhido mudava, e o irmão ficava preso em
-    'em rota')."""
-    from storage import salvar_romaneio, atualizar_status_romaneio, registrar_desfecho_entrega
+    atualizado (ou None se não achou)."""
+    from storage import salvar_romaneio, atualizar_status_romaneio, registrar_desfecho_entrega, _arquivar_um_romaneio
     idx = {r['id']: r for r in listar_romaneios()}
     r = idx.get(pedido_id)
     if not r:
         return None
 
-    base = _id_base(pedido_id)
-    irmaos_ids = [rid for rid in idx if _id_base(rid) == base]
-
     if acao == 'chegada':
-        for rid in irmaos_ids:
-            rr = idx[rid]
-            rr['chegouLocal'] = True
-            rr['chegouLocalEm'] = datetime.datetime.utcnow().isoformat()
-            salvar_romaneio(rid, rr)
-        return idx[pedido_id]
+        r['chegouLocal'] = True
+        r['chegouLocalEm'] = datetime.datetime.utcnow().isoformat()
+        salvar_romaneio(pedido_id, r)
+        return r
 
     novo_status = 'entregue' if acao == 'conclusao' else 'falhou'
-    for rid in irmaos_ids:
-        if novo_status == 'falhou':
-            atualizar_status_romaneio(rid, 'pendente', falha=True)
-        else:
-            atualizar_status_romaneio(rid, novo_status)
-        rr = idx[rid]
-        entrega_id = rr.get('entregaId')
-        if entrega_id:
-            snap = {'cliente': rr.get('clienteNome') or rr.get('cliente') or '',
-                    'filial': rr.get('filial', ''), 'kg': rr.get('kgPlanejados', 0)}
-            registrar_desfecho_entrega(entrega_id, rid, novo_status, snap)
+    if novo_status == 'falhou':
+        atualizar_status_romaneio(pedido_id, 'pendente', falha=True)
+    else:
+        atualizar_status_romaneio(pedido_id, novo_status)
+        # NOVO (09/09/2026): arquiva NA HORA quando o motorista confirma
+        # conclusão pelo WhatsApp -- mesma regra do botão na tela.
+        try:
+            _arquivar_um_romaneio(pedido_id)
+        except Exception as _e:
+            print(f'[WARN] falha ao arquivar romaneio {pedido_id} na hora (via WhatsApp): {_e}')
+
+    entrega_id = r.get('entregaId')
+    if entrega_id:
+        snap = {'cliente': r.get('clienteNome') or r.get('cliente') or '',
+                'filial': r.get('filial', ''), 'kg': r.get('kgPlanejados', 0)}
+        registrar_desfecho_entrega(entrega_id, pedido_id, novo_status, snap)
 
     _limpar_cache_contexto()  # acabamos de escrever -> invalida o cache pra próxima leitura
     idx2 = {rr['id']: rr for rr in listar_romaneios()}
@@ -516,60 +496,6 @@ def montar_mensagem_lista_motorista(nome_motorista, pedidos):
     return f'Olá {nome_motorista}, temos as seguintes entregas hoje:{_QUEBRA}{corpo}{_QUEBRA}Bom trabalho!'
 
 
-# Brasília não tem mais horário de verão desde 2019 -> offset fixo.
-_FUSO_BRASILIA = datetime.timedelta(hours=-3)
-_ESPACAMENTO_MINIMO_LOJA = datetime.timedelta(minutes=2)
-
-
-def _agora_brasilia():
-    return datetime.datetime.utcnow() + _FUSO_BRASILIA
-
-
-def _agendar_mensagem_loja(telefone, texto):
-    """Enfileira o alerta de mercadoria a caminho pro encarregado/gerente
-    de loja (26/08/2026) -- NÃO manda na hora. Garante que não entra na
-    fila com horário antes das 8:00 (Brasília); o espaçamento mínimo de
-    2 min entre disparos é aplicado depois, em processar_fila_lojas, na
-    hora de efetivamente mandar (não aqui no agendamento)."""
-    agora_br = _agora_brasilia()
-    hoje_8h_br = agora_br.replace(hour=8, minute=0, second=0, microsecond=0)
-    agendado_br = max(agora_br, hoje_8h_br)
-    agendado_utc = agendado_br - _FUSO_BRASILIA
-    msg_id = f'{int(datetime.datetime.utcnow().timestamp() * 1000)}_{telefone}'
-    enfileirar_mensagem_loja(msg_id, {
-        'telefone': telefone,
-        'texto': texto,
-        'agendado_para': agendado_utc.isoformat(),
-    })
-
-
-def processar_fila_lojas():
-    """Chamada periodicamente por um Cloud Scheduler batendo num endpoint
-    do main.py. Manda NO MÁXIMO 1 mensagem por chamada -- o espaçamento
-    mínimo de 2 min é garantido comparando com o horário do ÚLTIMO envio
-    REAL (não com a frequência do Scheduler), então funciona mesmo se o
-    Scheduler rodar mais rápido ou mais devagar que isso."""
-    pendentes = listar_fila_lojas()
-    if not pendentes:
-        return {'enviado': False, 'motivo': 'fila vazia'}
-
-    agora = datetime.datetime.utcnow()
-    ultimo_iso = carregar_ultimo_envio_loja()
-    if ultimo_iso and (agora - datetime.datetime.fromisoformat(ultimo_iso)) < _ESPACAMENTO_MINIMO_LOJA:
-        return {'enviado': False, 'motivo': 'espaçamento mínimo entre disparos ainda não passou'}
-
-    prontos = [m for m in pendentes if m.get('agendado_para', '') <= agora.isoformat()]
-    if not prontos:
-        return {'enviado': False, 'motivo': 'nenhuma mensagem da fila com horário já chegado'}
-    prontos.sort(key=lambda m: m.get('agendado_para', ''))
-    msg = prontos[0]
-
-    _enviar_whatsapp(msg['telefone'], msg['texto'])
-    salvar_ultimo_envio_loja(agora.isoformat())
-    remover_da_fila_lojas(msg['_msg_id'])
-    return {'enviado': True, 'telefone': msg['telefone']}
-
-
 def notificar_despacho_entrega(entrega):
     """Chamada quando uma entrega passa pra fase 'em_rota' (o botão de
     despacho). Dispara a mensagem #1 (vendedor + encarregados) pra cada
@@ -609,22 +535,12 @@ def notificar_despacho_entrega(entrega):
         alvos = [(r.get('vendedor', ''), r.get('telefoneVendedor', ''), 'vendedor')] + \
                 [(e.get('nome', ''), e.get('telefone', ''), 'encarregado') for e in (r.get('encarregados') or [])]
         for nome, tel, papel in alvos:
-            if not tel:
-                continue
-            texto = montar_mensagem_pedido_em_rota(
-                nome, r.get('clienteNome') or r.get('cliente') or '', r.get('filial', ''), papel,
-                vendedor_nome=r.get('vendedor', ''), vendedor_telefone=r.get('telefoneVendedor', ''),
-                encarregados=r.get('encarregados'),
-                motorista_nome=mot_nome, motorista_telefone=mot_tel)
-            if papel == 'encarregado':
-                # Encarregado/gerente de loja: NÃO manda na hora -- vai pra
-                # fila (ver _agendar_mensagem_loja) pra respeitar o horário
-                # mínimo (8:00) e o espaçamento entre disparos (26/08/2026:
-                # não incomodar o encarregado cedo demais nem em rajada).
-                # Vendedor e motorista continuam disparando imediato.
-                _agendar_mensagem_loja(tel, texto)
-            else:
-                _enviar_whatsapp(tel, texto)
+            if tel:
+                _enviar_whatsapp(tel, montar_mensagem_pedido_em_rota(
+                    nome, r.get('clienteNome') or r.get('cliente') or '', r.get('filial', ''), papel,
+                    vendedor_nome=r.get('vendedor', ''), vendedor_telefone=r.get('telefoneVendedor', ''),
+                    encarregados=r.get('encarregados'),
+                    motorista_nome=mot_nome, motorista_telefone=mot_tel))
 
     telefone_motorista = (entrega.get('telefoneMotorista') or '').strip()
     if telefone_motorista:
@@ -713,4 +629,4 @@ def processar_mensagem_entrada(telefone, texto=''):
 
     return (f'Não localizei seu número em nenhuma entrega ativa hoje.{_QUEBRA}'
             'Se você é vendedor, encarregado ou motorista da Pata Negra e recebeu essa '
-            'mensagem por engano, fala com a gente direto: (21) 97488-7292')
+            'mensagem por engano, fala com a gente direto: (21) 99011-1992')
