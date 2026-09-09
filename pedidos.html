@@ -71,16 +71,16 @@
 
     .estado-col { display:flex; flex-direction:column; justify-content:space-between; align-items:flex-end; gap:7px; flex-shrink:0; height:67px; }
     .estado-col-baixo { display:flex; flex-direction:row; align-items:stretch; justify-content:flex-end; gap:14px; }
-    .btn-apagar { height:30px; border:1px solid var(--accent); border-radius:var(--radius); font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; background:#fff; color:var(--accent); padding:0 14px; white-space:nowrap; display:flex; align-items:center; justify-content:center; gap:4px; }
+    .btn-apagar { height:30px; width:121px; border:1px solid var(--accent); border-radius:var(--radius); font-size:12px; font-weight:700; letter-spacing:.3px; cursor:pointer; font-family:inherit; background:#fff; color:var(--accent); padding:0; white-space:nowrap; display:flex; align-items:center; justify-content:center; text-align:center; flex-shrink:0; box-sizing:border-box; }
     .btn-apagar:hover { background:var(--accent); color:#fff; }
     .entrega-regiao { font-size:18px; font-weight:700; color:var(--accent); text-align:right; line-height:1.1; white-space:nowrap; align-self:flex-start; margin-top:4px; }
     .entrega-regiao.sem { color:#bbb; font-weight:500; font-style:italic; }
 
     .card-entrega.no-sim { opacity:.5; }
 
-    .badge-idade { text-align:center; border-radius:10px; padding:5px 14px; min-width:86px; box-sizing:border-box; display:flex; flex-direction:column; align-items:center; justify-content:center; }
-    .badge-idade .fase { display:block; font-size:11px; font-weight:700; }
-    .badge-idade .horas { display:block; font-size:20px; font-weight:800; line-height:1.1; }
+    .badge-idade { text-align:center; border-radius:10px; padding:0 10px; min-width:70px; height:30px; box-sizing:border-box; display:flex; flex-direction:row; align-items:center; justify-content:center; gap:5px; }
+    .badge-idade .fase { font-size:9px; font-weight:700; white-space:nowrap; }
+    .badge-idade .horas { font-size:13px; font-weight:800; white-space:nowrap; }
 
     .card-acoes { display:grid; grid-template-columns:1fr 1fr; grid-auto-rows:30px; gap:7px; flex-shrink:0; width:250px; position:relative; align-content:center; }
     .card-acoes button { height:30px; width:100%; border:1px solid var(--accent); border-radius:var(--radius); font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; font-family:inherit; transition:background .13s; display:flex; align-items:center; justify-content:center; gap:4px; padding:0 8px; overflow:hidden; text-overflow:ellipsis; }
@@ -452,7 +452,7 @@
           '</div>' +
         '</div>' +
         '<div class="estado-col">' +
-          '<button class="btn-apagar" onclick="apagarPedido(event,\'' + rom.id + '\',\'' + (rom.clienteNome||rom.cliente) + '\')">🗑 Apagar</button>' +
+          '<button class="btn-apagar" onclick="apagarPedido(event,\'' + rom.id + '\',\'' + (rom.clienteNome||rom.cliente) + '\')">APAGAR</button>' +
           '<div class="estado-col-baixo">' + reg +
             '<div class="badge-idade" style="background:' + c.bg + ';color:' + c.txt + '">' +
               '<span class="fase">' + c.label + '</span><span class="horas">' + (isDormente(rom) ? '' : Math.round(horas) + 'h') + '</span>' +
