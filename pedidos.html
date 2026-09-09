@@ -53,6 +53,7 @@
 
     .card-entrega { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:12px 20px; display:flex; flex-direction:column; gap:6px; border-left:10px solid #ccc; transition:box-shadow .13s; }
     .linha-topo, .linha-baixo { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .linha-topo { align-items:flex-end; }
     .titulo-wrap { flex:1; min-width:0; overflow:hidden; }
     .linha-topo-direita, .linha-baixo-direita { display:flex; align-items:center; gap:6px; flex-shrink:0; position:relative; }
     .btn-acao { height:30px; width:88px; box-sizing:border-box; border:1px solid var(--accent); border-radius:var(--radius); font-size:11px; font-weight:600; cursor:pointer; font-family:inherit; white-space:nowrap; display:flex; align-items:center; justify-content:center; gap:3px; padding:0 4px; overflow:hidden; text-overflow:ellipsis; flex-shrink:0; }
@@ -460,7 +461,7 @@
             '<div class="meta-item"><span class="meta-label">Data: </span><span class="meta-valor">' + (rom.dataPedido || '—') + '</span></div>' +
             (rom.dataEntregaProgramada ? '<div class="meta-item"><span class="meta-label">Entrega prog.: </span><span class="meta-valor" style="font-weight:700;color:#8B1C1C">' + formatarDataProg(rom.dataEntregaProgramada) + '</span></div>' : '') +
             '<div class="meta-item"><span class="meta-label">Kg: </span><span class="meta-valor">' + (rom.kgPlanejados || '—') + '</span></div>' +
-            '<div class="meta-item"><span class="meta-label">Ger.: </span><span class="meta-valor">' + formatarData(rom.dataGeracao) + '</span></div>' +
+            '<div class="meta-item"><span class="meta-label">Gerado: </span><span class="meta-valor">' + formatarData(rom.dataGeracao) + '</span></div>' +
           '</div>' +
           '<div class="linha-baixo-direita">' +
             '<div class="badge-idade" style="background:' + c.bg + ';color:' + c.txt + '">' +
