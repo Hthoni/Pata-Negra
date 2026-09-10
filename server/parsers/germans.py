@@ -11,30 +11,32 @@ Robustez:
    extras que o TOTVS às vezes insere.
 
 FIX (20/08/2026): item MINI COSTELA (o único faturado em KG, não em CX)
-saía com quantidade zerada/em branco. Causa: a extração de Valor Unit./
-Valor Item usava ÍNDICES FIXOS diferentes pra CX (nums[3]/nums[5]) e pra
-KG (nums[2]/nums[4]) — presumindo que a coluna KG tivesse uma coluna a
-menos. Isso não é mais verdade no layout atual do TOTVS: a estrutura de
-colunas é a MESMA nos dois casos (Estoq., Qtde, Valor Unit., Valor Emb.,
-Valor Item, Valor Bruto, ...), só que pra item em KG "Valor Unit." e
-"Valor Emb." saem IGUAIS (fator de embalagem = 1), então os índices
-antigos pegavam a coluna errada (Qtde como se fosse preço, e Valor Unit.
-como se fosse total).
+saía com quantidade zerada/em branco. Ver histórico do módulo — corrigido
+extraindo preço/total pelo padrão estrutural (par Valor Item == Valor
+Bruto), não por índice fixo de coluna.
 
-Corrigido pra não depender de índice fixo nenhum: "Valor Item" e "Valor
-Bruto" sempre saem com o MESMO valor, lado a lado, quando não há IPI/
-desconto (sempre o caso aqui) — acha esse par pela repetição, pega o
-ÚLTIMO par assim (pra não cair no par "falso" Valor Unit./Valor Emb. que
-os itens em KG têm mais cedo na linha), e o preço é o valor 2 posições
-antes desse par. Funciona igual pra CX e pra KG, sem precisar de branch
-separado — mais simples e mais resistente a colunas que o TOTVS mude de
-novo no futuro.
+FIX (10/09/2026): nome de produto pode quebrar em ATÉ 2 linhas de
+continuação, não só 1 (ex.: "CHISPE" + "SALGADO PORC" + "KG - REF: 53" —
+o "REF: 53" é resquício de referência a ignorar, o "KG" faz parte do nome
+de verdade). O "REF:" às vezes vem grudado na linha ("KG - REF: 53"),
+às vezes em linha própria ("REF: 83", depois de "DEF PORC KG -").
+
+IMPORTANTE: isso NÃO relaxa o matching -- continua sendo exato, sempre.
+O que essa lógica faz é só tentar RECONSTRUIR o texto (já que o PDF quebra
+o nome de formas variáveis, imprevisíveis, sem relação com o pedido em
+si) de algumas formas plausíveis (linha crua, sem "KG", sem sufixo
+"- REF: N", e sem os dois; até 2 linhas seguintes) -- só aceita uma
+reconstrução se ela bater CARACTERE POR CARACTERE com um nome já
+cadastrado no Perfil. Se nenhuma reconstrução bater, erro claro, igual
+sempre foi. Nunca aproxima produto diferente, nunca "adivinha" -- só dá
+mais chances de achar a forma certa de juntar um nome que o PDF quebrou
+em pedaços.
 """
 
 import io
 import re
 import pdfplumber
-from perfil import processar_item
+from perfil import processar_item, match_perfil
 
 CNPJ_DISTRIBUIDORA = '56.423.719'
 CNPJ_INDUSTRIA = '10.171.633'
@@ -66,11 +68,60 @@ def _preco_e_total(nums):
     return preco, total
 
 
-def _parse_item(ln, prox):
+def _candidatos_continuacao(prox):
+    """Gera as variações plausíveis de uma linha de continuação de nome:
+    crua, sem 'KG', sem sufixo '- REF: N' (às vezes grudado na mesma
+    linha, ex.: "KG - REF: 53"), e sem os dois -- sempre removendo um
+    hífen solto que sobra no final (ex.: "DEF PORC KG -", quando o
+    "REF: N" vem numa linha SEPARADA em vez de grudado). Devolve também
+    o "fallback" mais seguro (sem REF/hífen solto) pra usar quando nada
+    bate ainda, mas pode precisar de mais uma linha depois."""
+    cands = [prox]
+    sem_ref = re.sub(r'\s*-\s*REF:.*$', '', prox, flags=re.I).strip().rstrip('-').strip()
+    if sem_ref and sem_ref not in cands:
+        cands.append(sem_ref)
+    sem_kg = re.sub(r'\bKG\b', '', prox).strip().rstrip('-').strip()
+    if sem_kg and sem_kg not in cands:
+        cands.append(sem_kg)
+    sem_kg_ref = re.sub(r'\bKG\b', '', sem_ref).strip().rstrip('-').strip()
+    if sem_kg_ref and sem_kg_ref not in cands:
+        cands.append(sem_kg_ref)
+    return cands, sem_ref
+
+
+def _tenta_nome_completo(nome_base, linhas, i_prox, produtos, max_linhas_extra=2):
+    """Tenta casar nome_base sozinho contra o Perfil; se não bater, vai
+    mesclando as linhas seguintes (até max_linhas_extra), testando cada
+    combinação -- só usa a versão mesclada quando resulta num MATCH
+    EXATO de verdade. Pula/para se achar EANs/TOTAIS/REF ou início de
+    outro item."""
+    nome = nome_base
+    if match_perfil(nome, produtos):
+        return nome
+    j = i_prox
+    extra = 0
+    while extra < max_linhas_extra and j < len(linhas):
+        prox = linhas[j].strip()
+        if not prox or re.match(r'^\d{4,6}\s', prox) or prox.startswith(('EANs', 'TOTAIS', 'REF:')):
+            break
+        cands, fallback = _candidatos_continuacao(prox)
+        for c in cands:
+            tentativa = (nome + ' ' + c).strip()
+            if match_perfil(tentativa, produtos):
+                return tentativa
+        nome = (nome + ' ' + fallback).strip() if fallback else nome
+        j += 1
+        extra += 1
+    return nome
+
+
+def _parse_item(ln):
+    """Extrai só o que dá pra tirar da PRÓPRIA linha do item -- nome
+    ainda pode estar incompleto (ver _tenta_nome_completo, chamado
+    depois, já com acesso ao Perfil pra confirmar a mesclagem)."""
     parts = ln.split()
     if not parts or not re.match(r'^\d{4,6}$', parts[0]):
         return None
-    # embalagem = primeiro CX/KG cujo próximo token é numérico
     emb_j = None
     for j, p in enumerate(parts):
         if p in ('CX', 'KG') and j + 1 < len(parts) and re.match(r'^[\d.,]+$', parts[j + 1]):
@@ -78,7 +129,6 @@ def _parse_item(ln, prox):
             break
     if emb_j is None:
         return None
-    # nome = tokens entre os dígitos iniciais (cod/seq) e a embalagem
     k = 0
     while k < len(parts) and re.match(r'^\d{3,6}$', parts[k]):
         k += 1
@@ -87,11 +137,6 @@ def _parse_item(ln, prox):
     preco, total = _preco_e_total(nums)
     if not preco:
         return None
-    # sufixo do nome na próxima linha (não puxa '- REF:', 'EANs', códigos)
-    if prox and len(prox) < 30 and not prox.startswith(('EANs', 'TOTAIS', '- REF')):
-        suf = re.sub(r'\bKG\b', '', prox).strip().rstrip('-').strip()
-        if suf and not suf.upper().startswith('REF'):
-            nome = (nome + ' ' + suf).strip()
     kg = round(total / preco, 3) if preco else 0.0
     return {'cod': parts[0], 'nome': nome, 'kg': kg, 'preco': preco, 'total': total}
 
@@ -101,12 +146,8 @@ def parse(pdf_bytes, produtos):
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
         paginas_txt = [(p.extract_text() or '') for p in pdf.pages]
 
-    # Agrupa páginas pelo Nº do pedido repetido no cabeçalho. FIX
-    # (26/08/2026): mesmo bug achado no dom_atacarejo.py -- "2 págs por
-    # pedido" era só o caso comum, não uma garantia. Pedido que estourasse
-    # de 2 páginas tinha itens da 3ª página cortados silenciosamente (nunca
-    # escaneados). Agrupa dinamicamente e escaneia itens em TODAS as
-    # páginas do grupo, não só a primeira.
+    # Agrupa páginas pelo Nº do pedido repetido no cabeçalho -- pedido que
+    # estoura de 2 páginas tem itens escaneados em TODAS as páginas do grupo.
     grupos = []
     pedido_atual = None
     for txt in paginas_txt:
@@ -152,12 +193,12 @@ def parse(pdf_bytes, produtos):
 
         itens = []
         for i, ln in enumerate(lines_itens):
-            prox = lines_itens[i + 1].strip() if i + 1 < len(lines_itens) else ''
-            d = _parse_item(ln.strip(), prox)
+            d = _parse_item(ln.strip())
             if not d:
                 continue
+            nome_completo = _tenta_nome_completo(d['nome'], lines_itens, i + 1, produtos)
             # kg já é físico -> passa como KG p/ processar_item não multiplicar
-            it = processar_item(d['cod'], d['nome'], 'KG', 1, d['kg'], d['preco'], d['total'], produtos)
+            it = processar_item(d['cod'], nome_completo, 'KG', 1, d['kg'], d['preco'], d['total'], produtos)
             it['empresa'] = empresa
             itens.append(it)
 
