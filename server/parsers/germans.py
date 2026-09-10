@@ -120,15 +120,17 @@ def _parse_item(ln):
     ainda pode estar incompleto (ver _tenta_nome_completo, chamado
     depois, já com acesso ao Perfil pra confirmar a mesclagem).
 
-    FIX (10/09/2026): o "Cod Forn" normalmente tem 4-6 dígitos
-    (ex.: "000075"), mas um item real veio com um código de barras (EAN)
-    de 14 dígitos no lugar ("17898611040078") -- com o limite de 6
-    dígitos, a linha inteira era descartada em SILÊNCIO (sem erro
-    nenhum), o item simplesmente sumia. Ampliado pra aceitar até 20
-    dígitos, cobrindo tanto o código curto normal quanto um EAN
-    completo."""
+    FIX (10/09/2026, simplificado): o "Cod Forn" normalmente tem 4-6
+    dígitos, mas um item real veio com um código de barras (EAN) de 14
+    dígitos no lugar -- tentei primeiro só ampliar o limite (até 20
+    dígitos), mas o limite em si nunca devia existir: quem de fato
+    delimita onde o CÓDIGO termina e o NOME do produto começa é a
+    coluna Embalagem (o primeiro "CX"/"KG" seguido de número), não a
+    quantidade de dígitos do código. Removido o limite de tamanho por
+    completo -- qualquer sequência de dígitos no início conta como
+    código, não importa quantos dígitos tenha."""
     parts = ln.split()
-    if not parts or not re.match(r'^\d{4,20}$', parts[0]):
+    if not parts or not re.match(r'^\d+$', parts[0]):
         return None
     emb_j = None
     for j, p in enumerate(parts):
@@ -138,7 +140,7 @@ def _parse_item(ln):
     if emb_j is None:
         return None
     k = 0
-    while k < len(parts) and re.match(r'^\d{3,20}$', parts[k]):
+    while k < len(parts) and re.match(r'^\d+$', parts[k]):
         k += 1
     nome = ' '.join(parts[k:emb_j])
     nums = parts[emb_j + 1:]
