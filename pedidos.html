@@ -333,8 +333,19 @@
     return true;
   }
 
+  function _parseUTC(str) {
+    // Timestamps do backend são gerados com datetime.utcnow().isoformat()
+    // -- vêm SEM indicador de fuso ("Z"/"+00:00"), e o JS por padrão
+    // interpreta isso como horário LOCAL, não UTC, adicionando 3h de erro
+    // (Brasília é UTC-3). Corrige acrescentando "Z" quando não tiver fuso.
+    if (str && str.indexOf('T') !== -1 && !/[Zz]$|[+-]\d{2}:?\d{2}$/.test(str)) {
+      str = str + 'Z';
+    }
+    return new Date(str);
+  }
+
   function idadeHoras(dataGeracao) {
-    return (Date.now() - new Date(dataGeracao).getTime()) / 3600000;
+    return (Date.now() - _parseUTC(dataGeracao).getTime()) / 3600000;
   }
 
   function classePorIdade(horas) {
@@ -364,13 +375,18 @@
   }
   function formatarDataProg(iso) {
     var d = new Date(iso); if (isNaN(d)) return iso;
-    return d.toLocaleDateString('pt-BR') + ' 08h';
+    // iso é só a DATA (sem hora) -- já é interpretado como meia-noite UTC.
+    // Usa os componentes UTC (não locais) pra não deslocar o dia ao
+    // converter pro fuso de Brasília (senão "15/09" viraria "14/09" errado).
+    var dia = String(d.getUTCDate()).padStart(2, '0');
+    var mes = String(d.getUTCMonth() + 1).padStart(2, '0');
+    return dia + '/' + mes + '/' + d.getUTCFullYear() + ' 08h';
   }
 
   function formatarData(str) {
     if (!str) return '—';
     if (str.includes('T')) {
-      var d = new Date(str);
+      var d = _parseUTC(str);
       return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
     }
     return str;
