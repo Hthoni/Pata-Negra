@@ -75,8 +75,12 @@ def parse(pdf_bytes, produtos):
         qtde = _num(nums[-8])          # nº de caixas
         preco = _num(nums[-4])         # Unitário (R$/kg; p/ LING é R$/pct)
         total = _num(nums[-1])         # Valor total da linha
-        # remove a unidade que fecha o nome (" kg"), preserva pesos ("400g")
-        nome = re.sub(r'\s+kg$', '', nome, flags=re.I).strip()
+        # FIX (10/09/2026): removida a limpeza de sufixo " kg" do nome --
+        # mesmo bug já visto no Assaí (03/09/2026): o perfil cadastra o
+        # nome COM "kg" incluído (ex.: "BACON DEF PORCIONADO kg" é o nome
+        # de verdade), a limpeza arrancava exatamente essa parte antes de
+        # comparar. Testado: sem a limpeza, os 10 itens batem 100%; com
+        # ela, 9 de 10 davam "produto não cadastrado".
         it = processar_item('', nome, 'CX', 1, qtde, preco, total, produtos)
         itens.append(it)
 
