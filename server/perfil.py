@@ -236,12 +236,6 @@ def processar_item(cod_cli, nome_raw, emb_tipo, qtde_emb, qtde_ped, preco, total
     produto nele) do que gerar um romaneio errado ou incompleto."""
     nome_raw = re.sub(r'\s+', ' ', nome_raw).strip()
     pf = match_perfil(nome_raw, produtos)
-    # LOG DE DIAGNÓSTICO TEMPORÁRIO (10/09/2026) -- investigando bug real
-    # em produção (Germans, Garganta Granel/Porcionado saindo com dado
-    # duplicado). Remover depois de confirmar a causa.
-    print(f'[DEBUG-MATCH] nome_raw={nome_raw!r} -> '
-          f'codInterno={pf.get("codInterno") if pf else None!r} '
-          f'nomePerfil={pf.get("nomePerfil") if pf else None!r}')
     if pf is None:
         raise ValueError(f'Produto não cadastrado no perfil do mercado: "{nome_raw}"')
     kgCx = pf['kgCx']
