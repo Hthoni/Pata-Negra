@@ -26,7 +26,8 @@ def parse(pdf_bytes, produtos):
         return m.group(1).strip() if m else ''
 
     # Nº do pedido: usa o do RODAPÉ (Observação -> 'Pedido: NNNNNN'), que é o
-    # número que o Henrique controla; cai no Nº do cabeçalho só se faltar.
+    # número que o Henrique controla; cai no Nº do cabeçalho só se faltar
+    # (alguns pedidos não trazem essa linha no rodapé, só uma observação livre).
     pedidoNum = (fm(r'Observaç[ãa]o\s*Pedido:\s*(\d+)')
                  or fm(r'\bPedido:\s*(\d+)')
                  or fm(r'Informações sobre PEDIDO.*?Nº\s*(\d+)'))
@@ -36,9 +37,14 @@ def parse(pdf_bytes, produtos):
     filial = filial_m.group(1).strip().rstrip(',') if filial_m else 'ADONAI'
     endereco = filial_m.group(1).strip() if filial_m else ''
 
-    # itens: Seq  Cód  Nome  Qtde  IPI%  Peso  Preço/Kg  Total
+    # itens: Seq  Cód  Nome  [colunas variáveis: Qtde/IPI%/Peso]  Preço/Kg  Total
+    # Formatos antigos traziam Qtde+IPI%+Peso antes do preço; o formato atual
+    # (14/09/2026 em diante) só traz "Peso (Kg)". Por isso ancoramos pelo "R$"
+    # e capturamos apenas o ÚLTIMO número antes dele — funciona nos dois casos
+    # sem precisar detectar qual formato é.
     reItem = re.compile(
-        r'(\d+)\s+(\d+(?:-\d+)?)\s+([A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇ][^\n]+?)\s+([\d.,]+)\s+[\d,.]+\s+[\d,.]+\s+R\$\s*([\d,.]+)\s+([\d,.]+)',
+        r'(\d+)\s+(\d+(?:-\d+)?)\s+([A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇ][^\n]+?)\s+'
+        r'(?:[\d.,]+\s+)*([\d.,]+)\s+R\$\s*([\d,.]+)\s+([\d,.]+)',
         re.M
     )
     itens = []
