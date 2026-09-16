@@ -42,6 +42,21 @@ CNPJ_DISTRIBUIDORA = '56.423.719'
 CNPJ_INDUSTRIA = '10.171.633'
 
 
+
+def _paginas_texto(pdf):
+    """Extrai o texto de cada página e FECHA a página em seguida.
+
+    FIX (16/09/2026): '[p.extract_text() for p in pdf.pages]' mantém a
+    estrutura de todas as páginas viva na memória até o fim -- medido num
+    pedido real do Atacadão (36 págs): +444 MB assim, +14 MB fechando cada
+    página, texto idêntico. Foi o que derrubou a instância do Cloud Run
+    (limite 512 MB, OOM aos 5 s, 'Failed to fetch' e nenhum pedido criado)."""
+    textos = []
+    for p in pdf.pages:
+        textos.append(p.extract_text() or '')
+        p.close()
+    return textos
+
 def _num(s):
     return float(str(s).replace('.', '').replace(',', '.'))
 
@@ -154,7 +169,7 @@ def _parse_item(ln):
 def parse(pdf_bytes, produtos):
     filiais = []
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-        paginas_txt = [(p.extract_text() or '') for p in pdf.pages]
+        paginas_txt = _paginas_texto(pdf)
 
     # Agrupa páginas pelo Nº do pedido repetido no cabeçalho -- pedido que
     # estoura de 2 páginas tem itens escaneados em TODAS as páginas do grupo.
