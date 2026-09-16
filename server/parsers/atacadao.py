@@ -20,6 +20,21 @@ CNPJ_INDUSTRIA = '10.171.633'
 CNPJ_RE = r'\d{2}\.?\d{3}\.?\d{3}\s*/\s*\d{4}\s*-\s*\d{2}'  # pontos opcionais (Atacadão não pontua) + espaço opcional ao redor de / e - (artefato do pdfplumber)
 
 
+
+def _paginas_texto(pdf):
+    """Extrai o texto de cada página e FECHA a página em seguida.
+
+    FIX (16/09/2026): '[p.extract_text() for p in pdf.pages]' mantém a
+    estrutura de todas as páginas viva na memória até o fim -- medido num
+    pedido real do Atacadão (36 págs): +444 MB assim, +14 MB fechando cada
+    página, texto idêntico. Foi o que derrubou a instância do Cloud Run
+    (limite 512 MB, OOM aos 5 s, 'Failed to fetch' e nenhum pedido criado)."""
+    textos = []
+    for p in pdf.pages:
+        textos.append(p.extract_text() or '')
+        p.close()
+    return textos
+
 def _extrai_chave(txt):
     """CNPJ de entrega + número do pedido dessa página — identifica a loja."""
     m_cnpj = re.search(rf'Local de Entrega:\s*({CNPJ_RE})', txt, re.I)
@@ -55,7 +70,7 @@ def _agrupar_paginas_por_loja(page_texts):
 
 def parse(pdf_bytes, produtos):
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-        page_texts = [p.extract_text() or '' for p in pdf.pages]
+        page_texts = _paginas_texto(pdf)
 
     blocos = _agrupar_paginas_por_loja(page_texts)
 
