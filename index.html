@@ -915,15 +915,19 @@ async function gerarPedido() {
 // CLIENTE AVULSO — pedido pontual sem parser/perfil dedicado.
 // Popup próprio (#overlayAvulso), independente do fluxo S.cliente acima.
 // ═══════════════════════════════════════════════════════════════════
-var _avulso = { produtosMaster: [], itens: [], faturamentoEncontrado: false, regiao: '', lat: null, lng: null };
+var _avulso = { arvore: {}, familias: [], itens: [], faturamentoEncontrado: false, regiao: '', lat: null, lng: null };
 
 function abrirPedidoAvulso() {
   document.getElementById('overlayAvulso').classList.add('aberto');
   _avulso.itens = [avCriarItemVazio()];
   fetch(SERVER_URL + '/master/produtos')
     .then(function(r){ return r.json(); })
-    .then(function(d){ _avulso.produtosMaster = d.produtos || []; avRenderizarPopup(); })
-    .catch(function(){ _avulso.produtosMaster = []; avRenderizarPopup(); });
+    .then(function(d){
+      _avulso.arvore = d.produtos || {};
+      _avulso.familias = Object.keys(_avulso.arvore).sort(function(a,b){ return a.localeCompare(b,'pt-BR'); });
+      avRenderizarPopup();
+    })
+    .catch(function(){ _avulso.arvore = {}; _avulso.familias = []; avRenderizarPopup(); });
 }
 
 function fecharPedidoAvulso() {
@@ -931,7 +935,7 @@ function fecharPedidoAvulso() {
 }
 
 function avCriarItemVazio() {
-  return { codigoMaster:'', nomeProduto:'', quantidade:'', unidade:'kg', pesoUnitKg:'', embalagem:'', precoUnit:'', empresa:'2' };
+  return { familia:'', formato:'', emb:'', unidade:'', codigoMaster:'', nomeProduto:'', quantidade:'', pesoUnitKg:'', embalagem:'', precoUnit:'', empresa:'2' };
 }
 
 function avDataHojeBR() {
@@ -982,8 +986,8 @@ function avRenderizarPopup() {
 
     '<table class="itens">' +
       '<thead><tr>' +
-        '<th>#</th><th>Produto</th><th>Quantidade</th><th>Peso unit. (kg)</th>' +
-        '<th>Embalagem</th><th>Preço Unit.</th><th>Empresa</th>' +
+        '<th>#</th><th>Produto</th><th>Formato</th><th>Emb.</th><th>Faturar por</th>' +
+        '<th>Quantidade</th><th>Preço Unit.</th><th>Empresa</th>' +
         '<th>Kg Planejados</th><th>Valor R$</th><th></th>' +
       '</tr></thead>' +
       '<tbody id="avCorpoTabela"></tbody>' +
@@ -1006,26 +1010,69 @@ function avRenderizarPopup() {
   avRenderizarLinhas();
 }
 
+// Helpers de navegação na árvore: familia -> formato -> emb -> folha {faturar,pesoCaixa,pesoPct,nome}
+function avFormatos(fam){ var f = _avulso.arvore[fam]; return f ? Object.keys(f) : []; }
+function avEmbs(fam, fmt){ var e = (_avulso.arvore[fam]||{})[fmt]; return e ? Object.keys(e) : []; }
+function avFolha(it){ try { return _avulso.arvore[it.familia][it.formato][it.emb]; } catch(e){ return null; } }
+function avUnidLabel(u){ return u==='Kg' ? 'kg' : (u==='Cx' ? 'caixas' : 'pacotes'); }
+
+// Preenche automaticamente os níveis que só têm 1 opção (UX: sempre 4 dropdowns,
+// única opção já selecionada). Reajusta cascata quando um nível de cima muda.
+function avNormalizarItem(it){
+  var fmts = avFormatos(it.familia);
+  if (it.formato && fmts.indexOf(it.formato) < 0) it.formato = '';
+  if (!it.formato && fmts.length === 1) it.formato = fmts[0];
+  var embs = avEmbs(it.familia, it.formato);
+  if (it.emb && embs.indexOf(it.emb) < 0) it.emb = '';
+  if (!it.emb && embs.length === 1) it.emb = embs[0];
+  var folha = avFolha(it);
+  var fats = folha ? Object.keys(folha.faturar) : [];
+  if (it.unidade && fats.indexOf(it.unidade) < 0) it.unidade = '';
+  if (!it.unidade && fats.length === 1) it.unidade = fats[0];
+  // deriva código, nome e peso a partir da folha + faturamento escolhido
+  if (folha && it.unidade){
+    it.codigoMaster = folha.faturar[it.unidade] || '';
+    it.nomeProduto = folha.nome || '';
+    it.embalagem = 'CX-' + it.emb;
+    it.pesoUnitKg = it.unidade === 'Cx' ? folha.pesoCaixa
+                  : (it.unidade === 'Pct' ? folha.pesoPct : '');
+  } else {
+    it.codigoMaster = ''; it.nomeProduto = '';
+  }
+}
+
+function _opt(v, sel, label){ return '<option value="'+v+'"'+(v===sel?' selected':'')+'>'+(label||v)+'</option>'; }
+
 function avRenderizarLinhas() {
   var corpo = document.getElementById('avCorpoTabela');
   corpo.innerHTML = _avulso.itens.map(function(it, i) {
-    var opcoesProduto = '<option value="">Selecione…</option>';
-    _avulso.produtosMaster.forEach(function(p) {
-      opcoesProduto += '<option value="' + p.codigo + '"' + (it.codigoMaster === p.codigo ? ' selected' : '') + '>' + p.nome + '</option>';
-    });
+    avNormalizarItem(it);
+    var optFam = '<option value="">Selecione…</option>';
+    _avulso.familias.forEach(function(f){ optFam += _opt(f, it.familia); });
+
+    var fmts = avFormatos(it.familia);
+    var optFmt = fmts.length ? '' : '<option value="">—</option>';
+    if (fmts.length && !it.formato) optFmt = '<option value="">Selecione…</option>';
+    fmts.forEach(function(f){ optFmt += _opt(f, it.formato); });
+
+    var embs = avEmbs(it.familia, it.formato);
+    var optEmb = embs.length ? '' : '<option value="">—</option>';
+    if (embs.length && !it.emb) optEmb = '<option value="">Selecione…</option>';
+    embs.forEach(function(e){ optEmb += _opt(e, it.emb, e + ' kg'); });
+
+    var folha = avFolha(it);
+    var fats = folha ? Object.keys(folha.faturar) : [];
+    var optFat = fats.length ? '' : '<option value="">—</option>';
+    if (fats.length && !it.unidade) optFat = '<option value="">Selecione…</option>';
+    fats.forEach(function(u){ optFat += _opt(u, it.unidade, avUnidLabel(u)); });
+
     return `<tr>
       <td>${i + 1}</td>
-      <td class="nome-produto"><select data-index="${i}" onchange="avProdutoSelecionado(${i})" style="width:100%">${opcoesProduto}</select></td>
-      <td><div class="qtde-wrap">
-        <input type="number" min="0" step="0.1" value="${it.quantidade}" oninput="avLinhaMudou(${i},'quantidade',this.value)" placeholder="0">
-        <select class="unidade-label" onchange="avLinhaMudou(${i},'unidade',this.value)">
-          <option value="kg" ${it.unidade==='kg'?'selected':''}>KG</option>
-          <option value="pct" ${it.unidade==='pct'?'selected':''}>PCT</option>
-          <option value="cx" ${it.unidade==='cx'?'selected':''}>CX</option>
-        </select>
-      </div></td>
-      <td><input type="number" min="0" step="0.01" value="${it.pesoUnitKg}" placeholder="—" ${it.unidade==='kg'?'disabled':''} oninput="avLinhaMudou(${i},'pesoUnitKg',this.value)" style="width:70px"></td>
-      <td><input type="text" value="${it.embalagem}" placeholder="ex: CX-25" oninput="avLinhaMudou(${i},'embalagem',this.value)" style="width:90px"></td>
+      <td class="nome-produto"><select onchange="avLinhaMudou(${i},'familia',this.value)" style="width:100%">${optFam}</select></td>
+      <td><select onchange="avLinhaMudou(${i},'formato',this.value)" style="width:100%" ${fmts.length?'':'disabled'}>${optFmt}</select></td>
+      <td><select onchange="avLinhaMudou(${i},'emb',this.value)" style="width:78px" ${embs.length?'':'disabled'}>${optEmb}</select></td>
+      <td><select class="unidade-label" onchange="avLinhaMudou(${i},'unidade',this.value)" ${fats.length?'':'disabled'}>${optFat}</select></td>
+      <td><input type="number" min="0" step="0.1" value="${it.quantidade}" oninput="avLinhaMudou(${i},'quantidade',this.value)" placeholder="0" style="width:80px"></td>
       <td><input type="number" min="0" step="0.01" value="${it.precoUnit}" placeholder="0,00" oninput="avLinhaMudou(${i},'precoUnit',this.value)" style="width:75px"></td>
       <td><select onchange="avLinhaMudou(${i},'empresa',this.value)" style="width:100%">
         <option value="1" ${it.empresa==='1'?'selected':''}>Indústria</option>
@@ -1039,17 +1086,18 @@ function avRenderizarLinhas() {
   _avulso.itens.forEach(function(_, i){ avRecalcularLinha(i); });
 }
 
-function avProdutoSelecionado(i) {
-  var sel = document.querySelectorAll('#avCorpoTabela select')[i * 3];  // 1º select da linha = produto
-  var p = _avulso.produtosMaster.filter(function(p){ return p.codigo === sel.value; })[0];
-  _avulso.itens[i].codigoMaster = sel.value;
-  _avulso.itens[i].nomeProduto = p ? p.nome : '';
-  avValidarFormulario();
-}
-
 function avLinhaMudou(i, campo, valor) {
   _avulso.itens[i][campo] = valor;
-  if (campo === 'unidade') { avRenderizarLinhas(); return; }  // reconstrói pra habilitar/desabilitar Peso unit.
+  // mudar família/formato/emb/faturamento reconstrói a cascata; quantidade/preço/empresa não
+  if (campo === 'familia' || campo === 'formato' || campo === 'emb' || campo === 'unidade') {
+    if (campo === 'familia') { _avulso.itens[i].formato=''; _avulso.itens[i].emb=''; _avulso.itens[i].unidade=''; }
+    if (campo === 'formato') { _avulso.itens[i].emb=''; _avulso.itens[i].unidade=''; }
+    if (campo === 'emb') { _avulso.itens[i].unidade=''; }
+    avRenderizarLinhas();
+    avRecalcularTotais();
+    avValidarFormulario();
+    return;
+  }
   avRecalcularLinha(i);
   avRecalcularTotais();
   avValidarFormulario();
@@ -1067,7 +1115,7 @@ function avRecalcularLinha(i) {
     if (valEl) valEl.textContent = '—';
     return;
   }
-  var kg = it.unidade === 'kg' ? qtde : qtde * peso;
+  var kg = it.unidade === 'Kg' ? qtde : qtde * peso;  // Cx/Pct multiplicam pelo peso da folha
   var valor = qtde * preco;
   if (kgEl) kgEl.textContent = kg.toLocaleString('pt-BR', {maximumFractionDigits:1});
   if (valEl) valEl.textContent = valor.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -1081,7 +1129,7 @@ function avRecalcularTotais() {
     var preco = parseFloat(it.precoUnit) || 0;
     if (!qtde || !it.codigoMaster) return;
     n++;
-    kgTot += it.unidade === 'kg' ? qtde : qtde * peso;
+    kgTot += it.unidade === 'Kg' ? qtde : qtde * peso;
     valTot += qtde * preco;
   });
   document.getElementById('avTotalItens').textContent = n;
@@ -1156,7 +1204,7 @@ function avGerarPedido() {
         codigoMaster: it.codigoMaster,
         nomeProduto: it.nomeProduto,
         quantidade: parseFloat(it.quantidade),
-        unidade: it.unidade,
+        unidade: (it.unidade || 'kg').toLowerCase(),
         pesoUnitKg: parseFloat(it.pesoUnitKg) || null,
         embalagem: it.embalagem,
         precoUnit: parseFloat(it.precoUnit) || 0,
