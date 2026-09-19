@@ -666,13 +666,17 @@ def buscar_faturamento_avulso(cnpj):
 
 @app.route('/master/produtos')
 def master_produtos_lista():
-    """Lista {codigo, nome} da tabela MASTER, pro dropdown de produto do
-    popup de Cliente Avulso (não existe perfil próprio nesse fluxo)."""
+    """Árvore de produtos da MASTER pro popup de Cliente Avulso:
+    {familia: {formato: {emb: {faturar:{Kg,Cx,Pct}, pesoCaixa, pesoPct, nome}}}}.
+    Os 4 dropdowns encadeados do popup (Produto->Formato->Embalagem->Faturar por)
+    leem direto essa estrutura; a folha traz o código e os pesos, sem o front
+    precisar adivinhar nada. 'Do Seu Jeito' fica de fora (linha Zona Sul).
+    FIX (18/09/2026): antes devolvia lista plana {codigo, nome} da coluna B;
+    o operador escolhia o produto completo num dropdown só de ~50 opções e
+    digitava peso/embalagem à mão. Agora vem tudo da MASTER (colunas Formato
+    e Peso Pct novas)."""
     try:
-        mapa = master.get_mapa()  # {codigo_normalizado: nome}
-        lista = [{'codigo': c, 'nome': n} for c, n in mapa.items()]
-        lista.sort(key=lambda p: p['nome'])
-        return jsonify({'produtos': lista})
+        return jsonify({'produtos': master.arvore_avulso()})
     except Exception as e:
         return jsonify({'erro': str(e)}), 500
 
