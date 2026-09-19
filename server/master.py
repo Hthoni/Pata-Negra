@@ -61,6 +61,11 @@ def _carregar():
 
     col_nome = 2 if layout_novo else 1
     col_cod_ini = 3 if layout_novo else 2
+    # No layout novo os códigos ocupam SÓ as colunas C, D, E (Kg/Pct/Cx);
+    # de F em diante vêm metadados (peso da caixa, Formato, Peso Pct) que
+    # NÃO são código -- varrer até o fim faria o peso do pacote (0,5/0,4)
+    # vazar pro de-para como se fosse um código. Por isso o limite é fixo.
+    col_cod_fim = 5 if layout_novo else ws.max_column
     for r in range(2, ws.max_row + 1):
         nome = ws.cell(r, col_nome).value
         if not nome or not str(nome).strip():
@@ -71,7 +76,7 @@ def _carregar():
             rz = str(ws.cell(r, 1).value or '').strip()
             if rz:
                 raizes[nome] = rz
-        for c in range(col_cod_ini, ws.max_column + 1):
+        for c in range(col_cod_ini, col_cod_fim + 1):
             s = _norm(ws.cell(r, c).value)
             if _eh_codigo(s):
                 mapa[s] = nome
@@ -130,3 +135,68 @@ def raiz(nome):
         if r != n:
             return r.strip()
     return n
+
+
+# ── Árvore de produtos para o popup de Cliente Avulso ────────────────────
+# Lê as colunas do layout NOVO da MASTER:
+#   A=Família  B=Nome  C=cód Kg  D=cód Pct  E=cód Cx  F=peso caixa(10/20)
+#   G=Formato (Porcionado/Granel/Especial/Do Seu Jeito)  H=peso pacote(kg)
+# Monta {familia: {formato: {emb: {faturar:{Kg,Cx,Pct}, pesoCaixa, pesoPct,
+#                                   nome, codBase}}}}. "Do Seu Jeito" fica de
+# fora (linha exclusiva do Zona Sul, não vendida a terceiros no avulso).
+_FORMATOS_FORA_AVULSO = {'DO SEU JEITO'}
+
+
+def arvore_avulso():
+    if not master_existe():
+        return {}
+    wb = openpyxl.load_workbook(io.BytesIO(carregar_master_bytes()), data_only=True)
+    ws = wb['Produtos MASTER'] if 'Produtos MASTER' in wb.sheetnames else wb[wb.sheetnames[0]]
+
+    # confirma que é o layout novo (col B textual); no antigo não há Formato
+    layout_novo = False
+    for r in range(2, ws.max_row + 1):
+        a = _norm(ws.cell(r, 1).value); b = _norm(ws.cell(r, 2).value)
+        if not a:
+            continue
+        if b and not _eh_codigo(b):
+            layout_novo = True
+        break
+    if not layout_novo:
+        return {}
+
+    arvore = {}
+    for r in range(2, ws.max_row + 1):
+        familia = str(ws.cell(r, 1).value or '').strip()
+        nome = str(ws.cell(r, 2).value or '').strip()
+        if not familia or not nome:
+            continue
+        formato = str(ws.cell(r, 7).value or '').strip()
+        if not formato or formato.upper() in _FORMATOS_FORA_AVULSO:
+            continue
+        emb = _norm(ws.cell(r, 6).value)  # 10 ou 20
+        cod_kg = _norm(ws.cell(r, 3).value)
+        cod_pct = _norm(ws.cell(r, 4).value)
+        cod_cx = _norm(ws.cell(r, 5).value)
+        faturar = {}
+        if _eh_codigo(cod_kg):  faturar['Kg'] = cod_kg
+        if _eh_codigo(cod_pct): faturar['Pct'] = cod_pct
+        if _eh_codigo(cod_cx):  faturar['Cx'] = cod_cx
+        if not faturar:
+            continue
+        peso_pct = ws.cell(r, 8).value
+        try:
+            peso_pct = float(str(peso_pct).replace(',', '.')) if peso_pct not in (None, '') else None
+        except (ValueError, TypeError):
+            peso_pct = None
+        try:
+            peso_caixa = float(str(emb).replace(',', '.')) if emb else None
+        except (ValueError, TypeError):
+            peso_caixa = None
+        arvore.setdefault(familia, {}).setdefault(formato, {})[emb] = {
+            'faturar': faturar,
+            'pesoCaixa': peso_caixa,
+            'pesoPct': peso_pct,
+            'nome': nome,
+        }
+    return arvore
