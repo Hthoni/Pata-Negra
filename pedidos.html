@@ -360,18 +360,36 @@
     if (isNaN(d)) return null;
     return (d.getTime() - Date.now()) / 3600000;
   }
-  function idadeEfetiva(rom) {
-    var ate = horasAteEntrega(rom);
-    if (ate === null) return idadeHoras(rom.dataGeracao);
-    return 120 - ate;
-  }
   function isDormente(rom) {
     var ate = horasAteEntrega(rom);
-    return ate !== null && ate > 60;
+    return ate !== null && ate > 120;   // programado com +120h pra entrega -> Programado (branco)
+  }
+  // Cor de um pedido PROGRAMADO pela contagem regressiva até a entrega
+  // (regra 19/09/2026): >120h branco, 120–96 verde, 96–48 amarelo,
+  // 48–24 laranja, <24h vermelho. Escala por horas RESTANTES, direto --
+  // sem o antigo truque "120 - ate", que fazia o pedido pular de branco
+  // pra amarelo sem passar pelo verde.
+  function classePorEntrega(ate) {
+    if (ate > 96) return { cls:'verde',    label:'Programado', bg:'#d5f5e3', txt:'#1e8449' };
+    if (ate > 48) return { cls:'amarelo',  label:'Atenção',    bg:'#fef9e7', txt:'#b7950b' };
+    if (ate > 24) return { cls:'laranja',  label:'Atrasado',   bg:'#fdebd0', txt:'#a04000' };
+    return             { cls:'vermelho', label:'Crítico',    bg:'#fdedec', txt:'#922b21' };
+  }
+  function horasBadge(rom, horas) {
+    var ate = horasAteEntrega(rom);
+    if (ate !== null) {
+      if (ate > 120) return '';                    // Programado (branco): sem número
+      return Math.max(0, Math.round(ate)) + 'h';   // conta regressiva até a entrega
+    }
+    return Math.round(horas) + 'h';                // pedido comum: idade desde a geração
   }
   function classeDe(rom) {
-    if (isDormente(rom)) return { cls:'dormente', label:'Programado', bg:'#f2f2f2', txt:'#8a8a8a' };
-    return classePorIdade(idadeEfetiva(rom));
+    var ate = horasAteEntrega(rom);
+    if (ate !== null) {
+      if (ate > 120) return { cls:'dormente', label:'Programado', bg:'#f2f2f2', txt:'#8a8a8a' };
+      return classePorEntrega(ate);
+    }
+    return classePorIdade(idadeHoras(rom.dataGeracao));   // pedido comum: idade desde a geração (inalterado)
   }
   function formatarDataProg(iso) {
     var d = new Date(iso); if (isNaN(d)) return iso;
@@ -448,7 +466,7 @@
 
     var html = '';
     data.forEach(function(rom) {
-      var horas = idadeEfetiva(rom);
+      var horas = idadeHoras(rom.dataGeracao);
       var c = classeDe(rom);
       var noSim = simIds.has(rom.id);
       var emRota = rom.status === 'em_rota';
@@ -481,7 +499,7 @@
           '</div>' +
           '<div class="linha-baixo-direita">' +
             '<div class="badge-idade" style="background:' + c.bg + ';color:' + c.txt + '">' +
-              '<span class="fase">' + c.label + '</span><span class="horas">' + (isDormente(rom) ? '' : Math.round(horas) + 'h') + '</span>' +
+              '<span class="fase">' + c.label + '</span><span class="horas">' + horasBadge(rom, horas) + '</span>' +
             '</div>' +
             '<button class="btn-acao btn-xls" onclick="baixarExcel(\'' + rom.id + '\',' + JSON.stringify(rom.empresas||[]) + ')">Gerar xlx</button>' +
             '<button class="btn-acao btn-entregar" onclick="confirmarEntrega(\'' + rom.id + '\',\'' + (rom.clienteNome||rom.cliente) + '\',\'' + (rom.filial||'') + '\')">Entregue</button>' +
