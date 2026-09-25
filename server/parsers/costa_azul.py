@@ -10,15 +10,21 @@ Todos os itens vêm em KG diretamente (Qtde == Peso(Kg) em todos os pedidos
 de amostra) — sem conversão de caixa/pacote necessária, diferente de outros
 clientes SuasVendas que às vezes misturam unidades.
 
-FIX (04/08/2026): a regex de item herdada do parser do O Bom tinha um bug
-latente no quantifier — só capturava 4 números no máximo (`{2,3}`), mas a
-linha real tem 5 números quando o Preço/Kg vem preenchido (IPI%, Peso,
-Preço/Kg, R$ Total, R$ Total c/ impostos). Isso cortava o último número
-(R$ Total c/ impostos) do texto capturado; não dava sintoma visível porque
-nos pedidos vistos até agora o IPI é sempre 0,00 (os dois totais coincidem),
-mas pegaria o total ERRADO (sem imposto) assim que aparecesse IPI != 0.
-Corrigido para `{3,4}` (4 a 5 números), cobrindo os dois casos: com e sem
-Preço/Kg preenchido.
+FIX (04/08/2026): quantifier da cauda numérica ajustado (histórico).
+
+FIX (25/09/2026): o cliente migrou pro layout SuasVendas mais enxuto
+(mesma mudança já vista em Zona Sul, Torre, GMAP, Padrão do Fonseca). A
+linha do item agora tem só 3 números — Peso(Kg), R$ Preço/Kg, R$ Total —
+sem as colunas IPI%/Total-sem-imposto que existiam antes. A regex antiga
+exigia de 4 a 5 números na cauda; com só 3, ela falhava e, pior, a busca
+gulosa engolia a linha seguinte tentando completar a cauda — resultado
+real: 3 itens capturados em vez de 6, com dados de duas linhas misturados
+(pesos e preços trocados, preços absurdos tipo R$ 4.762/kg no PDF gerado).
+Regex reescrita pro layout novo:
+    Seq  Cód(-dv)  Nome  Peso(Kg)  R$ Preço/Kg  R$ Total
+O total é a última coluna (não há mais "com impostos" separado). Preço/Kg
+vem sempre preenchido nesse layout; mantido o fallback (deriva do total)
+por segurança caso volte a faltar.
 """
 
 __cliente_nome__ = "Costa Azul"
@@ -31,8 +37,8 @@ from perfil import processar_item, match_perfil
 # seq  cod(-dv opcional)  nome  qtde  + cauda numérica (4 ou 5 números,
 # "R$" opcional colado em qualquer um deles, ex.: "R$ 25,74" ou "9.900,00")
 _RE_ITEM = re.compile(
-    r'(\d+)\s+(\d+(?:-\d+)?)\s+([A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇ][^\n]+?)\s+([\d.,]+)\s+'
-    r'((?:R\$\s*)?[\d,.]+(?:\s+(?:R\$\s*)?[\d,.]+){3,4})',
+    r'(\d+)\s+(\d+(?:-\d+)?)\s+([A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇ][^\n]+?)\s+'
+    r'([\d.,]+)\s+R\$\s*([\d,.]+)\s+([\d,.]+)',
     re.M
 )
 
@@ -64,20 +70,13 @@ def parse(pdf_bytes, produtos):
     itens = []
     for m in _RE_ITEM.finditer(txt):
         cod = m.group(2)
-        nome = m.group(3).strip()
+        nome = re.sub(r'\s+', ' ', m.group(3)).strip()
         qtde_ped = _num(m.group(4))
-
-        nums = [_num(n) for n in re.findall(r'[\d.,]+', m.group(5))]
-        if not nums:
-            continue
-        total = nums[-1]  # R$ Total c/ impostos - sempre a última, autoritativa
-
-        if len(nums) >= 5:
-            # IPI%, Peso, Preço/Kg, R$Total, R$Total c/ impostos -> preço veio preenchido
-            preco = nums[2]
-        else:
-            # Preço/Kg ausente (Tabela de Preço "Não definida") -> deriva do total
-            preco = round(total / qtde_ped, 4) if qtde_ped else 0.0
+        preco = _num(m.group(5))
+        total = _num(m.group(6))
+        # fallback: se por acaso o Preço/Kg vier vazio/zerado, deriva do total
+        if not preco and qtde_ped:
+            preco = round(total / qtde_ped, 4)
 
         pf = match_perfil(nome, produtos)
         emb_tipo = 'CX' if (pf and str(pf.get('unidFat', '')).lower() == 'cx') else 'KG'
