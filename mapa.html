@@ -209,10 +209,11 @@
   </div>
   <button id="btn-editar" onclick="toggleEdicao()">Editar zonas</button>
   <div class="legenda">
-    <div class="leg-item"><div class="leg-dot" style="background:#27ae60"></div> &lt; 48h</div>
-    <div class="leg-item"><div class="leg-dot" style="background:#f1c40f"></div> 48–96h</div>
-    <div class="leg-item"><div class="leg-dot" style="background:#e67e22"></div> 96–120h</div>
-    <div class="leg-item"><div class="leg-dot" style="background:#e74c3c"></div> &gt; 120h</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#cfcfcf"></div> Programado</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#27ae60"></div> Recente</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#f1c40f"></div> Atenção</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#e67e22"></div> Atrasado</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#e74c3c"></div> Crítico</div>
   </div>
 </div>
 
@@ -309,26 +310,41 @@
     if (horas < 120) return { cor:'#e67e22', label:'Atrasado', bg:'#fdebd0', txt:'#a04000' };
     return              { cor:'#e74c3c', label:'Crítico',  bg:'#fdedec', txt:'#922b21' };
   }
-  // ── Pedido programado: relógio começa 60h antes da entrega (nasce amarelo,
-  //    fica vermelho na hora da entrega). Antes disso, dormente (cinza). ──
+  // ── Cor do pedido (regra 19/09/2026, igual em Lista/Mapa/Plano/Em Rota):
+  //    PROGRAMADO (tem dataEntregaProgramada) -> contagem regressiva até a
+  //    entrega: >120h branco(Programado), 120-96 verde, 96-48 amarelo,
+  //    48-24 laranja, <24h vermelho. DIRETO (sem data) -> idade desde a
+  //    geração, via corPorIdade. Sem o antigo "120 - ate". ──
   function horasAteEntrega(rom) {
     if (!rom.dataEntregaProgramada) return null;
     var d = new Date(rom.dataEntregaProgramada);
     if (isNaN(d)) return null;
     return (d.getTime() - Date.now()) / 3600000;
   }
-  function idadeEfetiva(rom) {
-    var ate = horasAteEntrega(rom);
-    if (ate === null) return idadeHoras(rom.dataGeracao);  // pedido normal
-    return 120 - ate;  // programado: 60h antes = 60h de idade; na entrega = 120h
+  function corPorEntrega(ate) {
+    if (ate > 96) return { cor:'#27ae60', label:'Recente',  bg:'#d5f5e3', txt:'#1e8449' };
+    if (ate > 48) return { cor:'#f1c40f', label:'Atenção',  bg:'#fef9e7', txt:'#b7950b' };
+    if (ate > 24) return { cor:'#e67e22', label:'Atrasado', bg:'#fdebd0', txt:'#a04000' };
+    return             { cor:'#e74c3c', label:'Crítico',   bg:'#fdedec', txt:'#922b21' };
   }
   function isDormente(rom) {
     var ate = horasAteEntrega(rom);
-    return ate !== null && ate > 60;  // ainda faltam +60h: dorme
+    return ate !== null && ate > 120;
   }
   function corDe(rom) {
-    if (isDormente(rom)) return { cor:'#cfcfcf', label:'Programado', bg:'#f2f2f2', txt:'#8a8a8a' };
-    return corPorIdade(idadeEfetiva(rom));
+    var ate = horasAteEntrega(rom);
+    if (ate !== null) {
+      if (ate > 120) return { cor:'#cfcfcf', label:'Programado', bg:'#f2f2f2', txt:'#8a8a8a' };
+      return corPorEntrega(ate);
+    }
+    return corPorIdade(idadeHoras(rom.dataGeracao));
+  }
+  // horas mostradas no badge: dormente sem número; programado ativo conta
+  // regressiva até a entrega; direto, idade desde a geração.
+  function horasBadge(rom) {
+    var ate = horasAteEntrega(rom);
+    if (ate !== null) { if (ate > 120) return null; return Math.max(0, Math.round(ate)); }
+    return Math.round(idadeHoras(rom.dataGeracao));
   }
 
   var CORES_FILTRO = [
@@ -410,7 +426,7 @@
       (rom.dataEntregaProgramada ? '<div class="popup-row"><span class="popup-label">Entrega prog.</span><span class="popup-valor" style="font-weight:700;color:#8B1C1C">' + formatarDataProg(rom.dataEntregaProgramada) + '</span></div>' : '') +
       '<div class="popup-row"><span class="popup-label">Gerado em</span><span class="popup-valor">' + formatarData(rom.dataGeracao) + '</span></div>' +
       '<div class="popup-row"><span class="popup-label">Kg planejados</span><span class="popup-valor">' + (rom.kgPlanejados || '—') + ' kg</span></div>' +
-      '<span class="popup-idade" style="background:' + c.bg + ';color:' + c.txt + '">' + (isDormente(rom) ? 'Programado' : (c.label + ' — ' + Math.round(horas) + 'h')) + '</span>' +
+      '<span class="popup-idade" style="background:' + c.bg + ';color:' + c.txt + '">' + (horasBadge(rom) === null ? 'Programado' : (c.label + ' — ' + horasBadge(rom) + 'h')) + '</span>' +
       '<div class="popup-acoes">' +
         '<button class="popup-btn popup-btn-pdf" onclick="verPdf(\'' + rom.id + '\',' + JSON.stringify(rom.empresas||[]) + ')">Ver PDF</button>' +
         '<button class="popup-btn popup-btn-xls" onclick="baixarExcel(\'' + rom.id + '\',' + JSON.stringify(rom.empresas||[]) + ')">Gerar xlx</button>' +
@@ -438,7 +454,6 @@
     var grupos = {}; // "lat,lng" -> [marker...]
 
     visiveis.forEach(function(rom) {
-      var horas = idadeEfetiva(rom);
       var c = corDe(rom);
       var corBolinha = (ehCentral(rom) || ehKanejo(rom)) ? '#000' : '#fff';
       // pmIgnore: pinos nunca são editáveis pelo Geoman (só as zonas)
