@@ -186,6 +186,34 @@
     if (horas <= 120) return { bg:'#fdf0e3', txt:'#a85a1a' };
     return { bg:'#fdecea', txt:'#b03024' };
   }
+  // Cor do pedido (regra 19/09/2026, igual em Lista/Mapa/Plano/Em Rota):
+  // PROGRAMADO -> contagem regressiva até a entrega; DIRETO -> idade desde
+  // a geração. Recebe o pedido inteiro (r), não só as horas.
+  function horasAteEntregaPed(r) {
+    if (!r || !r.dataEntregaProgramada) return null;
+    var d = new Date(r.dataEntregaProgramada);
+    if (isNaN(d)) return null;
+    return (d.getTime() - Date.now()) / 3600000;
+  }
+  function classePedidoRom(r) {
+    var ate = horasAteEntregaPed(r);
+    if (ate !== null) {
+      if (ate > 120) return { bg:'#f2f2f2', txt:'#8a8a8a' };   // Programado (branco)
+      if (ate > 96)  return { bg:'#eafaf0', txt:'#1A6B3C' };   // verde
+      if (ate > 48)  return { bg:'#fef9e7', txt:'#8a6d1a' };   // amarelo
+      if (ate > 24)  return { bg:'#fdf0e3', txt:'#a85a1a' };   // laranja
+      return { bg:'#fdecea', txt:'#b03024' };                  // vermelho
+    }
+    return classePedido(horasDe(r.dataGeracao));               // pedido direto: idade
+  }
+  function horasBadgePedido(r) {
+    var ate = horasAteEntregaPed(r);
+    if (ate !== null) {
+      if (ate > 120) return 'Prog.';                 // programado ainda dormente
+      return Math.max(0, Math.round(ate)) + 'h';     // contagem regressiva até a entrega
+    }
+    return Math.round(horasDe(r.dataGeracao)) + 'h'; // pedido direto: idade
+  }
   function fmtKg(v) { return (Math.round((Number(v) || 0))).toLocaleString('pt-BR') + ' kg'; }
 
   function pedidosDaEntrega(ent) {
@@ -289,13 +317,13 @@
         html += '<div style="padding:10px 0;color:#999;font-size:13px">Sem pedidos ativos nesta entrega.</div>';
       } else {
         peds.forEach(function(r) {
-          var hp = horasDe(r.dataGeracao);
-          var cp = classePedido(hp);
+          var cp = classePedidoRom(r);
+          var badgeHoras = horasBadgePedido(r);
           html += '<div class="ped-row">' +
             '<div class="ped-nome"><b>' + escapeHtml(r.clienteNome || r.cliente || '\u2014') + '</b> <em>' + escapeHtml(r.filial || '') + (r.numero ? ' - ' + escapeHtml(String(r.numero)) : '') + '</em></div>' +
             '<div class="ped-kg">' + fmtKg(r.kgPlanejados) + '</div>' +
             '<div class="ped-regiao">' + escapeHtml(r.regiao || '') + '</div>' +
-            '<div class="ped-idade" style="background:' + cp.bg + ';color:' + cp.txt + '">' + Math.round(hp) + 'h</div>' +
+            '<div class="ped-idade" style="background:' + cp.bg + ';color:' + cp.txt + '">' + badgeHoras + '</div>' +
             '<div class="ped-acoes">' +
               '<button class="b-pdf" onclick="verPdf(\'' + r.id + '\',' + JSON.stringify(r.empresas||[]) + ')">Ver PDF</button>' +
               '<button class="b-xls" onclick="baixarExcel(\'' + r.id + '\',' + JSON.stringify(r.empresas||[]) + ')">Gerar xlx</button>' +
