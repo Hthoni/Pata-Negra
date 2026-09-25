@@ -417,7 +417,7 @@
     var d = new Date(iso); if (isNaN(d)) return iso;
     return d.toLocaleDateString('pt-BR') + ' 08h';
   }
-  function montarPopup(rom, c, horas) {
+  function montarPopup(rom, c) {
     return '<div class="popup-content">' +
       '<div class="popup-cliente">' + (rom.clienteNome || rom.cliente) + '</div>' +
       '<div class="popup-filial">' + (rom.filial || '—') + (rom.numero ? '  -  <b style="color:#1a1a1a">' + rom.numero + '</b>' : '') + '</div>' +
@@ -459,7 +459,7 @@
       // pmIgnore: pinos nunca são editáveis pelo Geoman (só as zonas)
       var marker = L.marker([rom.lat, rom.lng], { icon: criarIcone(c.cor, corBolinha), pmIgnore: true });
       marker._rom = rom;
-      marker._html = montarPopup(rom, c, horas);
+      marker._html = montarPopup(rom, c);
       marker._latlngBase = L.latLng(rom.lat, rom.lng);
       if (simIds.has(rom.id) || rom.status === 'em_rota') marker.setOpacity(0.35);  // esmaecido: no simulador ou em rota
       marker.addTo(map);
