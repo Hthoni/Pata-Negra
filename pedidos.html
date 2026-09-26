@@ -325,7 +325,7 @@
   function regiaoKey(rom) { return (rom.regiao && String(rom.regiao).trim()) || '__sem__'; }
 
   function pedidoVisivel(rom) {
-    if (clientesDesmarcados.has(rom.cliente)) return false;
+    if (clientesDesmarcados.has(chaveCliente(rom))) return false;
     if (coresDesmarcadas.has(classeDe(rom).label)) return false;
     if (faixasDesmarcadas.has(faixaDe(rom.kgPlanejados))) return false;
     if (regioesDesmarcadas.has(regiaoKey(rom))) return false;
@@ -588,9 +588,21 @@
   }
 
   // ── Filtro por cliente ──────────────────────────────────────────────
+  // Chave do filtro. Todo pedido avulso é gravado com cliente='avulso'; sem
+  // separar por clienteNome, todos os avulsos viram UMA opção só, rotulada com
+  // o nome do último avulso lido (FIX 26/09/2026).
+  function chaveCliente(r) {
+    if (r.cliente === 'avulso') return 'avulso:' + (r.clienteNome || '');
+    return r.cliente;
+  }
+  function rotuloCliente(r) {
+    if (r.cliente === 'avulso') return (r.clienteNome || 'Sem nome') + ' (avulso)';
+    return r.clienteNome || r.cliente;
+  }
+
   function montarFiltro(data) {
     var nomes = {};
-    data.forEach(function(r) { if (r.cliente) nomes[r.cliente] = r.clienteNome || r.cliente; });
+    data.forEach(function(r) { if (r.cliente) nomes[chaveCliente(r)] = rotuloCliente(r); });
     var ids = Object.keys(nomes).sort(function(a, b) { return nomes[a].localeCompare(nomes[b]); });
     var dd = document.getElementById('filtro-dropdown');
 
