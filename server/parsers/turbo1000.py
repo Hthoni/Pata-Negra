@@ -27,6 +27,17 @@ FIX (25/08/2026):
    emb_tipo='UN' de verdade; processar_item converte puxando o peso do
    nome do produto (500g -> 0,5kg/un, fallback 1000g). 40 x 0,5kg = 20kg,
    confere com o pedido real (nº 154316).
+
+FIX (03/11/2026):
+4) O FIX 3 acima nunca funcionou: processar_item (perfil.py) não tem ramo
+   para 'UN' e trata a quantidade como kg. Pedido 161884: 20 pacotes de
+   500g saíam como 20 kg (o certo é 10 kg). A conversão agora é feita aqui,
+   pelo PERFIL (kg/cx ÷ N do "CX-N" = kg por pacote, mesma regra do
+   formulário manual em /processar-manual); se o perfil não der, usa o peso
+   do nome ("500g"). A qtdeMultipl continua = nº de pacotes (unidade de
+   faturamento) e o valor continua o total do PDF — só kg e caixas mudam.
+5) Solicitante saía vazio: o regex exigia dois espaços depois do nome, mas
+   no PDF o nome termina a linha. Agora lê até o fim da linha.
 """
 import re, io
 import pdfplumber
@@ -51,6 +62,22 @@ ITEM_RE = re.compile(
     r'([\d.,]+)\s*$',
     re.IGNORECASE
 )
+
+
+def _kg_por_unidade(pf, nome):
+    """kg de 1 pacote/unidade. 1º pelo perfil: kg/cx ÷ N de "CX-N" (N =
+    pacotes por caixa; ex.: CX-20 com kg/cx 10 -> 0,5). 2º pelo peso no
+    nome ("500g", "1kg"). Sem nenhum dos dois, None (mantém como estava)."""
+    if pf:
+        m = re.search(r'CX-?(\d+)', str(pf.get('embalagem', '')), re.IGNORECASE)
+        n = int(m.group(1)) if m else 0
+        if n and pf.get('kgCx'):
+            return pf['kgCx'] / n
+    m = re.search(r'(\d+(?:[.,]\d+)?)\s*(KG|G)\b', str(nome or ''), re.IGNORECASE)
+    if m:
+        v = float(m.group(1).replace(',', '.'))
+        return v if m.group(2).upper() == 'KG' else v / 1000
+    return None
 
 
 def _mescla_continuacao(nome_atual, prox_linha):
@@ -83,7 +110,7 @@ def parse(pdf_bytes, produtos):
     data_pedido  = fm(r'Data\s+Pedido[:\s]*(\d{2}/\d{2}/\d{4})')
     data_entrega = fm(r'Entrega[:\s]*(\d{2}/\d{2}/\d{4})')
     cond_pgto    = fm(r'Condi[çc][aã]o\s+de\s+Pagamento\s*[\n\r]+([^\n\r]+)')
-    solicitante  = fm(r'Solicitante[:\s]*(.+?)(?:\s{2,}|$)')
+    solicitante  = fm(r'(?m)Solicitante:[ \t]*([^\n]+?)[ \t]*$')
     cnpj_fat     = fm(r'Filial[^\n]*?(\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2})')
     filial_nome  = fm(r'Filial[:\s]+(.+?)\s*[-–]\s*\d{2}\.\d{3}')
 
@@ -120,6 +147,13 @@ def parse(pdf_bytes, produtos):
                 nome_raw = candidato
 
         it = processar_item(cod_cli, nome_raw, emb_tipo, qtde, qtde, preco, total, produtos)
+        if emb_tipo == 'UN':
+            # FIX 4 (03/11/2026): processar_item não converte UN -> kg
+            kg_un = _kg_por_unidade(match_perfil(nome_raw, produtos), nome_raw)
+            if kg_un:
+                it['kgPlanejados'] = round(qtde * kg_un, 3)
+                it['nrCaixas'] = round(it['kgPlanejados'] / it['kgCx'], 1) if it['kgCx'] else 0
+                it['qtdeMultipl'] = qtde  # nº de pacotes (unidade de faturamento)
         itens.append(it)
 
     if not itens: return []
