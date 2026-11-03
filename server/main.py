@@ -87,6 +87,9 @@ CLIENTES_MANUAIS = {
     'prezunic': {'nome': 'Prezunic', 'multiFilial': False},
     'soberano': {'nome': 'Soberano', 'multiFilial': True},
     'publix': {'nome': 'Publix', 'multiFilial': True},
+    # GPA (03/11/2026): deixou de mandar PDF — parser gpa.py removido, pedido
+    # agora é lançado no formulário, no modelo do Guanabara Central (CD único).
+    'gpa': {'nome': 'GPA', 'multiFilial': False},
 }
 
 
