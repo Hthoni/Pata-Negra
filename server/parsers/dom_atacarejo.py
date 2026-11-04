@@ -98,7 +98,11 @@ def parse(pdf_bytes, produtos):
 
         # Nome = só a mesma linha, até a coluna Emb. (KG|CX). Sem
         # reconstrução das linhas de continuação — ver docstring.
-        reItem = re.compile(r'^(\d{5,6})\s+\d+\s+(.+?)\s+(KG|CX)\s+(\d+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)', re.M)
+        # FIX (04/11/2026): o Cod Forn era \d{5,6} -- a LING MINEIRA veio
+        # com código "9" (1 dígito) e a linha era descartada EM SILÊNCIO
+        # (mesmo bug do Germans, 10/09). Nunca limitar dígitos do código:
+        # quem ancora a linha é Seq (6 dígitos) + coluna Emb. (KG|CX).
+        reItem = re.compile(r'^(\d+)\s+\d{5,}\s+(.+?)\s+(KG|CX)\s+(\d+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)', re.M)
         itens = []
         for m in reItem.finditer(txt1):
             nome_raw = re.sub(r'\s+', ' ', m.group(2)).strip()
