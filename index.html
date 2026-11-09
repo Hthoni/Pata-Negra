@@ -126,6 +126,8 @@ table.itens td.nome-produto{text-align:left}
 .cnpj-busca{display:flex;gap:6px}
 .cnpj-busca input{flex:1;padding:4px 6px;font-size:13px;border:1px solid #bbb;border-radius:3px}
 .cnpj-busca button{padding:4px 12px;font-size:12px;font-weight:bold;border-radius:3px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer}
+.av-escolha{padding:8px 16px;background:var(--accent-lt);border-top:1px solid #e8c9c9;border-bottom:1px solid #e8c9c9;font-size:12.5px}
+.av-escolha select{width:100%;margin-top:4px;padding:5px 6px;font-size:13px;border:1px solid var(--accent);border-radius:3px;box-sizing:border-box}
 .aviso-cnpj{background:#FEF3E2;color:#8a6d1a;font-size:12.5px;padding:8px 16px;border-top:1px solid #f0dca0;border-bottom:1px solid #f0dca0}
 .btn-add-item{margin:8px 16px;padding:5px 12px;font-size:12px;font-weight:bold;border:1px dashed var(--accent);background:#fff;color:var(--accent);border-radius:3px;cursor:pointer}
 .btn-rm-item{border:none;background:none;color:var(--cor-erro);font-size:16px;cursor:pointer;line-height:1}
@@ -946,7 +948,7 @@ function avDataHojeBR() {
 function avRenderizarPopup() {
   document.getElementById('popupAvulsoConteudo').innerHTML =
     '<div class="titulo-pedido">PEDIDO CLIENTE AVULSO</div>' +
-    '<div class="subtitulo-pedido" id="avulsoSubtitulo">Informe o CNPJ para localizar os dados de faturamento</div>' +
+    '<div class="subtitulo-pedido" id="avulsoSubtitulo">Informe o CNPJ ou o nome para localizar os dados de faturamento</div>' +
     '<div class="meta-grid">' +
       '<div class="meta-label">Pedido Nº: <span style="color:var(--accent)">*</span></div>' +
       '<div><input type="text" id="avPedidoNum" placeholder="digite o nº do pedido" autocomplete="off" oninput="avValidarFormulario()" style="width:100%;box-sizing:border-box"></div>' +
@@ -955,14 +957,17 @@ function avRenderizarPopup() {
 
       '<div class="meta-label">CNPJ: <span style="color:var(--accent)">*</span></div>' +
       '<div class="cnpj-busca">' +
-        '<input type="text" id="avCnpj" placeholder="00.000.000/0000-00" autocomplete="off">' +
+        '<input type="text" id="avCnpj" placeholder="00.000.000/0000-00" autocomplete="off" onkeydown="if(event.key===\'Enter\')avBuscarCnpj()">' +
         '<button type="button" onclick="avBuscarCnpj()">Buscar</button>' +
       '</div>' +
       '<div class="meta-label">Operador:</div>' +
       '<div><input type="text" id="avOperador" placeholder="nome do operador" oninput="avValidarFormulario()" style="width:100%;box-sizing:border-box"></div>' +
 
       '<div class="meta-label">Razão Social: <span style="color:var(--accent)">*</span></div>' +
-      '<div><input type="text" id="avRazao" oninput="avValidarFormulario()" style="width:100%;box-sizing:border-box"></div>' +
+      '<div class="cnpj-busca">' +
+        '<input type="text" id="avRazao" placeholder="nome (mín. 3 letras)" autocomplete="off" oninput="avValidarFormulario()" onkeydown="if(event.key===\'Enter\')avBuscarNome()">' +
+        '<button type="button" onclick="avBuscarNome()">Buscar</button>' +
+      '</div>' +
       '<div class="meta-label">Vendedor:</div>' +
       '<div style="display:flex;gap:6px;align-items:center">' +
         '<input type="text" id="avVendedor" style="flex:1;box-sizing:border-box">' +
@@ -980,6 +985,7 @@ function avRenderizarPopup() {
       '<div><input type="text" id="avEndereco" style="width:100%;box-sizing:border-box"></div>' +
     '</div>' +
 
+    '<div class="av-escolha" id="avEscolhaLoja" style="display:none"></div>' +
     '<div class="aviso-cnpj" id="avAvisoCnpj" style="display:none">' +
       'CNPJ não encontrado na planilha de faturamento. Preencha os dados acima manualmente.' +
     '</div>' +
@@ -1150,38 +1156,94 @@ function avRemoverItem(i) {
   avValidarFormulario();
 }
 
+// Preenche o formulário com uma loja da planilha avulsa (usado pela busca
+// por CNPJ e pela busca por nome — os dois devolvem o mesmo formato).
+function avPreencherFaturamento(d) {
+  document.getElementById('avCnpj').value = d.cnpj || '';
+  document.getElementById('avRazao').value = d.razaoSocial || '';
+  document.getElementById('avCond').value = d.condPgto || '';
+  document.getElementById('avCodCond').value = d.codCondPgto || '';
+  document.getElementById('avVendedor').value = d.vendedor || '';
+  document.getElementById('avCodVendedor').value = d.codVendedor || '';
+  document.getElementById('avEndereco').value = d.endereco || '';
+  document.getElementById('avulsoSubtitulo').textContent = d.razaoSocial || '';
+  document.getElementById('avAvisoCnpj').style.display = 'none';
+  document.getElementById('avEscolhaLoja').style.display = 'none';
+  _avulso.faturamentoEncontrado = true;
+  // Região/lat/lng vêm da planilha (não têm campo próprio no popup —
+  // usados só na hora de gerar o pedido, pro romaneio ganhar pino no mapa).
+  _avulso.regiao = d.regiao || '';
+  _avulso.lat = d.lat != null ? d.lat : null;
+  _avulso.lng = d.lng != null ? d.lng : null;
+  avValidarFormulario();
+}
+
+function avAviso(texto) {
+  var aviso = document.getElementById('avAvisoCnpj');
+  aviso.textContent = texto;
+  aviso.style.display = 'block';
+  _avulso.faturamentoEncontrado = false;
+  _avulso.regiao = '';
+  _avulso.lat = null;
+  _avulso.lng = null;
+}
+
 function avBuscarCnpj() {
   var cnpj = document.getElementById('avCnpj').value.trim();
   if (!cnpj) return;
+  document.getElementById('avEscolhaLoja').style.display = 'none';
   fetch(SERVER_URL + '/faturamento-avulso/' + encodeURIComponent(cnpj))
     .then(function(r){ return r.json(); })
     .then(function(d) {
-      var aviso = document.getElementById('avAvisoCnpj');
-      if (d.encontrado) {
-        document.getElementById('avRazao').value = d.razaoSocial || '';
-        document.getElementById('avCond').value = d.condPgto || '';
-        document.getElementById('avCodCond').value = d.codCondPgto || '';
-        document.getElementById('avVendedor').value = d.vendedor || '';
-        document.getElementById('avCodVendedor').value = d.codVendedor || '';
-        document.getElementById('avEndereco').value = d.endereco || '';
-        document.getElementById('avulsoSubtitulo').textContent = d.razaoSocial || '';
-        aviso.style.display = 'none';
-        _avulso.faturamentoEncontrado = true;
-        // Região/lat/lng vêm da planilha (não têm campo próprio no popup —
-        // usados só na hora de gerar o pedido, pro romaneio ganhar pino no mapa).
-        _avulso.regiao = d.regiao || '';
-        _avulso.lat = d.lat != null ? d.lat : null;
-        _avulso.lng = d.lng != null ? d.lng : null;
+      if (d.encontrado) avPreencherFaturamento(d);
+      else avAviso('CNPJ não encontrado na planilha de faturamento. Preencha os dados acima manualmente.');
+      avValidarFormulario();
+    })
+    .catch(function(){ avAviso('Não foi possível consultar a planilha de faturamento. Tente de novo.'); });
+}
+
+// NOVO (09/11/2026): busca por PARTE da Razão Social. 1 loja -> preenche
+// direto; 2+ (mesmo nome, lojas diferentes) -> dropdown pra operadora escolher.
+var _avLojasNome = [];
+function avBuscarNome() {
+  var termo = document.getElementById('avRazao').value.trim();
+  var escolha = document.getElementById('avEscolhaLoja');
+  escolha.style.display = 'none';
+  if (termo.replace(/\s/g, '').length < 3) {
+    avAviso('Digite pelo menos 3 letras do nome para buscar.');
+    return;
+  }
+  fetch(SERVER_URL + '/faturamento-avulso-busca?q=' + encodeURIComponent(termo))
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      if (d.erro) { avAviso(d.erro); return; }
+      _avLojasNome = d.lojas || [];
+      if (!_avLojasNome.length) {
+        avAviso('Nenhum cliente com "' + termo + '" no nome na planilha de faturamento. Busque pelo CNPJ ou preencha manualmente.');
+      } else if (_avLojasNome.length === 1) {
+        avPreencherFaturamento(_avLojasNome[0]);
       } else {
-        aviso.style.display = 'block';
+        document.getElementById('avAvisoCnpj').style.display = 'none';
+        // Limpa os dados de uma busca anterior: até a operadora escolher a
+        // loja, o pedido fica sem CNPJ (Gerar bloqueado) e sem coordenadas.
+        ['avCnpj','avCond','avCodCond','avVendedor','avCodVendedor','avEndereco'].forEach(function(id){
+          document.getElementById(id).value = '';
+        });
         _avulso.faturamentoEncontrado = false;
-        _avulso.regiao = '';
-        _avulso.lat = null;
-        _avulso.lng = null;
+        _avulso.regiao = ''; _avulso.lat = null; _avulso.lng = null;
+        document.getElementById('avulsoSubtitulo').textContent = 'Escolha a loja abaixo';
+        var opts = '<option value="">Selecione a loja…</option>';
+        _avLojasNome.forEach(function(l, i) {
+          var txt = (l.razaoSocial || '') + ' — ' + (l.endereco || 'sem endereço') + ' — CNPJ ' + (l.cnpj || '');
+          opts += '<option value="' + i + '">' + txt.replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</option>';
+        });
+        escolha.innerHTML = '<b>' + _avLojasNome.length + ' lojas encontradas.</b> Escolha a correta:' +
+          '<select onchange="if(this.value!==\'\')avPreencherFaturamento(_avLojasNome[+this.value])">' + opts + '</select>';
+        escolha.style.display = 'block';
       }
       avValidarFormulario();
     })
-    .catch(function(){ document.getElementById('avAvisoCnpj').style.display = 'block'; });
+    .catch(function(){ avAviso('Não foi possível consultar a planilha de faturamento. Tente de novo.'); });
 }
 
 function avValidarFormulario() {
