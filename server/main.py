@@ -667,6 +667,47 @@ def buscar_faturamento_avulso(cnpj):
         return jsonify({'erro': str(e)}), 500
 
 
+def _sem_acento_min(s):
+    """Minúsculas, sem acento, espaços colapsados — só pra comparar nomes."""
+    import unicodedata
+    s = unicodedata.normalize('NFKD', str(s or '')).encode('ASCII', 'ignore').decode('ASCII')
+    return re.sub(r'\s+', ' ', s).strip().lower()
+
+
+def _buscar_avulso_por_nome(dados, termo):
+    """Lojas da planilha avulsa cuja Razão Social CONTÉM o termo (sem
+    diferenciar maiúscula/acento). Devolve lista ordenada por nome, no máximo
+    50. Uma linha por CNPJ (a planilha já é indexada por CNPJ, então linhas
+    duplicadas não aparecem duas vezes)."""
+    alvo = _sem_acento_min(termo)
+    achados = [info for info in dados.values()
+               if alvo and alvo in _sem_acento_min(info.get('razaoSocial'))]
+    achados.sort(key=lambda i: (_sem_acento_min(i.get('razaoSocial')), i.get('endereco') or ''))
+    return achados[:50]
+
+
+@app.route('/faturamento-avulso-busca')
+def buscar_faturamento_avulso_nome():
+    """Busca lojas na planilha avulsa por PARTE da Razão Social (?q=..., mín.
+    3 letras). NOVO (09/11/2026): as operadoras recebem o pedido pelo nome
+    e tinham que procurar o CNPJ no sistema legado. 1 resultado -> o popup
+    preenche direto; 2+ (mesmo nome, lojas diferentes) -> o popup mostra um
+    dropdown pra escolher. Rota separada (não '/faturamento-avulso/<x>') pra
+    não colidir com a busca por CNPJ."""
+    termo = (request.args.get('q') or '').strip()
+    if len(_sem_acento_min(termo)) < 3:
+        return jsonify({'erro': 'Digite pelo menos 3 letras do nome'}), 400
+    if not perfil_existe(_CLIENTE_AVULSO_KEY):
+        return jsonify({'erro': 'Planilha de faturamento avulso ainda não foi cadastrada'}), 404
+    try:
+        dados = ler_faturamento_avulso(carregar_perfil_bytes(_CLIENTE_AVULSO_KEY))
+        lojas = _buscar_avulso_por_nome(dados, termo)
+        print(f'[INFO] busca avulso por nome "{termo}": {len(lojas)} loja(s)')
+        return jsonify({'lojas': lojas, 'total': len(lojas)})
+    except Exception as e:
+        return jsonify({'erro': str(e)}), 500
+
+
 @app.route('/master/produtos')
 def master_produtos_lista():
     """Árvore de produtos da MASTER pro popup de Cliente Avulso:
