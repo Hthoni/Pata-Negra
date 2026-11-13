@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#FFFFFF">
+<title>Controle de validade</title>
+<!--
+  Controle de validade — tela do PROMOTOR (celular). NOVO 13/11/2026.
+  Login próprio (não é o do BELLOTAS). Backend: server/validade.py.
+  Visita preenchida sem sinal fica numa FILA no celular (localStorage
+  'vl_fila') e é enviada sozinha quando a internet volta.
+-->
+<style>
+:root{--azul:#1F3B63;--azul-esc:#152A47;--laranja:#F29A1F;--fundo:#F4F6F9;--borda:#D5DCE6;--texto:#1A2230;--fraco:#4A5568;--verm:#A3201B;--verm-lt:#FBEAE8;--amar:#8A5A00}
+*{box-sizing:border-box}
+body{margin:0;background:var(--fundo);color:var(--texto);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,sans-serif;font-size:16px;-webkit-text-size-adjust:100%}
+header{background:#fff;border-bottom:4px solid var(--laranja);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;position:sticky;top:0;z-index:5}
+header img{height:38px;width:auto;display:block}
+.hdr-dir{text-align:right;font-size:14px;color:var(--fraco)}
+.hdr-dir b{display:block;color:var(--azul);font-size:15px}
+button,input,select{font-family:inherit;font-size:16px}
+.link{background:none;border:none;color:var(--azul);text-decoration:underline;padding:4px 0;cursor:pointer;font-size:14px}
+main{max-width:560px;margin:0 auto;padding:16px}
+h1{font-size:22px;margin:4px 0 4px;color:var(--azul)}
+.sub{color:var(--fraco);font-size:14px;margin:0 0 14px}
+label.lb{display:block;font-weight:600;font-size:14px;margin:14px 0 6px}
+input.campo{width:100%;height:52px;border:1px solid #B9C3D1;border-radius:10px;padding:0 14px;background:#fff}
+.btn{width:100%;min-height:54px;border:none;border-radius:12px;background:var(--azul);color:#fff;font-size:18px;font-weight:700;cursor:pointer}
+.btn:disabled{opacity:.55}
+.erro{color:var(--verm);font-size:14px;margin-top:10px;min-height:18px}
+.aviso{border-radius:12px;padding:12px 14px;font-size:14px;line-height:1.45;margin-bottom:12px}
+.aviso.fila{background:#FFF4D9;border:1px solid #EBD39A;color:#5C4710}
+.aviso.err{background:var(--verm-lt);border:1px solid #E3B3AF;color:#7E1712}
+.aviso.info{background:#fff;border:1px solid var(--borda)}
+.loja{width:100%;min-height:68px;background:#fff;border:1px solid var(--borda);border-radius:12px;padding:12px 14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:left;cursor:pointer;color:var(--texto)}
+.loja .n{font-size:17px;font-weight:600}
+.loja .c{font-size:13px;color:var(--fraco);margin-top:2px}
+.tag{font-size:12px;font-weight:700;border-radius:999px;padding:6px 10px;white-space:nowrap}
+.tag.ok{background:#DCEFE2;color:#1F5F3A}
+.tag.pend{background:#FDEBD3;color:#7A4A00}
+.tag.fila{background:#FFF4D9;color:#5C4710}
+.voltar{display:inline-flex;align-items:center;gap:4px;color:var(--azul);font-weight:600;background:none;border:none;padding:8px 0;min-height:44px;cursor:pointer}
+.prod{background:#fff;border:1px solid var(--borda);border-radius:12px;padding:10px 12px;margin-bottom:8px}
+.prod.rup{background:var(--verm-lt);border-color:#E3B3AF}
+.prod.bad{border-color:var(--verm);box-shadow:0 0 0 1px var(--verm)}
+.p-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.p-nome{font-weight:600;font-size:15px;line-height:1.25}
+.b-rup{min-height:38px;padding:0 12px;border-radius:999px;border:1.5px solid var(--azul);background:#fff;color:var(--azul);font-size:13px;font-weight:700;white-space:nowrap;cursor:pointer}
+.prod.rup .b-rup{background:var(--azul);color:#fff}
+.p-campos{display:grid;grid-template-columns:84px minmax(0,1fr);gap:8px;margin-top:8px}
+.p-campos label{font-size:12px;color:var(--fraco);font-weight:600;display:block;margin-bottom:3px}
+.p-campos input{width:100%;height:46px;border:1px solid #B9C3D1;border-radius:8px;padding:0 8px;background:#fff;text-align:center}
+.p-msg{font-size:13px;font-weight:700;margin-top:6px}
+.rup-txt{font-size:14px;font-weight:600;color:var(--verm);margin-top:6px}
+.rodape{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--borda);padding:12px 16px calc(12px + env(safe-area-inset-bottom));margin:12px -16px -16px}
+.resumo{font-size:14px;color:var(--fraco);margin-bottom:8px}
+.oculto{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <img src="lider-logo.png" alt="Lider Field Marketing &amp; Serviços">
+  <div class="hdr-dir oculto" id="hdrUser"><b id="hdrNome"></b><button class="link" onclick="sair()">Sair</button></div>
+</header>
+
+<main>
+  <div id="avisoFila" class="aviso fila oculto"></div>
+  <div id="avisoErro" class="aviso err oculto"></div>
+
+  <!-- LOGIN -->
+  <section id="telaLogin" class="oculto">
+    <h1>Controle de validade</h1>
+    <p class="sub">Lojas Guanabara · acesso do promotor</p>
+    <form onsubmit="entrar(event)">
+      <label class="lb" for="lgUsr">Usuário</label>
+      <input class="campo" id="lgUsr" autocomplete="username" autocapitalize="none" required>
+      <label class="lb" for="lgPwd">Senha</label>
+      <input class="campo" id="lgPwd" type="password" autocomplete="current-password" required>
+      <div class="erro" id="lgErro"></div>
+      <button class="btn" id="lgBtn" type="submit">Entrar</button>
+    </form>
+    <p class="sub" style="margin-top:14px">Esqueceu a senha? Fale com o seu coordenador.</p>
+  </section>
+
+  <!-- LOJAS -->
+  <section id="telaLojas" class="oculto">
+    <h1>Qual loja você está visitando?</h1>
+    <p class="sub" id="lojasSub"></p>
+    <div id="listaLojas"></div>
+  </section>
+
+  <!-- FORMULÁRIO -->
+  <section id="telaForm" class="oculto">
+    <button class="voltar" onclick="mostrarLojas()">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+      Lojas
+    </button>
+    <h1 id="fmLoja"></h1>
+    <div class="aviso info" id="fmInstr"></div>
+    <div id="listaProd"></div>
+    <div class="rodape">
+      <div class="resumo" id="fmResumo"></div>
+      <button class="btn" id="fmBtn" onclick="enviarVisita()">Enviar visita</button>
+    </div>
+  </section>
+</main>
+
+<script>
+var SRV = 'https://pata-negra-784065203515.us-central1.run.app';
+var DIAS_ALERTA = 30;
+var S = { token: null, nome: '', lojas: [], produtos: [], semana: '', loja: null, rasc: {} };
+
+function $(id){ return document.getElementById(id); }
+function ls(k, v){ try { if (v === undefined) { var x = localStorage.getItem(k); return x ? JSON.parse(x) : null; } if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch(e){ return null; } }
+function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function mostra(id){ ['telaLogin','telaLojas','telaForm'].forEach(function(t){ $(t).classList.toggle('oculto', t !== id); }); window.scrollTo(0,0); }
+function api(caminho, opts){
+  opts = opts || {};
+  opts.headers = Object.assign({'Content-Type':'application/json'}, opts.headers || {});
+  if (S.token) opts.headers['Authorization'] = 'Bearer ' + S.token;
+  return fetch(SRV + caminho, opts);
+}
+function hojeISO(){ var d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,10); }
+function diasAte(iso){ var a = new Date(hojeISO() + 'T00:00:00'), b = new Date(iso + 'T00:00:00'); return Math.round((b - a) / 86400000); }
+function dataBR(iso){ return iso ? iso.slice(8,10) + '/' + iso.slice(5,7) + '/' + iso.slice(0,4) : ''; }
+function erroGeral(txt){ var e = $('avisoErro'); e.textContent = txt || ''; e.classList.toggle('oculto', !txt); }
+
+// ── login ────────────────────────────────────────────────────────────
+function entrar(ev){
+  ev.preventDefault();
+  $('lgErro').textContent = ''; $('lgBtn').disabled = true;
+  api('/validade/login', { method:'POST', body: JSON.stringify({ usuario: $('lgUsr').value.trim(), senha: $('lgPwd').value }) })
+    .then(function(r){ return r.json().then(function(d){ return [r, d]; }); })
+    .then(function(x){
+      $('lgBtn').disabled = false;
+      if (!x[0].ok) { $('lgErro').textContent = x[1].erro || 'Não foi possível entrar'; return; }
+      S.token = x[1].token; S.nome = x[1].nome;
+      ls('vl_token', S.token); ls('vl_nome', S.nome);
+      $('lgPwd').value = '';
+      iniciar();
+    })
+    .catch(function(){ $('lgBtn').disabled = false; $('lgErro').textContent = 'Sem conexão. Para entrar é preciso internet.'; });
+}
+function sair(){
+  if ((ls('vl_fila') || []).length && !confirm('Há visita(s) ainda não enviadas neste celular. Se sair, elas continuam guardadas e serão enviadas quando você entrar de novo. Sair mesmo?')) return;
+  S.token = null; ls('vl_token', null); ls('vl_nome', null);
+  $('hdrUser').classList.add('oculto'); mostra('telaLogin');
+}
+
+// ── lojas ────────────────────────────────────────────────────────────
+function iniciar(){
+  $('hdrNome').textContent = S.nome; $('hdrUser').classList.remove('oculto');
+  var cache = ls('vl_cat');
+  if (cache) aplicaCatalogo(cache);
+  mostrarLojas();
+  api('/validade/minhas').then(function(r){
+    if (r.status === 401) { S.token = null; ls('vl_token', null); mostra('telaLogin'); $('lgErro').textContent = 'Sua sessão expirou. Entre de novo.'; return null; }
+    return r.json();
+  }).then(function(d){
+    if (!d) return;
+    if (d.erro) { erroGeral(d.erro); return; }
+    ls('vl_cat', d); aplicaCatalogo(d);
+    if (!$('telaLojas').classList.contains('oculto')) mostrarLojas();
+  }).catch(function(){ /* sem sinal: segue com o que está guardado */ });
+  enviarFila();
+}
+function aplicaCatalogo(d){ S.lojas = d.lojas || []; S.produtos = d.produtos || []; S.semana = d.semana || ''; DIAS_ALERTA = d.diasAlerta || 30; }
+function mostrarLojas(){
+  mostra('telaLojas');
+  var fila = ls('vl_fila') || [];
+  $('lojasSub').textContent = S.semana ? 'Semana de ' + dataBR(S.semana) + ' · suas lojas' : 'Suas lojas';
+  if (!S.lojas.length) { $('listaLojas').innerHTML = '<div class="aviso info">Nenhuma loja atribuída a você ainda (ou sem conexão para carregar). Fale com o seu coordenador.</div>'; return; }
+  $('listaLojas').innerHTML = S.lojas.map(function(l, i){
+    var naFila = fila.some(function(v){ return v.loja === l.cnpj; });
+    var tag = naFila ? '<span class="tag fila">Aguardando sinal</span>'
+            : l.visitadaEm ? '<span class="tag ok">Visitada ' + dataBR(l.visitadaEm.slice(0,10)).slice(0,5) + '</span>'
+            : '<span class="tag pend">Pendente</span>';
+    return '<button class="loja" onclick="abrirLoja(' + i + ')"><span><span class="n">' + esc(l.rotulo) + '</span><span class="c" style="display:block">' + esc(l.cidade || '') + '</span></span>' + tag + '</button>';
+  }).join('');
+}
+
+// ── formulário ───────────────────────────────────────────────────────
+function abrirLoja(i){
+  S.loja = S.lojas[i];
+  S.rasc = ls('vl_rasc_' + S.loja.cnpj) || {};
+  $('fmLoja').textContent = S.loja.rotulo;
+  var lim = new Date(hojeISO() + 'T00:00:00'); lim.setDate(lim.getDate() + DIAS_ALERTA);
+  $('fmInstr').innerHTML = 'Lance só o que vence em <b>menos de ' + DIAS_ALERTA + ' dias</b> (antes de ' + lim.toLocaleDateString('pt-BR') + '). Se houver mais de um lote, informe o <b>pior</b> (validade mais próxima), em <b>caixas</b>.<br>Produto em falta na câmara? Toque em <b>Ruptura</b>.<br>Nada a reportar? É só tocar em <b>Enviar visita</b>.';
+  $('listaProd').innerHTML = S.produtos.map(function(p){
+    var r = S.rasc[p.cod] || {};
+    return '<div class="prod" id="pr_' + p.cod + '">' +
+      '<div class="p-top"><span class="p-nome">' + esc(p.nome) + '</span>' +
+      '<button type="button" class="b-rup" aria-pressed="false" onclick="toggleRup(\'' + p.cod + '\')">Ruptura</button></div>' +
+      '<div class="rup-txt oculto">Em falta na câmara frigorífica</div>' +
+      '<div class="p-campos">' +
+        '<div><label for="cx_' + p.cod + '">Caixas</label><input id="cx_' + p.cod + '" type="number" inputmode="decimal" min="0" step="any" value="' + esc(r.caixas || '') + '" oninput="mudou(\'' + p.cod + '\')"></div>' +
+        '<div><label for="vd_' + p.cod + '">Validade do pior lote</label><input id="vd_' + p.cod + '" type="date" value="' + esc(r.validade || '') + '" oninput="mudou(\'' + p.cod + '\')"></div>' +
+      '</div><div class="p-msg"></div></div>';
+  }).join('');
+  S.produtos.forEach(function(p){ if ((S.rasc[p.cod] || {}).ruptura) aplicaRup(p.cod, true); validaLinha(p.cod); });
+  atualizaResumo();
+  mostra('telaForm');
+}
+function aplicaRup(cod, on){
+  var el = $('pr_' + cod);
+  el.classList.toggle('rup', on);
+  el.querySelector('.b-rup').setAttribute('aria-pressed', on ? 'true' : 'false');
+  el.querySelector('.rup-txt').classList.toggle('oculto', !on);
+  el.querySelector('.p-campos').classList.toggle('oculto', on);
+}
+function toggleRup(cod){
+  var r = S.rasc[cod] = S.rasc[cod] || {};
+  r.ruptura = !r.ruptura;
+  aplicaRup(cod, r.ruptura);
+  salvaRasc(); validaLinha(cod); atualizaResumo();
+}
+function mudou(cod){
+  var r = S.rasc[cod] = S.rasc[cod] || {};
+  r.caixas = $('cx_' + cod).value; r.validade = $('vd_' + cod).value;
+  salvaRasc(); validaLinha(cod); atualizaResumo();
+}
+function salvaRasc(){ ls('vl_rasc_' + S.loja.cnpj, S.rasc); }
+// devolve '' (ok/vazio) ou o texto do problema
+function validaLinha(cod){
+  var r = S.rasc[cod] || {}, el = $('pr_' + cod), msg = el.querySelector('.p-msg'), prob = '', info = '';
+  if (!r.ruptura) {
+    var cx = String(r.caixas || '').trim(), vd = r.validade || '';
+    if (cx || vd) {
+      if (!(parseFloat(cx.replace(',', '.')) > 0)) prob = 'Informe a quantidade de caixas';
+      else if (!vd) prob = 'Informe a validade do pior lote';
+      else {
+        var d = diasAte(vd);
+        if (d >= DIAS_ALERTA) prob = 'Vence em ' + d + ' dias — só lance o que vence em menos de ' + DIAS_ALERTA + '. Apague esta linha.';
+        else info = d < 0 ? 'VENCIDO há ' + (-d) + ' dia(s)' : 'vence em ' + d + ' dia(s)';
+      }
+    }
+  }
+  el.classList.toggle('bad', !!prob);
+  msg.textContent = prob || info;
+  msg.style.color = prob ? 'var(--verm)' : (info && diasAte(r.validade) < 15 ? 'var(--verm)' : 'var(--amar)');
+  return prob;
+}
+function atualizaResumo(){
+  var n = 0, rup = 0, bad = 0;
+  S.produtos.forEach(function(p){
+    var r = S.rasc[p.cod] || {};
+    if (r.ruptura) rup++; else if (String(r.caixas || '').trim() || r.validade) { if (validaLinha(p.cod)) bad++; else n++; }
+  });
+  $('fmResumo').textContent = bad ? bad + ' linha(s) com problema — corrija antes de enviar'
+    : (n || rup) ? n + ' produto(s) vencendo · ' + rup + ' ruptura(s)' : 'Nada a reportar — envie para confirmar a visita.';
+  $('fmBtn').disabled = bad > 0;
+}
+
+// ── envio (sempre passa pela fila; a fila tenta mandar na hora) ─────
+function enviarVisita(){
+  var itens = [];
+  S.produtos.forEach(function(p){
+    var r = S.rasc[p.cod] || {};
+    if (r.ruptura) itens.push({ cod: p.cod, ruptura: true });
+    else if (String(r.caixas || '').trim() && r.validade) itens.push({ cod: p.cod, caixas: String(r.caixas).trim(), validade: r.validade });
+  });
+  var resumo = itens.length ? itens.length + ' linha(s) preenchida(s)' : 'nada a reportar';
+  if (!confirm('Enviar a visita de ' + S.loja.rotulo + ' (' + resumo + ')?')) return;
+  $('fmBtn').disabled = true; $('fmBtn').textContent = 'Registrando…';
+  var visita = { idLocal: Date.now() + '-' + Math.random().toString(36).slice(2, 8), loja: S.loja.cnpj, lojaNome: S.loja.rotulo,
+                 coletadoEm: new Date().toISOString(), itens: itens, lat: null, lng: null, precisao: null };
+  var feito = false;
+  function grava(){
+    if (feito) return; feito = true;
+    var fila = (ls('vl_fila') || []).filter(function(v){ return v.loja !== visita.loja; });  // nova visita da loja substitui
+    fila.push(visita); ls('vl_fila', fila);
+    ls('vl_rasc_' + visita.loja, null);
+    $('fmBtn').textContent = 'Enviar visita';
+    mostrarLojas(); enviarFila();
+  }
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(function(p){
+      visita.lat = p.coords.latitude; visita.lng = p.coords.longitude; visita.precisao = Math.round(p.coords.accuracy); grava();
+    }, grava, { enableHighAccuracy: true, timeout: 8000, maximumAge: 600000 });
+    setTimeout(grava, 9000);
+  } else grava();
+}
+var _enviando = false;
+function enviarFila(){
+  var fila = ls('vl_fila') || [];
+  mostraFila();
+  if (_enviando || !fila.length || !S.token) return;
+  _enviando = true;
+  var v = fila[0];
+  api('/validade/visita', { method: 'POST', body: JSON.stringify(v) })
+    .then(function(r){ return r.json().then(function(d){ return [r, d]; }, function(){ return [r, {}]; }); })
+    .then(function(x){
+      var r = x[0], d = x[1], resto = (ls('vl_fila') || []).filter(function(q){ return q.idLocal !== v.idLocal; });
+      if (r.ok) {
+        ls('vl_fila', resto);
+        S.lojas.forEach(function(l){ if (l.cnpj === v.loja) l.visitadaEm = v.coletadoEm; });
+        erroGeral('');
+      } else if (r.status === 401) {
+        _enviando = false; mostraFila();
+        erroGeral('Sua sessão expirou. Saia e entre de novo — as visitas guardadas serão enviadas em seguida.');
+        return;
+      } else {
+        ls('vl_fila', resto);   // recusada pelo servidor: não adianta insistir
+        erroGeral('A visita de ' + v.lojaNome + ' foi recusada: ' + (d.erro || ('erro ' + r.status)) + '. Abra a loja e envie de novo.');
+      }
+      _enviando = false;
+      if (!$('telaLojas').classList.contains('oculto')) mostrarLojas();
+      enviarFila();
+    })
+    .catch(function(){ _enviando = false; mostraFila(); });   // sem sinal: tenta de novo depois
+}
+function mostraFila(){
+  var fila = ls('vl_fila') || [], el = $('avisoFila');
+  el.classList.toggle('oculto', !fila.length);
+  if (fila.length) el.innerHTML = '<b>' + fila.length + ' visita(s) aguardando sinal</b><br>' +
+    fila.map(function(v){ return esc(v.lojaNome) + ' · preenchida às ' + new Date(v.coletadoEm).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}); }).join('<br>') +
+    '<br>Será enviada sozinha quando a internet voltar. Não feche o navegador nem saia da conta.';
+}
+window.addEventListener('online', enviarFila);
+setInterval(enviarFila, 30000);
+
+// ── início ───────────────────────────────────────────────────────────
+S.token = ls('vl_token'); S.nome = ls('vl_nome') || '';
+if (S.token) iniciar(); else mostra('telaLogin');
+</script>
+</body>
+</html>
