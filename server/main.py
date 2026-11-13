@@ -55,6 +55,11 @@ _MOTORISTAS_KEY = '_motoristas'
 app = Flask(__name__)
 CORS(app)
 
+# Controle de validade das lojas Guanabara (NOVO 13/11/2026) — módulo
+# separado, login próprio, rotas /validade/*. Ver server/validade.py.
+import validade
+app.register_blueprint(validade.bp)
+
 # Descoberta automática de parsers: qualquer módulo em parsers/ que
 # exponha uma função parse() é registrado automaticamente.
 # O nome de exibição pode ser definido como __cliente_nome__ no módulo;
