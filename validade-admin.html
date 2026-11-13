@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Controle de validade — painel</title>
+<!--
+  Controle de validade — PAINEL (coordenador Lider; admin/operador do
+  BELLOTAS entram sem novo login, pelo token 'pn_token' do BELLOTAS).
+  NOVO 13/11/2026. Backend: server/validade.py.
+-->
+<style>
+:root{--azul:#1F3B63;--laranja:#F29A1F;--fundo:#F4F6F9;--borda:#D5DCE6;--texto:#1A2230;--fraco:#4A5568;--verm:#A3201B}
+*{box-sizing:border-box}
+body{margin:0;background:var(--fundo);color:var(--texto);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,sans-serif;font-size:14px}
+button,input,select{font-family:inherit;font-size:14px}
+header{background:#fff;border-bottom:4px solid var(--laranja);padding:10px 28px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px}
+.marca{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.marca img{height:44px;width:auto;display:block}
+.marca .t{border-left:1px solid var(--borda);padding-left:18px}
+.marca .t small{display:block;font-size:11px;letter-spacing:.1em;font-weight:600;color:var(--fraco)}
+.marca .t b{font-size:19px;color:var(--azul)}
+nav{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+nav button{border:1px solid var(--azul);background:#fff;color:var(--azul);border-radius:8px;padding:9px 15px;font-weight:600;cursor:pointer}
+nav button.ativo{background:var(--azul);color:#fff}
+.quem{font-size:13px;color:var(--fraco);margin-left:8px}
+.quem a{color:var(--azul);cursor:pointer;text-decoration:underline}
+main{max-width:1500px;margin:0 auto;padding:20px 28px}
+.barra{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:14px;margin-bottom:16px}
+.barra label{display:block;font-size:12px;font-weight:600;margin-bottom:5px}
+select,input.campo{height:40px;border:1px solid #B9C3D1;border-radius:8px;padding:0 10px;background:#fff}
+.btn{height:42px;padding:0 18px;border:none;border-radius:8px;background:var(--azul);color:#fff;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+.btn.sec{background:#fff;color:var(--azul);border:1px solid var(--azul)}
+.btn:disabled{opacity:.5}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:14px}
+.card{background:#fff;border:1px solid var(--borda);border-radius:12px;padding:12px 16px}
+.card small{color:var(--fraco);font-size:13px}
+.card b{display:block;font-size:26px}
+.leg{display:flex;flex-wrap:wrap;gap:16px;font-size:13px;margin-bottom:10px;align-items:center}
+.leg span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:14px;height:14px;border-radius:3px;display:inline-block}
+.tabwrap{overflow:auto;background:#fff;border:1px solid var(--borda);border-radius:12px;max-height:calc(100vh - 330px);min-height:300px}
+table.m{border-collapse:separate;border-spacing:0;font-size:12.5px}
+table.m th,table.m td{border-bottom:1px solid #E6EAF0;border-left:1px solid #E6EAF0;padding:6px 8px;text-align:center;white-space:nowrap}
+table.m thead th,table.m thead td{position:sticky;background:#fff;z-index:2}
+table.m thead tr:nth-child(1) > *{top:0}
+table.m thead tr:nth-child(2) > *{top:31px}
+table.m thead tr:nth-child(3) > *{top:60px;border-bottom:2px solid #B9C3D1}
+table.m .c0{position:sticky;left:0;z-index:3;background:#F7F8FA;text-align:left;font-weight:600;border-left:none;min-width:210px}
+table.m thead .c0{z-index:4;background:#EEF1F5;color:var(--fraco);font-size:12px}
+table.m td.cel{min-width:118px;line-height:1.3;cursor:default}
+.semvis{background:#ECEEF2!important;color:var(--verm);font-weight:700}
+.vm{background:#F4C9C5;color:#7E1712;font-weight:700}
+.am{background:#FBE7C2;color:#6B4700;font-weight:700}
+.rp{background:#2B2622;color:#fff;font-weight:700}
+.nota{font-size:12.5px;color:var(--fraco);margin-top:8px}
+.oculto{display:none!important}
+.aviso{border-radius:10px;padding:10px 14px;margin-bottom:12px}
+.aviso.err{background:#FBEAE8;border:1px solid #E3B3AF;color:#7E1712}
+/* login */
+.login{max-width:380px;margin:48px auto;background:#fff;border:1px solid var(--borda);border-radius:12px;padding:24px}
+.login h1{font-size:20px;color:var(--azul);margin:0 0 4px}
+.login label{display:block;font-weight:600;margin:14px 0 6px}
+.login input{width:100%;height:44px}
+/* cadastro */
+.cad{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
+.cad .lista{flex:999 1 560px;min-width:0}
+.cad form{flex:1 1 360px;background:#fff;border:1px solid var(--borda);border-radius:12px;padding:16px}
+.u{background:#fff;border:1px solid var(--borda);border-radius:12px;padding:12px 14px;margin-bottom:10px}
+.u.inativo{opacity:.6}
+.u-top{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center}
+.u-top b{font-size:15px}
+.u-top small{color:var(--fraco)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chip{font-size:12px;font-weight:600;background:#E3EAF4;color:var(--azul);border-radius:999px;padding:4px 9px}
+.cad form h2{font-size:17px;margin:0 0 6px;color:var(--azul)}
+.cad form label.lb{display:block;font-weight:600;font-size:13px;margin:12px 0 5px}
+.cad form input.campo,.cad form select{width:100%}
+.lojasel{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 10px;max-height:330px;overflow:auto;border:1px solid var(--borda);border-radius:8px;padding:8px 10px}
+.lojasel label{display:flex;gap:6px;align-items:flex-start;font-size:13px;line-height:1.3}
+.lojasel label small{color:#7A8494}
+.ok-msg{color:#1F5F3A;font-weight:600;margin-top:10px;min-height:18px}
+.err-msg{color:var(--verm);font-weight:600;margin-top:10px;min-height:18px}
+</style>
+</head>
+<body>
+<header>
+  <div class="marca">
+    <img src="lider-logo.png" alt="Lider Field Marketing &amp; Serviços">
+    <div class="t"><small>CONTROLE DE VALIDADE</small><b>Lojas Guanabara</b></div>
+  </div>
+  <nav id="nav" class="oculto">
+    <button id="tbPainel" class="ativo" onclick="aba('painel')">Painel</button>
+    <button id="tbCad" onclick="aba('cad')">Promotores e lojas</button>
+    <span class="quem" id="quem"></span>
+  </nav>
+</header>
+
+<main>
+  <div id="erroGeral" class="aviso err oculto"></div>
+
+  <!-- LOGIN (coordenador) -->
+  <form class="login oculto" id="telaLogin" onsubmit="entrar(event)">
+    <h1>Acesso do coordenador</h1>
+    <div style="color:var(--fraco)">Controle de validade · Lojas Guanabara</div>
+    <label for="lgUsr">Usuário</label>
+    <input class="campo" id="lgUsr" autocomplete="username" autocapitalize="none" required>
+    <label for="lgPwd">Senha</label>
+    <input class="campo" id="lgPwd" type="password" autocomplete="current-password" required>
+    <div class="err-msg" id="lgErro"></div>
+    <button class="btn" style="width:100%;justify-content:center;margin-top:6px" type="submit">Entrar</button>
+  </form>
+
+  <!-- PAINEL -->
+  <section id="telaPainel" class="oculto">
+    <div class="barra">
+      <div style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap">
+        <div><label for="semSel">Semana de levantamento</label><select id="semSel" onchange="carregaPainel()"></select></div>
+        <div class="nota" id="atualizado" style="padding-bottom:10px"></div>
+      </div>
+      <button class="btn" id="btnXls" onclick="exportar()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+        Exportar Excel
+      </button>
+    </div>
+    <div class="cards" id="cards"></div>
+    <div class="leg">
+      <span><i class="sw" style="background:#F4C9C5;border:1px solid #A3201B"></i>vence em menos de 15 dias</span>
+      <span><i class="sw" style="background:#FBE7C2;border:1px solid #A8720A"></i>vence em 15 a 29 dias</span>
+      <span><i class="sw" style="background:#2B2622"></i>ruptura</span>
+      <span><i class="sw" style="background:#ECEEF2;border:1px dashed #8A93A0"></i>loja sem visita na semana</span>
+      <span>vazio = nada a reportar · dias contados até hoje</span>
+    </div>
+    <div class="tabwrap"><table class="m" id="matriz"></table></div>
+    <div class="nota">Passe o mouse sobre a data de envio para ver o horário de recebimento e a localização registrada.</div>
+  </section>
+
+  <!-- CADASTRO -->
+  <section id="telaCad" class="oculto">
+    <div class="cad">
+      <div class="lista">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+          <b style="font-size:17px">Usuários cadastrados</b>
+          <span id="semProm" style="color:var(--fraco)"></span>
+        </div>
+        <div id="listaUsr"></div>
+      </div>
+      <form id="fmUsr" onsubmit="salvarUsr(event)">
+        <h2 id="fmTit">Novo usuário</h2>
+        <label class="lb" for="fNome">Nome</label>
+        <input class="campo" id="fNome" required>
+        <label class="lb" for="fUsr">Usuário (login)</label>
+        <input class="campo" id="fUsr" autocapitalize="none" required>
+        <label class="lb" for="fPapel">Tipo</label>
+        <select id="fPapel" onchange="papelMudou()">
+          <option value="promotor">Promotor</option>
+          <option value="coordenador">Coordenador (acessa este painel)</option>
+        </select>
+        <label class="lb" for="fSenha" id="fSenhaLb">Senha inicial</label>
+        <input class="campo" id="fSenha" type="text" autocomplete="off" placeholder="mínimo 6 caracteres">
+        <label class="lb" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="fAtivo" checked> Ativo (desmarque para bloquear o acesso)</label>
+        <div id="blocoLojas">
+          <label class="lb">Lojas deste promotor</label>
+          <div class="lojasel" id="lojasSel"></div>
+          <div class="nota">Marcar uma loja de outro promotor transfere a loja para este.</div>
+        </div>
+        <div class="err-msg" id="fErro"></div>
+        <div class="ok-msg" id="fOk"></div>
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+          <button class="btn" type="submit" id="fBtn">Cadastrar</button>
+          <button class="btn sec" type="button" onclick="limparForm()">Limpar</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</main>
+
+<script>
+var SRV = 'https://pata-negra-784065203515.us-central1.run.app';
+var S = { token: null, origem: '', painel: null, usuarios: [], lojas: [] };
+function $(id){ return document.getElementById(id); }
+function ls(k, v){ try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch(e){ return null; } }
+function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function api(caminho, opts){
+  opts = opts || {};
+  opts.headers = Object.assign({'Content-Type':'application/json'}, opts.headers || {});
+  if (S.token) opts.headers['Authorization'] = 'Bearer ' + S.token;
+  return fetch(SRV + caminho, opts);
+}
+function dataBR(iso){ return iso ? iso.slice(8,10) + '/' + iso.slice(5,7) + '/' + iso.slice(0,4) : ''; }
+function erroGeral(t){ $('erroGeral').textContent = t || ''; $('erroGeral').classList.toggle('oculto', !t); }
+
+// ── acesso: 1º token do BELLOTAS (admin/operador), 2º token do coordenador ──
+function tentar(token){
+  if (!token) return Promise.resolve(null);
+  return fetch(SRV + '/validade/me', { headers: { 'Authorization': 'Bearer ' + token } })
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(d){ return d && (d.papel === 'admin' || d.papel === 'coordenador') ? { token: token, me: d } : null; })
+    .catch(function(){ return null; });
+}
+function iniciar(){
+  tentar(ls('pn_token')).then(function(x){ return x || tentar(ls('vl_token_coord')); }).then(function(x){
+    if (!x) { $('telaLogin').classList.remove('oculto'); return; }
+    S.token = x.token; S.origem = x.me.origem;
+    $('quem').innerHTML = esc(x.me.nome) + (x.me.origem === 'bellotas' ? ' (BELLOTAS)' : '') +
+      (x.me.origem === 'validade' ? ' · <a onclick="sair()">Sair</a>' : '');
+    $('telaLogin').classList.add('oculto'); $('nav').classList.remove('oculto');
+    aba('painel');
+    setInterval(function(){ if (!$('telaPainel').classList.contains('oculto')) carregaPainel(true); }, 60000);
+  });
+}
+function entrar(ev){
+  ev.preventDefault(); $('lgErro').textContent = '';
+  fetch(SRV + '/validade/login', { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ usuario: $('lgUsr').value.trim(), senha: $('lgPwd').value }) })
+    .then(function(r){ return r.json().then(function(d){ return [r, d]; }); })
+    .then(function(x){
+      if (!x[0].ok) { $('lgErro').textContent = x[1].erro || 'Não foi possível entrar'; return; }
+      if (x[1].papel !== 'coordenador') { $('lgErro').textContent = 'Este acesso é dos coordenadores. Promotores usam a página do celular.'; return; }
+      ls('vl_token_coord', x[1].token); iniciar();
+    })
+    .catch(function(){ $('lgErro').textContent = 'Sem conexão com o servidor.'; });
+}
+function sair(){ ls('vl_token_coord', null); location.reload(); }
+function aba(qual){
+  $('tbPainel').classList.toggle('ativo', qual === 'painel'); $('tbCad').classList.toggle('ativo', qual === 'cad');
+  $('telaPainel').classList.toggle('oculto', qual !== 'painel'); $('telaCad').classList.toggle('oculto', qual !== 'cad');
+  if (qual === 'painel') carregaPainel(); else carregaUsr();
+}
+
+// ── painel ───────────────────────────────────────────────────────────
+function carregaPainel(silencioso){
+  var sem = $('semSel').value || '';
+  api('/validade/painel?semana=' + encodeURIComponent(sem))
+    .then(function(r){ return r.json().then(function(d){ return [r, d]; }); })
+    .then(function(x){
+      if (!x[0].ok) { erroGeral(x[1].erro || 'Erro ao carregar o painel'); return; }
+      erroGeral(''); S.painel = x[1]; desenhaPainel();
+    })
+    .catch(function(){ if (!silencioso) erroGeral('Sem conexão com o servidor.'); });
+}
+function desenhaPainel(){
+  var d = S.painel;
+  $('semSel').innerHTML = d.semanas.map(function(s, i){
+    var fim = new Date(s + 'T00:00:00'); fim.setDate(fim.getDate() + 6);
+    return '<option value="' + s + '"' + (s === d.semana ? ' selected' : '') + '>' + dataBR(s).slice(0,5) + ' a ' + fim.toLocaleDateString('pt-BR') + (i === 0 ? ' (atual)' : '') + '</option>';
+  }).join('');
+  $('atualizado').textContent = 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) + ' · atualiza sozinho a cada minuto';
+  var visit = 0, venc = 0, cx = 0, rup = 0;
+  d.lojas.forEach(function(l){
+    if (!l.visita) return; visit++;
+    l.visita.itens.forEach(function(it){ if (it.ruptura) rup++; else { venc++; cx += it.caixas; } });
+  });
+  $('cards').innerHTML =
+    '<div class="card"><small>Lojas visitadas</small><b>' + visit + ' <span style="font-size:15px;color:var(--fraco);font-weight:500">de ' + d.lojas.length + '</span></b></div>' +
+    '<div class="card"><small>Sem visita na semana</small><b style="color:var(--fraco)">' + (d.lojas.length - visit) + '</b></div>' +
+    '<div class="card"><small>Itens vencendo (&lt; 30 dias)</small><b style="color:var(--verm)">' + venc + ' <span style="font-size:15px;font-weight:500">· ' + (Math.round(cx * 10) / 10) + ' cx</span></b></div>' +
+    '<div class="card"><small>Rupturas</small><b>' + rup + '</b></div>';
+  var h = '<thead><tr><th class="c0">Loja</th>';
+  d.lojas.forEach(function(l){ h += '<th class="' + (l.visita ? '' : 'semvis') + '" style="font-size:13px">' + esc(l.rotulo) + '</th>'; });
+  h += '</tr><tr><th class="c0">Promotor</th>';
+  d.lojas.forEach(function(l){ h += '<td class="' + (l.visita ? '' : 'semvis') + '" style="font-weight:500;color:var(--texto)">' + esc(l.promotor || '—') + '</td>'; });
+  h += '</tr><tr><th class="c0">Envio</th>';
+  d.lojas.forEach(function(l){
+    var v = l.visita;
+    if (!v) { h += '<td class="semvis">sem visita</td>'; return; }
+    var dt = new Date(v.coletadoEm), rec = new Date(v.recebidoEm);
+    var tip = 'Preenchida: ' + dt.toLocaleString('pt-BR') + '\nRecebida: ' + rec.toLocaleString('pt-BR') + '\nPor: ' + v.promotorNome +
+      '\nLocalização: ' + (v.lat != null ? v.lat.toFixed(5) + ', ' + v.lng.toFixed(5) + (v.precisao ? ' (±' + v.precisao + ' m)' : '') : 'não registrada');
+    h += '<td title="' + esc(tip) + '">' + dt.toLocaleDateString('pt-BR', {weekday:'short', day:'2-digit', month:'2-digit'}) + ' ' + dt.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) +
+         (v.lat != null ? '' : ' <span title="sem localização" style="color:var(--verm)">•</span>') + '</td>';
+  });
+  h += '</tr></thead><tbody>';
+  d.produtos.forEach(function(p){
+    h += '<tr><th class="c0">' + esc(p.nome) + '</th>';
+    d.lojas.forEach(function(l){
+      if (!l.visita) { h += '<td class="cel semvis"></td>'; return; }
+      var it = l.visita.itens.filter(function(i){ return i.cod === p.cod; })[0];
+      if (!it) { h += '<td class="cel"></td>'; return; }
+      if (it.ruptura) { h += '<td class="cel rp">RUPTURA</td>'; return; }
+      var dias = it.dias, txt2 = dias < 0 ? 'VENCIDO há ' + (-dias) + 'd' : dias + ' dias';
+      h += '<td class="cel ' + (dias < 15 ? 'vm' : 'am') + '">' + it.caixas + ' cx · ' + dataBR(it.validade).slice(0,5) +
+           '<br><span style="font-size:11.5px;font-weight:500">' + txt2 + ' · ' + it.kg + ' kg</span></td>';
+    });
+    h += '</tr>';
+  });
+  $('matriz').innerHTML = h + '</tbody>';
+}
+function exportar(){
+  var b = $('btnXls'); b.disabled = true;
+  api('/validade/painel.xlsx?semana=' + encodeURIComponent(S.painel ? S.painel.semana : ''))
+    .then(function(r){ if (!r.ok) throw new Error(); return r.blob(); })
+    .then(function(blob){
+      var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+      a.download = 'validade_guanabara_semana_' + (S.painel ? S.painel.semana : '') + '.xlsx';
+      document.body.appendChild(a); a.click(); a.remove(); b.disabled = false;
+    })
+    .catch(function(){ b.disabled = false; erroGeral('Não foi possível gerar o Excel.'); });
+}
+
+// ── cadastro ─────────────────────────────────────────────────────────
+function carregaUsr(){
+  api('/validade/usuarios').then(function(r){ return r.json(); }).then(function(d){
+    if (d.erro) { erroGeral(d.erro); return; }
+    S.usuarios = d.usuarios; S.lojas = d.lojas; desenhaUsr(); desenhaLojasSel([]);
+  }).catch(function(){ erroGeral('Sem conexão com o servidor.'); });
+}
+function donoDe(cnpj){ var u = S.usuarios.filter(function(x){ return x.papel === 'promotor' && x.ativo && (x.lojas || []).indexOf(cnpj) >= 0; })[0]; return u ? u.nome : ''; }
+function rotulo(cnpj){ var l = S.lojas.filter(function(x){ return x.cnpj === cnpj; })[0]; return l ? l.rotulo : cnpj; }
+function desenhaUsr(){
+  var sem = S.lojas.filter(function(l){ return !donoDe(l.cnpj); });
+  $('semProm').innerHTML = S.lojas.length + ' lojas · ' + (sem.length ? '<b style="color:var(--verm)">' + sem.length + ' sem promotor</b>' : 'todas com promotor');
+  var ord = S.usuarios.slice().sort(function(a, b){ return (a.papel > b.papel ? -1 : a.papel < b.papel ? 1 : 0) || a.nome.localeCompare(b.nome); });
+  $('listaUsr').innerHTML = (sem.length ? '<div class="aviso" style="background:#FFF4D9;border:1px solid #EBD39A">Lojas sem promotor: <b>' + sem.map(function(l){ return esc(l.rotulo); }).join(', ') + '</b></div>' : '') +
+    (ord.length ? '' : '<div class="nota">Nenhum usuário ainda. Cadastre os coordenadores e promotores ao lado.</div>') +
+    ord.map(function(u){
+      return '<div class="u' + (u.ativo ? '' : ' inativo') + '"><div class="u-top"><div><b>' + esc(u.nome) + '</b><br><small>usuário: ' + esc(u.usuario) + ' · ' +
+        (u.papel === 'coordenador' ? 'coordenador' : 'promotor') + ' · ' + (u.ativo ? 'ativo' : 'DESATIVADO') + '</small></div>' +
+        '<button class="btn sec" type="button" onclick="editar(\'' + esc(u.usuario) + '\')">Editar</button></div>' +
+        (u.papel === 'promotor' ? '<div class="chips">' + ((u.lojas || []).length ? u.lojas.map(function(c){ return '<span class="chip">' + esc(rotulo(c)) + '</span>'; }).join('') : '<span class="nota">sem lojas</span>') + '</div>' : '') +
+        '</div>';
+    }).join('');
+}
+function desenhaLojasSel(marcadas, eu){
+  $('lojasSel').innerHTML = S.lojas.map(function(l){
+    var dono = donoDe(l.cnpj), meu = marcadas.indexOf(l.cnpj) >= 0;
+    var outro = dono && !meu ? ' <small>(' + esc(dono) + ')</small>' : '';
+    return '<label><input type="checkbox" value="' + l.cnpj + '"' + (meu ? ' checked' : '') + '><span>' + esc(l.rotulo) + outro + '</span></label>';
+  }).join('');
+}
+function papelMudou(){ $('blocoLojas').classList.toggle('oculto', $('fPapel').value !== 'promotor'); }
+function limparForm(){
+  $('fmUsr').reset(); $('fUsr').readOnly = false; $('fAtivo').checked = true;
+  $('fmTit').textContent = 'Novo usuário'; $('fBtn').textContent = 'Cadastrar'; $('fSenhaLb').textContent = 'Senha inicial';
+  $('fErro').textContent = ''; papelMudou(); desenhaLojasSel([]);
+}
+function editar(usr){
+  var u = S.usuarios.filter(function(x){ return x.usuario === usr; })[0]; if (!u) return;
+  $('fNome').value = u.nome; $('fUsr').value = u.usuario; $('fUsr').readOnly = true;
+  $('fPapel').value = u.papel; $('fAtivo').checked = !!u.ativo; $('fSenha').value = '';
+  $('fmTit').textContent = 'Editar ' + u.nome; $('fBtn').textContent = 'Salvar alterações';
+  $('fSenhaLb').textContent = 'Nova senha (deixe em branco para manter)';
+  $('fErro').textContent = ''; $('fOk').textContent = '';
+  papelMudou(); desenhaLojasSel(u.lojas || []);
+  $('fmUsr').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function salvarUsr(ev){
+  ev.preventDefault(); $('fErro').textContent = ''; $('fOk').textContent = '';
+  var lojas = Array.prototype.map.call($('lojasSel').querySelectorAll('input:checked'), function(i){ return i.value; });
+  var corpo = { nome: $('fNome').value.trim(), usuario: $('fUsr').value.trim(), papel: $('fPapel').value,
+                senha: $('fSenha').value, ativo: $('fAtivo').checked, lojas: lojas };
+  api('/validade/usuarios', { method: 'POST', body: JSON.stringify(corpo) })
+    .then(function(r){ return r.json().then(function(d){ return [r, d]; }); })
+    .then(function(x){
+      if (!x[0].ok) { $('fErro').textContent = x[1].erro || 'Erro ao salvar'; return; }
+      var msg = 'Salvo: ' + corpo.nome + (corpo.senha ? ' — informe a senha ao usuário.' : '');
+      limparForm(); $('fOk').textContent = msg; carregaUsr();
+    })
+    .catch(function(){ $('fErro').textContent = 'Sem conexão com o servidor.'; });
+}
+iniciar();
+</script>
+</body>
+</html>
