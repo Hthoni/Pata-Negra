@@ -1,5 +1,6 @@
 """
-Controle de validade — lojas Guanabara (NOVO, 13/11/2026).
+Controle de validade — lojas Guanabara e Atacadão (NOVO, 13/11/2026;
+REDES 16/11/2026).
 
 Promotores terceirizados (Lider) visitam as lojas Guanabara uma vez por
 semana e informam, pelo celular, os produtos com MENOS DE 30 DIAS até o
@@ -16,9 +17,15 @@ Módulo SEPARADO do resto do BELLOTAS de propósito:
     secret                              -> segredo dos tokens da validade
     visitas/<segunda AAAA-MM-DD>/<cnpj>.json -> 1 visita por loja por semana
                                            (nova visita na semana SUBSTITUI)
-- produtos e lojas NÃO são cadastrados aqui: vêm dos perfis
-  guanabara_lojas (5 produtos + 28 lojas) e guanabara_central (9 produtos)
-  do bucket de perfis. Mudou o perfil -> o site acompanha sozinho.
+- produtos e lojas NÃO são cadastrados aqui: vêm dos perfis de cada REDE
+  (ver REDES abaixo). Mudou o perfil -> o site acompanha sozinho.
+  Guanabara: guanabara_lojas (5 produtos + 28 lojas) + guanabara_central
+  (9 produtos). Atacadão: atacadao (12 produtos + 30 lojas).
+- REDES (16/11/2026): um promotor pode ter lojas de redes diferentes; o
+  formulário de cada loja mostra os produtos da rede dela. CNPJ é único
+  entre redes, então visitas/<semana>/<cnpj>.json não muda.
+- Nome de produto EXIBIDO é simplificado (sem "RF." e sem "PATA NEGRA")
+  — a marca não aparece pro promotor e o nome fica curto no celular.
 
 Registrado no main.py com: app.register_blueprint(validade.bp)
 """
@@ -45,8 +52,21 @@ from perfil import ler_perfil, ler_filiais
 bp = Blueprint('validade', __name__)
 
 BUCKET = os.environ.get('GCS_VALIDADE_BUCKET', 'pata-negra-validade')
-PERFIL_LOJAS = 'guanabara_lojas'
-PERFIL_CENTRAL = 'guanabara_central'
+# Cada rede: perfis de onde vêm os produtos (na ordem), perfil com a tabela
+# de lojas, cores (cor = texto/botão, contraste ok com branco; cor2 = faixa),
+# perfil cujo CNPJ de cabeçalho NÃO é loja (CD), e CNPJs que são a MESMA
+# loja física (alias -> principal; o perfil de pedidos precisa dos dois).
+REDES = {
+    'guanabara': {'nome': 'Guanabara', 'perfis': ['guanabara_lojas', 'guanabara_central'],
+                  'perfilLojas': 'guanabara_lojas', 'naoLoja': 'guanabara_central',
+                  'cor': '#C8102E', 'cor2': '#FFD100', 'claro': '#FDECEE', 'unir': {}},
+    'atacadao': {'nome': 'Atacadão', 'perfis': ['atacadao'], 'perfilLojas': 'atacadao',
+                 'naoLoja': None,
+                 'cor': '#00773A', 'cor2': '#F47B20', 'claro': '#FEF1E6',
+                 # PILARES: mesma loja, dois CNPJs (confirmado 16/11/2026)
+                 'unir': {'93209765069150': '00063960002659'}},
+}
+ORDEM_REDES = ['guanabara', 'atacadao']
 DIAS_ALERTA = 30            # promotor reporta só o que vence em menos disso
 DIAS_TOKEN = {'promotor': 30, 'coordenador': 7}
 FUSO = datetime.timezone(datetime.timedelta(hours=-3))   # Brasília (sem horário de verão)
@@ -186,37 +206,69 @@ def _eh_gestor(q):
 _cache_cat = {'t': 0, 'cat': None}
 
 
+def _nome_curto(nome):
+    """Nome exibido: sem 'RF.' no início, sem 'PATA NEGRA', espaços simples,
+    sem ponto sobrando no fim ('RF.RABO SUINO SAL.PATA NEGRA' -> 'RABO SUINO SAL')."""
+    n = re.sub(r'^\s*RF\.?\s*', '', str(nome or ''), flags=re.I)
+    n = re.sub(r'PATA\s*NEGRA', ' ', n, flags=re.I)
+    n = re.sub(r'\s+', ' ', n).strip(' .-')
+    return n or str(nome or '').strip()
+
+
+def _rede_meta(r):
+    c = REDES[r]
+    return {'id': r, 'nome': c['nome'], 'cor': c['cor'], 'cor2': c['cor2'], 'claro': c['claro']}
+
+
 def _catalogo():
+    """{'redes': [meta...], 'produtos': {rede: [...]}, 'lojas': [... com 'rede'],
+    'alias': {cnpj_alias: cnpj_principal}}. Cache de 2 min."""
     if _cache_cat['cat'] is not None and time.time() - _cache_cat['t'] < 120:
         return _cache_cat['cat']
-    produtos, lojas = [], []
-    cnpj_central = ''
-    vistos = set()
-    for chave in (PERFIL_LOJAS, PERFIL_CENTRAL):
-        if not perfil_existe(chave):
-            continue
-        pb = carregar_perfil_bytes(chave)
-        meta, prods = ler_perfil(pb)
-        if chave == PERFIL_CENTRAL:
-            cnpj_central = _so_digitos(meta.get('cnpjPerfil'))
-        for p in prods:
-            cod = str(p['codInterno']).strip()
-            if cod in vistos:
+    produtos, lojas, alias, redes = {}, [], {}, []
+    for r in ORDEM_REDES:
+        cfg = REDES[r]
+        prods, vistos, nao_loja, filiais = [], set(), '', {}
+        for chave in cfg['perfis']:
+            if not perfil_existe(chave):
+                print(f'[WARN] validade: perfil "{chave}" da rede {r} não encontrado no bucket')
                 continue
-            vistos.add(cod)
-            produtos.append({'cod': cod, 'nome': p['nomePerfil'], 'kgCx': p['kgCx']})
-        if chave == PERFIL_LOJAS:
-            for cnpj, f in ler_filiais(pb).items():
-                lojas.append({'cnpj': cnpj, 'nome': f['nome'], 'numero': f['numero'],
-                              'regiao': f['regiao'], 'cidade': f['cidade']})
-    # a Central é o CD, não é loja (aparece na tabela de filiais com nº 0)
-    lojas = [l for l in lojas if l['cnpj'] != cnpj_central and str(l['numero']).strip() not in ('0', '')]
-    lojas.sort(key=lambda l: (int(l['numero']) if str(l['numero']).isdigit() else 999, l['nome']))
-    for l in lojas:
-        l['rotulo'] = f"{int(l['numero']):02d} · {l['nome']}" if str(l['numero']).isdigit() else l['nome']
-    cat = {'produtos': produtos, 'lojas': lojas}
+            pb = carregar_perfil_bytes(chave)
+            meta, ps = ler_perfil(pb)
+            if chave == cfg.get('naoLoja'):
+                nao_loja = _so_digitos(meta.get('cnpjPerfil'))
+            for p in ps:
+                cod = str(p['codInterno']).strip()
+                if cod in vistos:
+                    continue
+                vistos.add(cod)
+                prods.append({'cod': cod, 'nome': _nome_curto(p['nomePerfil']), 'kgCx': p['kgCx']})
+            if chave == cfg['perfilLojas']:
+                filiais = ler_filiais(pb)
+        if not prods and not filiais:
+            continue
+        redes.append(_rede_meta(r))
+        produtos[r] = prods
+        unir = cfg.get('unir') or {}
+        alias.update(unir)
+        ls = []
+        for cnpj, f in filiais.items():
+            if cnpj in unir or cnpj == nao_loja or str(f['numero']).strip() in ('0', ''):
+                continue   # alias da mesma loja, CD, ou linha sem número
+            ls.append({'cnpj': cnpj, 'rede': r, 'nome': f['nome'], 'numero': f['numero'],
+                       'regiao': f['regiao'], 'cidade': f['cidade']})
+        ls.sort(key=lambda l: (int(l['numero']) if str(l['numero']).isdigit() else 9999, l['nome']))
+        for l in ls:
+            l['rotulo'] = f"{int(l['numero']):02d} · {l['nome']}" if str(l['numero']).isdigit() else l['nome']
+        lojas.extend(ls)
+    cat = {'redes': redes, 'produtos': produtos, 'lojas': lojas, 'alias': alias}
     _cache_cat['cat'], _cache_cat['t'] = cat, time.time()
     return cat
+
+
+def _cnpj_loja(cnpj, cat):
+    c = _so_digitos(cnpj)
+    return cat['alias'].get(c, c)
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -265,7 +317,8 @@ def v_minhas():
         except Exception:
             pass
     out = [{**l, 'visitadaEm': feitas.get(l['cnpj'])} for l in lojas]
-    return jsonify({'semana': seg, 'lojas': out, 'produtos': cat['produtos'],
+    return jsonify({'semana': seg, 'lojas': out, 'redes': cat['redes'],
+                    'produtosPorRede': cat['produtos'],
                     'diasAlerta': DIAS_ALERTA, 'nome': q['nome']})
 
 
@@ -280,7 +333,8 @@ def v_visita():
         return jsonify({'erro': 'sessão inválida — entre de novo'}), 401
     body = request.get_json(silent=True) or {}
     cat = _catalogo()
-    loja = next((l for l in cat['lojas'] if l['cnpj'] == _so_digitos(body.get('loja'))), None)
+    cnpj = _cnpj_loja(body.get('loja'), cat)
+    loja = next((l for l in cat['lojas'] if l['cnpj'] == cnpj), None)
     if not loja:
         return jsonify({'erro': 'Loja desconhecida'}), 400
     if not _eh_gestor(q) and loja['cnpj'] not in q['lojas']:
@@ -294,7 +348,7 @@ def v_visita():
     except Exception:
         coletado = agora
 
-    prods = {p['cod']: p for p in cat['produtos']}
+    prods = {p['cod']: p for p in cat['produtos'].get(loja['rede'], [])}
     itens, erros = [], []
     for it in body.get('itens') or []:
         p = prods.get(str(it.get('cod')))
@@ -322,7 +376,7 @@ def v_visita():
 
     seg = _segunda(coletado.date()).isoformat()
     visita = {
-        'loja': loja['cnpj'], 'lojaNome': loja['rotulo'],
+        'loja': loja['cnpj'], 'lojaNome': loja['rotulo'], 'rede': loja['rede'],
         'promotor': q['usuario'], 'promotorNome': q['nome'],
         'coletadoEm': coletado.isoformat(timespec='seconds'),
         'recebidoEm': agora.isoformat(timespec='seconds'),
@@ -331,7 +385,7 @@ def v_visita():
         'semana': seg, 'itens': itens,
     }
     _gravar_json(f'visitas/{seg}/{loja["cnpj"]}.json', visita)
-    print(f'[INFO] validade visita: {loja["rotulo"]} por {q["usuario"]} semana {seg} '
+    print(f'[INFO] validade visita: {loja["rede"]} {loja["rotulo"]} por {q["usuario"]} semana {seg} '
           f'itens={len(itens)} gps={"sim" if visita["lat"] is not None else "não"}')
     return jsonify({'ok': True, 'semana': seg, 'itens': len(itens)})
 
@@ -339,13 +393,15 @@ def v_visita():
 # ─────────────────────────────────────────────────────────────────────
 # Rotas — painel (coordenador Lider / admin e operador do BELLOTAS)
 # ─────────────────────────────────────────────────────────────────────
-def _dados_painel(semana_txt):
+def _dados_painel(semana_txt, rede):
     hoje = _agora_brt().date()
     try:
         seg = _segunda(datetime.date.fromisoformat(semana_txt))
     except Exception:
         seg = _segunda(hoje)
     cat = _catalogo()
+    if rede not in cat['produtos']:
+        rede = cat['redes'][0]['id'] if cat['redes'] else rede
     visitas = {}
     for b in _bucket().list_blobs(prefix=f'visitas/{seg.isoformat()}/'):
         try:
@@ -360,6 +416,8 @@ def _dados_painel(semana_txt):
                 dono[c] = u.get('nome') or u['usuario']
     lojas = []
     for l in cat['lojas']:
+        if l['rede'] != rede:
+            continue
         v = visitas.get(l['cnpj'])
         if v:
             for it in v['itens']:
@@ -369,7 +427,8 @@ def _dados_painel(semana_txt):
                       'visita': v})
     semanas = [(_segunda(hoje) - datetime.timedelta(weeks=i)).isoformat() for i in range(12)]
     return {'semana': seg.isoformat(), 'semanaFim': (seg + datetime.timedelta(days=6)).isoformat(),
-            'semanas': semanas, 'hoje': hoje.isoformat(), 'produtos': cat['produtos'], 'lojas': lojas}
+            'semanas': semanas, 'hoje': hoje.isoformat(), 'rede': rede, 'redes': cat['redes'],
+            'produtos': cat['produtos'].get(rede, []), 'lojas': lojas}
 
 
 @bp.route('/validade/painel')
@@ -377,7 +436,7 @@ def v_painel():
     q = _quem()
     if not _eh_gestor(q):
         return jsonify({'erro': 'acesso restrito'}), 403
-    return jsonify(_dados_painel(request.args.get('semana', '')))
+    return jsonify(_dados_painel(request.args.get('semana', ''), request.args.get('rede', 'guanabara')))
 
 
 def _br(iso):
@@ -394,10 +453,25 @@ def v_painel_xlsx():
     q = _quem()
     if not _eh_gestor(q):
         return jsonify({'erro': 'acesso restrito'}), 403
-    d = _dados_painel(request.args.get('semana', ''))
+    semana = request.args.get('semana', '')
     wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = 'Validade'
+    wb.remove(wb.active)
+    d = None
+    for rm in _catalogo()['redes']:
+        d = _dados_painel(semana, rm['id'])
+        ws = wb.create_sheet(rm['nome'][:31])
+        ws.sheet_properties.tabColor = rm['cor'].lstrip('#')
+        _aba_excel(ws, d)
+    if d is None:
+        return jsonify({'erro': 'nenhuma rede com perfil cadastrado'}), 404
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return send_file(buf, as_attachment=True, download_name=f'validade_semana_{d["semana"]}.xlsx',
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+def _aba_excel(ws, d):
     cinza = PatternFill('solid', fgColor='E9E5DF')
     verm = PatternFill('solid', fgColor='F4C9C5')
     amar = PatternFill('solid', fgColor='FBE7C2')
@@ -447,11 +521,6 @@ def v_painel_xlsx():
     n = len(d['produtos']) + 6
     ws.cell(n, 1, f"Semana {_br(d['semana'])} a {_br(d['semanaFim'])} · dias contados até {_br(d['hoje'])}").font = Font(italic=True)
     ws.cell(n + 1, 1, 'Vermelho: vence em menos de 15 dias · Amarelo: 15 a 29 dias · Cinza: loja sem visita · Vazio: nada a reportar').font = Font(italic=True)
-    buf = io.BytesIO()
-    wb.save(buf)
-    buf.seek(0)
-    return send_file(buf, as_attachment=True, download_name=f'validade_semana_{d["semana"]}.xlsx',
-                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -466,8 +535,9 @@ def v_usuarios():
     q = _quem()
     if not _eh_gestor(q):
         return jsonify({'erro': 'acesso restrito'}), 403
+    cat = _catalogo()
     return jsonify({'usuarios': [_publico(u) for u in _usuarios(fresco=True)],
-                    'lojas': _catalogo()['lojas']})
+                    'lojas': cat['lojas'], 'redes': cat['redes']})
 
 
 @bp.route('/validade/usuarios', methods=['POST'])
@@ -482,12 +552,13 @@ def v_usuarios_salvar():
     if not re.fullmatch(r'[a-z0-9._-]{3,40}', usuario):
         return jsonify({'erro': 'Usuário: 3 a 40 letras/números, sem espaço (pode usar . _ -)'}), 400
     papel = b.get('papel') if b.get('papel') in ('promotor', 'coordenador') else 'promotor'
+    # 16/11/2026: cadastro só com login — o login é o nome exibido. Usuário
+    # antigo que tinha nome mantém o nome se o formulário não mandar outro.
     nome = str(b.get('nome') or '').strip()
-    if not nome:
-        return jsonify({'erro': 'Informe o nome'}), 400
     senha = str(b.get('senha') or '')
-    validas = {l['cnpj'] for l in _catalogo()['lojas']}
-    lojas = [c for c in dict.fromkeys(_so_digitos(x) for x in (b.get('lojas') or [])) if c in validas]
+    cat = _catalogo()
+    validas = {l['cnpj'] for l in cat['lojas']}
+    lojas = [c for c in dict.fromkeys(_cnpj_loja(x, cat) for x in (b.get('lojas') or [])) if c in validas]
     if papel != 'promotor':
         lojas = []
 
@@ -501,7 +572,8 @@ def v_usuarios_salvar():
         lista.append(u)
     elif senha and len(senha) < 6:
         return jsonify({'erro': 'Nova senha: mínimo 6 caracteres'}), 400
-    u.update({'nome': nome, 'papel': papel, 'ativo': bool(b.get('ativo', True)), 'lojas': lojas})
+    u.update({'nome': nome or u.get('nome') or usuario, 'papel': papel,
+              'ativo': bool(b.get('ativo', True)), 'lojas': lojas})
     if senha:
         u['senhaHash'] = hash_senha(senha)
     for outro in lista:
