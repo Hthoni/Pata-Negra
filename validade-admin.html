@@ -8,6 +8,8 @@
   Controle de validade — PAINEL (coordenador Lider; admin/operador do
   BELLOTAS entram sem novo login, pelo token 'pn_token' do BELLOTAS).
   NOVO 13/11/2026. Backend: server/validade.py.
+  REDES (16/11/2026): aba por rede no painel (cor da rede), Excel com uma
+  aba por rede, cadastro só com login e lojas agrupadas por rede.
 -->
 <style>
 :root{--azul:#1F3B63;--laranja:#F29A1F;--fundo:#F4F6F9;--borda:#D5DCE6;--texto:#1A2230;--fraco:#4A5568;--verm:#A3201B}
@@ -39,6 +41,13 @@ select,input.campo{height:40px;border:1px solid #B9C3D1;border-radius:8px;paddin
 .leg{display:flex;flex-wrap:wrap;gap:16px;font-size:13px;margin-bottom:10px;align-items:center}
 .leg span{display:inline-flex;align-items:center;gap:6px}
 .sw{width:14px;height:14px;border-radius:3px;display:inline-block}
+.redes{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.redes button{min-height:44px;padding:0 18px;border-radius:10px;border:2px solid var(--rc);background:#fff;color:var(--rc);font-weight:700;font-size:15px;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+.redes button .dot{width:12px;height:12px;border-radius:50%;background:var(--rc2)}
+.redes button.ativo{background:var(--rc);color:#fff}
+.grp-tit{display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;margin:10px 0 6px;grid-column:1/-1}
+.grp-tit .pill{color:#fff;border-radius:999px;padding:3px 10px;font-size:12px}
+.grp-tit .bar{flex:1;height:3px;border-radius:2px}
 .tabwrap{overflow:auto;background:#fff;border:1px solid var(--borda);border-radius:12px;max-height:calc(100vh - 330px);min-height:300px}
 table.m{border-collapse:separate;border-spacing:0;font-size:12.5px}
 table.m th,table.m td{border-bottom:1px solid #E6EAF0;border-left:1px solid #E6EAF0;padding:6px 8px;text-align:center;white-space:nowrap}
@@ -87,7 +96,7 @@ table.m td.cel{min-width:118px;line-height:1.3;cursor:default}
 <header>
   <div class="marca">
     <img src="lider-logo.png" alt="Lider Field Marketing &amp; Serviços">
-    <div class="t"><small>CONTROLE DE VALIDADE</small><b>Lojas Guanabara</b></div>
+    <div class="t"><small>CONTROLE DE VALIDADE</small><b>Guanabara · Atacadão</b></div>
   </div>
   <nav id="nav" class="oculto">
     <button id="tbPainel" class="ativo" onclick="aba('painel')">Painel</button>
@@ -113,6 +122,7 @@ table.m td.cel{min-width:118px;line-height:1.3;cursor:default}
 
   <!-- PAINEL -->
   <section id="telaPainel" class="oculto">
+    <div class="redes" id="redeTabs" role="tablist" aria-label="Rede"></div>
     <div class="barra">
       <div style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap">
         <div><label for="semSel">Semana de levantamento</label><select id="semSel" onchange="carregaPainel()"></select></div>
@@ -147,9 +157,7 @@ table.m td.cel{min-width:118px;line-height:1.3;cursor:default}
       </div>
       <form id="fmUsr" onsubmit="salvarUsr(event)">
         <h2 id="fmTit">Novo usuário</h2>
-        <label class="lb" for="fNome">Nome</label>
-        <input class="campo" id="fNome" required>
-        <label class="lb" for="fUsr">Usuário (login)</label>
+        <label class="lb" for="fUsr">Login</label>
         <input class="campo" id="fUsr" autocapitalize="none" required>
         <label class="lb" for="fPapel">Tipo</label>
         <select id="fPapel" onchange="papelMudou()">
@@ -177,7 +185,7 @@ table.m td.cel{min-width:118px;line-height:1.3;cursor:default}
 
 <script>
 var SRV = 'https://pata-negra-784065203515.us-central1.run.app';
-var S = { token: null, origem: '', painel: null, usuarios: [], lojas: [] };
+var S = { token: null, origem: '', painel: null, usuarios: [], lojas: [], redes: [], rede: 'guanabara' };
 function $(id){ return document.getElementById(id); }
 function ls(k, v){ try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch(e){ return null; } }
 function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -231,7 +239,7 @@ function aba(qual){
 // ── painel ───────────────────────────────────────────────────────────
 function carregaPainel(silencioso){
   var sem = $('semSel').value || '';
-  api('/validade/painel?semana=' + encodeURIComponent(sem))
+  api('/validade/painel?semana=' + encodeURIComponent(sem) + '&rede=' + encodeURIComponent(S.rede))
     .then(function(r){ return r.json().then(function(d){ return [r, d]; }); })
     .then(function(x){
       if (!x[0].ok) { erroGeral(x[1].erro || 'Erro ao carregar o painel'); return; }
@@ -239,8 +247,16 @@ function carregaPainel(silencioso){
     })
     .catch(function(){ if (!silencioso) erroGeral('Sem conexão com o servidor.'); });
 }
+function trocaRede(r){ S.rede = r; carregaPainel(); }
+function redeMeta(id, lista){ return (lista || S.redes).filter(function(r){ return r.id === id; })[0] || { id: id, nome: id, cor: '#1F3B63', cor2: '#F29A1F', claro: '#EEF1F5' }; }
 function desenhaPainel(){
   var d = S.painel;
+  S.rede = d.rede; if (d.redes) S.redes = d.redes;
+  $('redeTabs').innerHTML = (d.redes || []).map(function(r){
+    return '<button role="tab" aria-selected="' + (r.id === d.rede) + '" class="' + (r.id === d.rede ? 'ativo' : '') + '" style="--rc:' + r.cor + ';--rc2:' + r.cor2 + '" onclick="trocaRede(\'' + r.id + '\')"><span class="dot"></span>' + esc(r.nome) + '</button>';
+  }).join('');
+  var rm = redeMeta(d.rede, d.redes);
+  document.querySelector('.tabwrap').style.borderTop = '4px solid ' + rm.cor2;
   $('semSel').innerHTML = d.semanas.map(function(s, i){
     var fim = new Date(s + 'T00:00:00'); fim.setDate(fim.getDate() + 6);
     return '<option value="' + s + '"' + (s === d.semana ? ' selected' : '') + '>' + dataBR(s).slice(0,5) + ' a ' + fim.toLocaleDateString('pt-BR') + (i === 0 ? ' (atual)' : '') + '</option>';
@@ -292,7 +308,7 @@ function exportar(){
     .then(function(r){ if (!r.ok) throw new Error(); return r.blob(); })
     .then(function(blob){
       var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-      a.download = 'validade_guanabara_semana_' + (S.painel ? S.painel.semana : '') + '.xlsx';
+      a.download = 'validade_semana_' + (S.painel ? S.painel.semana : '') + '.xlsx';
       document.body.appendChild(a); a.click(); a.remove(); b.disabled = false;
     })
     .catch(function(){ b.disabled = false; erroGeral('Não foi possível gerar o Excel.'); });
@@ -302,30 +318,40 @@ function exportar(){
 function carregaUsr(){
   api('/validade/usuarios').then(function(r){ return r.json(); }).then(function(d){
     if (d.erro) { erroGeral(d.erro); return; }
-    S.usuarios = d.usuarios; S.lojas = d.lojas; desenhaUsr(); desenhaLojasSel([]);
+    S.usuarios = d.usuarios; S.lojas = d.lojas; if (d.redes) S.redes = d.redes; desenhaUsr(); desenhaLojasSel([]);
   }).catch(function(){ erroGeral('Sem conexão com o servidor.'); });
 }
-function donoDe(cnpj){ var u = S.usuarios.filter(function(x){ return x.papel === 'promotor' && x.ativo && (x.lojas || []).indexOf(cnpj) >= 0; })[0]; return u ? u.nome : ''; }
-function rotulo(cnpj){ var l = S.lojas.filter(function(x){ return x.cnpj === cnpj; })[0]; return l ? l.rotulo : cnpj; }
+function donoDe(cnpj){ var u = S.usuarios.filter(function(x){ return x.papel === 'promotor' && x.ativo && (x.lojas || []).indexOf(cnpj) >= 0; })[0]; return u ? u.usuario : ''; }
+function lojaDe(cnpj){ return S.lojas.filter(function(x){ return x.cnpj === cnpj; })[0]; }
+function rotulo(cnpj){ var l = lojaDe(cnpj); return l ? l.rotulo : cnpj; }
 function desenhaUsr(){
   var sem = S.lojas.filter(function(l){ return !donoDe(l.cnpj); });
   $('semProm').innerHTML = S.lojas.length + ' lojas · ' + (sem.length ? '<b style="color:var(--verm)">' + sem.length + ' sem promotor</b>' : 'todas com promotor');
-  var ord = S.usuarios.slice().sort(function(a, b){ return (a.papel > b.papel ? -1 : a.papel < b.papel ? 1 : 0) || a.nome.localeCompare(b.nome); });
-  $('listaUsr').innerHTML = (sem.length ? '<div class="aviso" style="background:#FFF4D9;border:1px solid #EBD39A">Lojas sem promotor: <b>' + sem.map(function(l){ return esc(l.rotulo); }).join(', ') + '</b></div>' : '') +
+  var ord = S.usuarios.slice().sort(function(a, b){ return (a.papel > b.papel ? -1 : a.papel < b.papel ? 1 : 0) || a.usuario.localeCompare(b.usuario); });
+  var avisoSem = S.redes.map(function(r){
+    var x = sem.filter(function(l){ return l.rede === r.id; });
+    return x.length ? '<div style="margin-top:4px"><b style="color:' + r.cor + '">' + esc(r.nome) + ' (' + x.length + '):</b> ' + x.map(function(l){ return esc(l.rotulo); }).join(', ') + '</div>' : '';
+  }).join('');
+  $('listaUsr').innerHTML = (sem.length ? '<div class="aviso" style="background:#FFF4D9;border:1px solid #EBD39A">Lojas sem promotor' + avisoSem + '</div>' : '') +
     (ord.length ? '' : '<div class="nota">Nenhum usuário ainda. Cadastre os coordenadores e promotores ao lado.</div>') +
     ord.map(function(u){
-      return '<div class="u' + (u.ativo ? '' : ' inativo') + '"><div class="u-top"><div><b>' + esc(u.nome) + '</b><br><small>usuário: ' + esc(u.usuario) + ' · ' +
+      return '<div class="u' + (u.ativo ? '' : ' inativo') + '"><div class="u-top"><div><b>' + esc(u.usuario) + '</b>' + (u.nome && u.nome !== u.usuario ? ' <small>(' + esc(u.nome) + ')</small>' : '') + '<br><small>' +
         (u.papel === 'coordenador' ? 'coordenador' : 'promotor') + ' · ' + (u.ativo ? 'ativo' : 'DESATIVADO') + '</small></div>' +
         '<button class="btn sec" type="button" onclick="editar(\'' + esc(u.usuario) + '\')">Editar</button></div>' +
-        (u.papel === 'promotor' ? '<div class="chips">' + ((u.lojas || []).length ? u.lojas.map(function(c){ return '<span class="chip">' + esc(rotulo(c)) + '</span>'; }).join('') : '<span class="nota">sem lojas</span>') + '</div>' : '') +
+        (u.papel === 'promotor' ? '<div class="chips">' + ((u.lojas || []).length ? u.lojas.map(function(c){ var l = lojaDe(c), r = redeMeta(l ? l.rede : ''); return '<span class="chip" style="background:' + r.claro + ';color:' + r.cor + ';border:1px solid ' + r.cor2 + '">' + esc(r.nome.slice(0, 4)) + ' · ' + esc(rotulo(c)) + '</span>'; }).join('') : '<span class="nota">sem lojas</span>') + '</div>' : '') +
         '</div>';
     }).join('');
 }
-function desenhaLojasSel(marcadas, eu){
-  $('lojasSel').innerHTML = S.lojas.map(function(l){
-    var dono = donoDe(l.cnpj), meu = marcadas.indexOf(l.cnpj) >= 0;
-    var outro = dono && !meu ? ' <small>(' + esc(dono) + ')</small>' : '';
-    return '<label><input type="checkbox" value="' + l.cnpj + '"' + (meu ? ' checked' : '') + '><span>' + esc(l.rotulo) + outro + '</span></label>';
+function desenhaLojasSel(marcadas){
+  $('lojasSel').innerHTML = S.redes.map(function(r){
+    var h = '<div class="grp-tit"><span class="pill" style="background:' + r.cor + '">' + esc(r.nome) + '</span><span class="bar" style="background:' + r.cor2 + '"></span></div>';
+    S.lojas.forEach(function(l){
+      if (l.rede !== r.id) return;
+      var dono = donoDe(l.cnpj), meu = marcadas.indexOf(l.cnpj) >= 0;
+      var outro = dono && !meu ? ' <small>(' + esc(dono) + ')</small>' : '';
+      h += '<label><input type="checkbox" value="' + l.cnpj + '"' + (meu ? ' checked' : '') + ' style="accent-color:' + r.cor + '"><span>' + esc(l.rotulo) + outro + '</span></label>';
+    });
+    return h;
   }).join('');
 }
 function papelMudou(){ $('blocoLojas').classList.toggle('oculto', $('fPapel').value !== 'promotor'); }
@@ -336,9 +362,9 @@ function limparForm(){
 }
 function editar(usr){
   var u = S.usuarios.filter(function(x){ return x.usuario === usr; })[0]; if (!u) return;
-  $('fNome').value = u.nome; $('fUsr').value = u.usuario; $('fUsr').readOnly = true;
+  $('fUsr').value = u.usuario; $('fUsr').readOnly = true;
   $('fPapel').value = u.papel; $('fAtivo').checked = !!u.ativo; $('fSenha').value = '';
-  $('fmTit').textContent = 'Editar ' + u.nome; $('fBtn').textContent = 'Salvar alterações';
+  $('fmTit').textContent = 'Editar ' + u.usuario; $('fBtn').textContent = 'Salvar alterações';
   $('fSenhaLb').textContent = 'Nova senha (deixe em branco para manter)';
   $('fErro').textContent = ''; $('fOk').textContent = '';
   papelMudou(); desenhaLojasSel(u.lojas || []);
@@ -347,13 +373,13 @@ function editar(usr){
 function salvarUsr(ev){
   ev.preventDefault(); $('fErro').textContent = ''; $('fOk').textContent = '';
   var lojas = Array.prototype.map.call($('lojasSel').querySelectorAll('input:checked'), function(i){ return i.value; });
-  var corpo = { nome: $('fNome').value.trim(), usuario: $('fUsr').value.trim(), papel: $('fPapel').value,
+  var corpo = { usuario: $('fUsr').value.trim(), papel: $('fPapel').value,
                 senha: $('fSenha').value, ativo: $('fAtivo').checked, lojas: lojas };
   api('/validade/usuarios', { method: 'POST', body: JSON.stringify(corpo) })
     .then(function(r){ return r.json().then(function(d){ return [r, d]; }); })
     .then(function(x){
       if (!x[0].ok) { $('fErro').textContent = x[1].erro || 'Erro ao salvar'; return; }
-      var msg = 'Salvo: ' + corpo.nome + (corpo.senha ? ' — informe a senha ao usuário.' : '');
+      var msg = 'Salvo: ' + corpo.usuario + (corpo.senha ? ' — informe a senha ao usuário.' : '');
       limparForm(); $('fOk').textContent = msg; carregaUsr();
     })
     .catch(function(){ $('fErro').textContent = 'Sem conexão com o servidor.'; });
