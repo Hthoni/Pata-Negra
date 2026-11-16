@@ -7,6 +7,8 @@
 <title>Controle de validade</title>
 <!--
   Controle de validade — tela do PROMOTOR (celular). NOVO 13/11/2026.
+  REDES (16/11/2026): lojas de Guanabara e Atacadão na mesma lista,
+  cada rede com a sua cor; o formulário mostra os produtos da rede da loja.
   Login próprio (não é o do BELLOTAS). Backend: server/validade.py.
   Visita preenchida sem sinal fica numa FILA no celular (localStorage
   'vl_fila') e é enviada sozinha quando a internet volta.
@@ -40,6 +42,12 @@ input.campo{width:100%;height:52px;border:1px solid #B9C3D1;border-radius:10px;p
 .tag.ok{background:#DCEFE2;color:#1F5F3A}
 .tag.pend{background:#FDEBD3;color:#7A4A00}
 .tag.fila{background:#FFF4D9;color:#5C4710}
+.rede-tit{display:flex;align-items:center;gap:10px;margin:18px 0 8px;font-size:15px;font-weight:700}
+.rede-tit .pill{color:#fff;border-radius:999px;padding:5px 12px;font-size:13px;letter-spacing:.02em}
+.rede-tit .barra{flex:1;height:4px;border-radius:2px}
+.loja .rb{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:2px 8px;margin-right:6px;vertical-align:2px}
+.fm-rede{display:flex;align-items:center;gap:8px;margin:2px 0 4px}
+.fm-rede .pill{color:#fff;border-radius:999px;padding:4px 11px;font-size:12px;font-weight:700}
 .voltar{display:inline-flex;align-items:center;gap:4px;color:var(--azul);font-weight:600;background:none;border:none;padding:8px 0;min-height:44px;cursor:pointer}
 .prod{background:#fff;border:1px solid var(--borda);border-radius:12px;padding:10px 12px;margin-bottom:8px}
 .prod.rup{background:var(--verm-lt);border-color:#E3B3AF}
@@ -96,6 +104,7 @@ input.campo{width:100%;height:52px;border:1px solid #B9C3D1;border-radius:10px;p
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
       Lojas
     </button>
+    <div class="fm-rede" id="fmRede"></div>
     <h1 id="fmLoja"></h1>
     <div class="aviso info" id="fmInstr"></div>
     <div id="listaProd"></div>
@@ -109,7 +118,7 @@ input.campo{width:100%;height:52px;border:1px solid #B9C3D1;border-radius:10px;p
 <script>
 var SRV = 'https://pata-negra-784065203515.us-central1.run.app';
 var DIAS_ALERTA = 30;
-var S = { token: null, nome: '', lojas: [], produtos: [], semana: '', loja: null, rasc: {} };
+var S = { token: null, nome: '', lojas: [], produtos: [], prodRede: {}, redes: {}, ordemRedes: [], semana: '', loja: null, rasc: {} };
 
 function $(id){ return document.getElementById(id); }
 function ls(k, v){ try { if (v === undefined) { var x = localStorage.getItem(k); return x ? JSON.parse(x) : null; } if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch(e){ return null; } }
@@ -165,26 +174,47 @@ function iniciar(){
   }).catch(function(){ /* sem sinal: segue com o que está guardado */ });
   enviarFila();
 }
-function aplicaCatalogo(d){ S.lojas = d.lojas || []; S.produtos = d.produtos || []; S.semana = d.semana || ''; DIAS_ALERTA = d.diasAlerta || 30; }
+function aplicaCatalogo(d){
+  S.lojas = d.lojas || []; S.semana = d.semana || ''; DIAS_ALERTA = d.diasAlerta || 30;
+  // cache antigo (antes das redes) só tinha 'produtos' do Guanabara
+  S.prodRede = d.produtosPorRede || { guanabara: d.produtos || [] };
+  S.redes = {}; S.ordemRedes = [];
+  (d.redes || [{ id: 'guanabara', nome: 'Guanabara', cor: '#C8102E', cor2: '#FFD100', claro: '#FDECEE' }]).forEach(function(r){ S.redes[r.id] = r; S.ordemRedes.push(r.id); });
+  S.lojas.forEach(function(l){ if (!l.rede) l.rede = 'guanabara'; });
+}
+function rede(id){ return S.redes[id] || { id: id, nome: id, cor: '#1F3B63', cor2: '#F29A1F', claro: '#EEF1F5' }; }
 function mostrarLojas(){
   mostra('telaLojas');
   var fila = ls('vl_fila') || [];
   $('lojasSub').textContent = S.semana ? 'Semana de ' + dataBR(S.semana) + ' · suas lojas' : 'Suas lojas';
   if (!S.lojas.length) { $('listaLojas').innerHTML = '<div class="aviso info">Nenhuma loja atribuída a você ainda (ou sem conexão para carregar). Fale com o seu coordenador.</div>'; return; }
-  $('listaLojas').innerHTML = S.lojas.map(function(l, i){
-    var naFila = fila.some(function(v){ return v.loja === l.cnpj; });
-    var tag = naFila ? '<span class="tag fila">Aguardando sinal</span>'
-            : l.visitadaEm ? '<span class="tag ok">Visitada ' + dataBR(l.visitadaEm.slice(0,10)).slice(0,5) + '</span>'
-            : '<span class="tag pend">Pendente</span>';
-    return '<button class="loja" onclick="abrirLoja(' + i + ')"><span><span class="n">' + esc(l.rotulo) + '</span><span class="c" style="display:block">' + esc(l.cidade || '') + '</span></span>' + tag + '</button>';
+  var redesUsadas = S.ordemRedes.filter(function(r){ return S.lojas.some(function(l){ return l.rede === r; }); });
+  S.lojas.forEach(function(l){ if (redesUsadas.indexOf(l.rede) < 0) redesUsadas.push(l.rede); });
+  $('listaLojas').innerHTML = redesUsadas.map(function(rid){
+    var r = rede(rid);
+    var h = '<div class="rede-tit"><span class="pill" style="background:' + r.cor + '">' + esc(r.nome) + '</span><span class="barra" style="background:' + r.cor2 + '"></span></div>';
+    S.lojas.forEach(function(l, i){
+      if (l.rede !== rid) return;
+      var naFila = fila.some(function(v){ return v.loja === l.cnpj; });
+      var tag = naFila ? '<span class="tag fila">Aguardando sinal</span>'
+              : l.visitadaEm ? '<span class="tag ok">Visitada ' + dataBR(l.visitadaEm.slice(0,10)).slice(0,5) + '</span>'
+              : '<span class="tag pend">Pendente</span>';
+      h += '<button class="loja" style="border-top:3px solid ' + r.cor2 + '" onclick="abrirLoja(' + i + ')"><span><span class="n">' + esc(l.rotulo) + '</span>' +
+           '<span class="c" style="display:block"><span class="rb" style="background:' + r.claro + ';color:' + r.cor + '">' + esc(r.nome) + '</span>' + esc(l.cidade || '') + '</span></span>' + tag + '</button>';
+    });
+    return h;
   }).join('');
 }
 
 // ── formulário ───────────────────────────────────────────────────────
 function abrirLoja(i){
   S.loja = S.lojas[i];
+  S.produtos = S.prodRede[S.loja.rede] || [];
   S.rasc = ls('vl_rasc_' + S.loja.cnpj) || {};
+  var r = rede(S.loja.rede);
+  $('fmRede').innerHTML = '<span class="pill" style="background:' + r.cor + '">' + esc(r.nome) + '</span>';
   $('fmLoja').textContent = S.loja.rotulo;
+  $('telaForm').querySelector('.rodape').style.borderTop = '4px solid ' + r.cor2;
   var lim = new Date(hojeISO() + 'T00:00:00'); lim.setDate(lim.getDate() + DIAS_ALERTA);
   $('fmInstr').innerHTML = 'Lance só o que vence em <b>menos de ' + DIAS_ALERTA + ' dias</b> (antes de ' + lim.toLocaleDateString('pt-BR') + '). Se houver mais de um lote, informe o <b>pior</b> (validade mais próxima), em <b>caixas</b>.<br>Produto em falta na câmara? Toque em <b>Ruptura</b>.<br>Nada a reportar? É só tocar em <b>Enviar visita</b>.';
   $('listaProd').innerHTML = S.produtos.map(function(p){
