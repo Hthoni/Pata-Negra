@@ -12,6 +12,8 @@
   aba por rede, cadastro só com login e lojas agrupadas por rede.
   19/11/2026: grade com linhas visíveis, colunas de loja estreitas (nome
   quebra em 2 linhas, nº da filial embaixo), botão APAGAR usuário.
+  SUPERMERCADO (19/11/2026): login de colaborador Guanabara/Atacadão vê só
+  a própria rede (painel + Excel), sem localização; só o BELLOTAS cria.
 -->
 <style>
 :root{--azul:#1F3B63;--laranja:#F29A1F;--fundo:#F4F6F9;--borda:#D5DCE6;--texto:#1A2230;--fraco:#4A5568;--verm:#A3201B}
@@ -118,7 +120,7 @@ table.m tbody tr:hover td.cel:not(.vm):not(.am):not(.rp):not(.semvis){background
 
   <!-- LOGIN (coordenador) -->
   <form class="login oculto" id="telaLogin" onsubmit="entrar(event)">
-    <h1>Acesso do coordenador</h1>
+    <h1>Acesso ao painel</h1>
     <div style="color:var(--fraco)">Controle de validade · Lojas Guanabara</div>
     <label for="lgUsr">Usuário</label>
     <input class="campo" id="lgUsr" autocomplete="username" autocapitalize="none" required>
@@ -150,7 +152,7 @@ table.m tbody tr:hover td.cel:not(.vm):not(.am):not(.rp):not(.semvis){background
       <span>vazio = nada a reportar · dias contados até hoje</span>
     </div>
     <div class="tabwrap"><table class="m" id="matriz"></table></div>
-    <div class="nota">Passe o mouse sobre a data de envio para ver o horário de recebimento e a localização; sobre uma célula para ver o detalhe do lote.</div>
+    <div class="nota" id="notaPainel">Passe o mouse sobre a data de envio para ver o horário de recebimento e a localização; sobre uma célula para ver o detalhe do lote.</div>
   </section>
 
   <!-- CADASTRO -->
@@ -171,10 +173,16 @@ table.m tbody tr:hover td.cel:not(.vm):not(.am):not(.rp):not(.semvis){background
         <select id="fPapel" onchange="papelMudou()">
           <option value="promotor">Promotor</option>
           <option value="coordenador">Coordenador (acessa este painel)</option>
+          <option value="cliente" id="optCliente" disabled hidden>Supermercado (vê só a rede dele)</option>
         </select>
         <label class="lb" for="fSenha" id="fSenhaLb">Senha inicial</label>
         <input class="campo" id="fSenha" type="text" autocomplete="off" placeholder="mínimo 6 caracteres">
         <label class="lb" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="fAtivo" checked> Ativo (desmarque para bloquear o acesso)</label>
+        <div id="blocoRede" class="oculto">
+          <label class="lb" for="fRede">Rede do supermercado</label>
+          <select id="fRede"></select>
+          <div class="nota">Vê o painel e o Excel de todas as lojas desta rede, sem a localização dos promotores.</div>
+        </div>
         <div id="blocoLojas">
           <label class="lb">Lojas deste promotor</label>
           <div class="lojasel" id="lojasSel"></div>
@@ -212,13 +220,14 @@ function tentar(token){
   if (!token) return Promise.resolve(null);
   return fetch(SRV + '/validade/me', { headers: { 'Authorization': 'Bearer ' + token } })
     .then(function(r){ return r.ok ? r.json() : null; })
-    .then(function(d){ return d && (d.papel === 'admin' || d.papel === 'coordenador') ? { token: token, me: d } : null; })
+    .then(function(d){ return d && (d.papel === 'admin' || d.papel === 'coordenador' || d.papel === 'cliente') ? { token: token, me: d } : null; })
     .catch(function(){ return null; });
 }
 function iniciar(){
   tentar(ls('pn_token')).then(function(x){ return x || tentar(ls('vl_token_coord')); }).then(function(x){
     if (!x) { $('telaLogin').classList.remove('oculto'); return; }
-    S.token = x.token; S.origem = x.me.origem;
+    S.token = x.token; S.origem = x.me.origem; S.cliente = x.me.papel === 'cliente';
+    if (S.cliente) { S.rede = x.me.rede; $('tbCad').classList.add('oculto'); $('tbPainel').classList.add('oculto'); }
     $('quem').innerHTML = esc(x.me.nome) + (x.me.origem === 'bellotas' ? ' (BELLOTAS)' : '') +
       (x.me.origem === 'validade' ? ' · <a onclick="sair()">Sair</a>' : '');
     $('telaLogin').classList.add('oculto'); $('nav').classList.remove('oculto');
@@ -233,7 +242,7 @@ function entrar(ev){
     .then(function(r){ return r.json().then(function(d){ return [r, d]; }); })
     .then(function(x){
       if (!x[0].ok) { $('lgErro').textContent = x[1].erro || 'Não foi possível entrar'; return; }
-      if (x[1].papel !== 'coordenador') { $('lgErro').textContent = 'Este acesso é dos coordenadores. Promotores usam a página do celular.'; return; }
+      if (x[1].papel !== 'coordenador' && x[1].papel !== 'cliente') { $('lgErro').textContent = 'Este acesso é do painel. Promotores usam a página do celular.'; return; }
       ls('vl_token_coord', x[1].token); iniciar();
     })
     .catch(function(){ $('lgErro').textContent = 'Sem conexão com o servidor.'; });
@@ -265,6 +274,8 @@ function desenhaPainel(){
     return '<button role="tab" aria-selected="' + (r.id === d.rede) + '" class="' + (r.id === d.rede ? 'ativo' : '') + '" style="--rc:' + r.cor + ';--rc2:' + r.cor2 + '" onclick="trocaRede(\'' + r.id + '\')"><span class="dot"></span>' + esc(r.nome) + '</button>';
   }).join('');
   var rm = redeMeta(d.rede, d.redes);
+  if (S.cliente) { document.querySelector('.marca .t b').textContent = 'Lojas ' + rm.nome;
+    $('notaPainel').textContent = 'Passe o mouse sobre a data de envio para ver o horário da visita; sobre uma célula para ver o detalhe do lote.'; }
   document.querySelector('.tabwrap').style.borderTop = '4px solid ' + rm.cor2;
   $('semSel').innerHTML = d.semanas.map(function(s, i){
     var fim = new Date(s + 'T00:00:00'); fim.setDate(fim.getDate() + 6);
@@ -289,11 +300,12 @@ function desenhaPainel(){
   d.lojas.forEach(function(l){
     var v = l.visita;
     if (!v) { h += '<td class="lj semvis">sem visita</td>'; return; }
-    var dt = new Date(v.coletadoEm), rec = new Date(v.recebidoEm);
-    var tip = 'Preenchida: ' + dt.toLocaleString('pt-BR') + '\nRecebida: ' + rec.toLocaleString('pt-BR') + '\nPor: ' + v.promotorNome +
+    var dt = new Date(v.coletadoEm);
+    var tip = 'Visita: ' + dt.toLocaleString('pt-BR') + '\nPor: ' + v.promotorNome;
+    if (!S.cliente) tip += '\nRecebida: ' + new Date(v.recebidoEm).toLocaleString('pt-BR') +
       '\nLocalização: ' + (v.lat != null ? v.lat.toFixed(5) + ', ' + v.lng.toFixed(5) + (v.precisao ? ' (±' + v.precisao + ' m)' : '') : 'não registrada');
     h += '<td class="lj" title="' + esc(tip) + '">' + dt.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'}) + '<br>' + dt.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) +
-         (v.lat != null ? '' : ' <span title="sem localização" style="color:var(--verm)">•</span>') + '</td>';
+         (S.cliente || v.lat != null ? '' : ' <span title="sem localização" style="color:var(--verm)">•</span>') + '</td>';
   });
   h += '</tr></thead><tbody>';
   d.produtos.forEach(function(p){
@@ -328,7 +340,11 @@ function exportar(){
 function carregaUsr(){
   api('/validade/usuarios').then(function(r){ return r.json(); }).then(function(d){
     if (d.erro) { erroGeral(d.erro); return; }
-    S.usuarios = d.usuarios; S.lojas = d.lojas; if (d.redes) S.redes = d.redes; desenhaUsr(); desenhaLojasSel([]);
+    S.usuarios = d.usuarios; S.lojas = d.lojas; if (d.redes) S.redes = d.redes;
+    S.podeSuper = !!d.podeSupermercado;
+    $('optCliente').disabled = !S.podeSuper; $('optCliente').hidden = !S.podeSuper;
+    $('fRede').innerHTML = S.redes.map(function(r){ return '<option value="' + r.id + '">' + esc(r.nome) + '</option>'; }).join('');
+    desenhaUsr(); desenhaLojasSel([]);
   }).catch(function(){ erroGeral('Sem conexão com o servidor.'); });
 }
 function donoDe(cnpj){ var u = S.usuarios.filter(function(x){ return x.papel === 'promotor' && x.ativo && (x.lojas || []).indexOf(cnpj) >= 0; })[0]; return u ? u.usuario : ''; }
@@ -346,7 +362,8 @@ function desenhaUsr(){
     (ord.length ? '' : '<div class="nota">Nenhum usuário ainda. Cadastre os coordenadores e promotores ao lado.</div>') +
     ord.map(function(u){
       return '<div class="u' + (u.ativo ? '' : ' inativo') + '"><div class="u-top"><div><b>' + esc(u.usuario) + '</b>' + (u.nome && u.nome !== u.usuario ? ' <small>(' + esc(u.nome) + ')</small>' : '') + '<br><small>' +
-        (u.papel === 'coordenador' ? 'coordenador' : 'promotor') + ' · ' + (u.ativo ? 'ativo' : 'DESATIVADO') + '</small></div>' +
+        (u.papel === 'coordenador' ? 'coordenador' : u.papel === 'cliente' ? 'supermercado' : 'promotor') + ' · ' + (u.ativo ? 'ativo' : 'DESATIVADO') + '</small>' +
+        (u.papel === 'cliente' ? (function(){ var r = redeMeta(u.rede); return ' <span class="chip" style="background:' + r.cor + ';color:#fff">' + esc(r.nome) + '</span>'; })() : '') + '</div>' +
         '<button class="btn sec" type="button" onclick="editar(\'' + esc(u.usuario) + '\')">Editar</button></div>' +
         (u.papel === 'promotor' ? '<div class="chips">' + ((u.lojas || []).length ? u.lojas.map(function(c){ var l = lojaDe(c), r = redeMeta(l ? l.rede : ''); return '<span class="chip" style="background:' + r.claro + ';color:' + r.cor + ';border:1px solid ' + r.cor2 + '">' + esc(r.nome.slice(0, 4)) + ' · ' + esc(rotulo(c)) + '</span>'; }).join('') : '<span class="nota">sem lojas</span>') + '</div>' : '') +
         '</div>';
@@ -364,7 +381,10 @@ function desenhaLojasSel(marcadas){
     return h;
   }).join('');
 }
-function papelMudou(){ $('blocoLojas').classList.toggle('oculto', $('fPapel').value !== 'promotor'); }
+function papelMudou(){
+  $('blocoLojas').classList.toggle('oculto', $('fPapel').value !== 'promotor');
+  $('blocoRede').classList.toggle('oculto', $('fPapel').value !== 'cliente');
+}
 function limparForm(){
   $('fmUsr').reset(); $('fUsr').readOnly = false; $('fAtivo').checked = true;
   $('fmTit').textContent = 'Novo usuário'; $('fBtn').textContent = 'Cadastrar'; $('fSenhaLb').textContent = 'Senha inicial';
@@ -374,6 +394,7 @@ function editar(usr){
   var u = S.usuarios.filter(function(x){ return x.usuario === usr; })[0]; if (!u) return;
   $('fUsr').value = u.usuario; $('fUsr').readOnly = true;
   $('fPapel').value = u.papel; $('fAtivo').checked = !!u.ativo; $('fSenha').value = '';
+  if (u.rede) $('fRede').value = u.rede;
   $('fmTit').textContent = 'Editar ' + u.usuario; $('fBtn').textContent = 'Salvar alterações';
   $('fSenhaLb').textContent = 'Nova senha (deixe em branco para manter)';
   $('fErro').textContent = ''; $('fOk').textContent = '';
@@ -385,7 +406,7 @@ function salvarUsr(ev){
   ev.preventDefault(); $('fErro').textContent = ''; $('fOk').textContent = '';
   var lojas = Array.prototype.map.call($('lojasSel').querySelectorAll('input:checked'), function(i){ return i.value; });
   var corpo = { usuario: $('fUsr').value.trim(), papel: $('fPapel').value,
-                senha: $('fSenha').value, ativo: $('fAtivo').checked, lojas: lojas };
+                senha: $('fSenha').value, ativo: $('fAtivo').checked, lojas: lojas, rede: $('fRede').value };
   api('/validade/usuarios', { method: 'POST', body: JSON.stringify(corpo) })
     .then(function(r){ return r.json().then(function(d){ return [r, d]; }); })
     .then(function(x){
