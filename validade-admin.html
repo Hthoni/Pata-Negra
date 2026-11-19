@@ -14,45 +14,51 @@
   quebra em 2 linhas, nº da filial embaixo), botão APAGAR usuário.
   SUPERMERCADO (19/11/2026): login de colaborador Guanabara/Atacadão vê só
   a própria rede (painel + Excel), sem localização; só o BELLOTAS cria.
+  19/11/2026 (tarde): topo compacto — rede, semana e Excel numa linha só,
+  totais e legenda numa faixa fina; a grade ganha o espaço.
 -->
 <style>
 :root{--azul:#1F3B63;--laranja:#F29A1F;--fundo:#F4F6F9;--borda:#D5DCE6;--texto:#1A2230;--fraco:#4A5568;--verm:#A3201B}
 *{box-sizing:border-box}
 body{margin:0;background:var(--fundo);color:var(--texto);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,sans-serif;font-size:14px}
 button,input,select{font-family:inherit;font-size:14px}
-header{background:#fff;border-bottom:4px solid var(--laranja);padding:10px 28px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px}
+header{background:#fff;border-bottom:3px solid var(--laranja);padding:5px 24px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px}
 .marca{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
-.marca img{height:44px;width:auto;display:block}
+.marca img{height:32px;width:auto;display:block}
 .marca .t{border-left:1px solid var(--borda);padding-left:18px}
 .marca .t small{display:block;font-size:11px;letter-spacing:.1em;font-weight:600;color:var(--fraco)}
-.marca .t b{font-size:19px;color:var(--azul)}
+.marca .t b{font-size:16px;color:var(--azul)}
 nav{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-nav button{border:1px solid var(--azul);background:#fff;color:var(--azul);border-radius:8px;padding:9px 15px;font-weight:600;cursor:pointer}
+nav button{border:1px solid var(--azul);background:#fff;color:var(--azul);border-radius:8px;padding:6px 13px;font-weight:600;cursor:pointer}
 nav button.ativo{background:var(--azul);color:#fff}
 .quem{font-size:13px;color:var(--fraco);margin-left:8px}
 .quem a{color:var(--azul);cursor:pointer;text-decoration:underline}
-main{max-width:1500px;margin:0 auto;padding:20px 28px}
-.barra{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:14px;margin-bottom:16px}
+main{max-width:1500px;margin:0 auto;padding:10px 24px}
+.barra{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px 14px;margin-bottom:8px}
+.barra .esq{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.barra .sem{display:flex;align-items:center;gap:6px}
+.barra .sem label{margin:0;font-size:12px;font-weight:600;color:var(--fraco)}
+.barra select{height:34px}
+.barra .btn{height:36px}
 .barra label{display:block;font-size:12px;font-weight:600;margin-bottom:5px}
 select,input.campo{height:40px;border:1px solid #B9C3D1;border-radius:8px;padding:0 10px;background:#fff}
 .btn{height:42px;padding:0 18px;border:none;border-radius:8px;background:var(--azul);color:#fff;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
 .btn.sec{background:#fff;color:var(--azul);border:1px solid var(--azul)}
 .btn:disabled{opacity:.5}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:14px}
-.card{background:#fff;border:1px solid var(--borda);border-radius:12px;padding:12px 16px}
-.card small{color:var(--fraco);font-size:13px}
-.card b{display:block;font-size:26px}
-.leg{display:flex;flex-wrap:wrap;gap:16px;font-size:13px;margin-bottom:10px;align-items:center}
+.faixa{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px 18px;background:#fff;border:1px solid var(--borda);border-radius:10px;padding:6px 12px;margin-bottom:8px}
+.cards{display:flex;flex-wrap:wrap;gap:4px 18px;font-size:13px;color:var(--fraco)}
+.cards b{font-size:17px;color:var(--texto);margin-right:3px}
+.leg{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;align-items:center;color:var(--fraco)}
 .leg span{display:inline-flex;align-items:center;gap:6px}
 .sw{width:14px;height:14px;border-radius:3px;display:inline-block}
-.redes{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
-.redes button{min-height:44px;padding:0 18px;border-radius:10px;border:2px solid var(--rc);background:#fff;color:var(--rc);font-weight:700;font-size:15px;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+.redes{display:flex;gap:8px;flex-wrap:wrap}
+.redes button{min-height:36px;padding:0 14px;border-radius:10px;border:2px solid var(--rc);background:#fff;color:var(--rc);font-weight:700;font-size:15px;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
 .redes button .dot{width:12px;height:12px;border-radius:50%;background:var(--rc2)}
 .redes button.ativo{background:var(--rc);color:#fff}
 .grp-tit{display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;margin:10px 0 6px;grid-column:1/-1}
 .grp-tit .pill{color:#fff;border-radius:999px;padding:3px 10px;font-size:12px}
 .grp-tit .bar{flex:1;height:3px;border-radius:2px}
-.tabwrap{overflow:auto;background:#fff;border:1px solid var(--borda);border-radius:12px;max-height:calc(100vh - 330px);min-height:300px}
+.tabwrap{overflow:auto;background:#fff;border:1px solid var(--borda);border-radius:12px;max-height:calc(100vh - 178px);min-height:300px}
 table.m{border-collapse:separate;border-spacing:0;font-size:12px}
 table.m th,table.m td{border-bottom:1px solid #C9D1DC;border-left:1px solid #C9D1DC;padding:4px 5px;text-align:center;white-space:nowrap}
 table.m thead{position:sticky;top:0;z-index:3}
@@ -132,24 +138,26 @@ table.m tbody tr:hover td.cel:not(.vm):not(.am):not(.rp):not(.semvis){background
 
   <!-- PAINEL -->
   <section id="telaPainel" class="oculto">
-    <div class="redes" id="redeTabs" role="tablist" aria-label="Rede"></div>
     <div class="barra">
-      <div style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap">
-        <div><label for="semSel">Semana de levantamento</label><select id="semSel" onchange="carregaPainel()"></select></div>
-        <div class="nota" id="atualizado" style="padding-bottom:10px"></div>
+      <div class="esq">
+        <div class="redes" id="redeTabs" role="tablist" aria-label="Rede"></div>
+        <div class="sem"><label for="semSel">Semana</label><select id="semSel" onchange="carregaPainel()"></select></div>
+        <div class="nota" id="atualizado" style="margin:0"></div>
       </div>
       <button class="btn" id="btnXls" onclick="exportar()">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
         Exportar Excel
       </button>
     </div>
+    <div class="faixa">
     <div class="cards" id="cards"></div>
     <div class="leg">
       <span><i class="sw" style="background:#F4C9C5;border:1px solid #A3201B"></i>vence em menos de 15 dias</span>
       <span><i class="sw" style="background:#FBE7C2;border:1px solid #A8720A"></i>vence em 15 a 29 dias</span>
       <span><i class="sw" style="background:#2B2622"></i>ruptura</span>
       <span><i class="sw" style="background:#D9DEE6;border:1px dashed #8A93A0"></i>loja sem visita na semana</span>
-      <span>vazio = nada a reportar · dias contados até hoje</span>
+      <span>vazio = nada a reportar</span>
+    </div>
     </div>
     <div class="tabwrap"><table class="m" id="matriz"></table></div>
     <div class="nota" id="notaPainel">Passe o mouse sobre a data de envio para ver o horário de recebimento e a localização; sobre uma célula para ver o detalhe do lote.</div>
@@ -281,17 +289,18 @@ function desenhaPainel(){
     var fim = new Date(s + 'T00:00:00'); fim.setDate(fim.getDate() + 6);
     return '<option value="' + s + '"' + (s === d.semana ? ' selected' : '') + '>' + dataBR(s).slice(0,5) + ' a ' + fim.toLocaleDateString('pt-BR') + (i === 0 ? ' (atual)' : '') + '</option>';
   }).join('');
-  $('atualizado').textContent = 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) + ' · atualiza sozinho a cada minuto';
+  $('atualizado').textContent = 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+  $('atualizado').title = 'Atualiza sozinho a cada minuto · dias contados até hoje';
   var visit = 0, venc = 0, cx = 0, rup = 0;
   d.lojas.forEach(function(l){
     if (!l.visita) return; visit++;
     l.visita.itens.forEach(function(it){ if (it.ruptura) rup++; else { venc++; cx += it.caixas; } });
   });
   $('cards').innerHTML =
-    '<div class="card"><small>Lojas visitadas</small><b>' + visit + ' <span style="font-size:15px;color:var(--fraco);font-weight:500">de ' + d.lojas.length + '</span></b></div>' +
-    '<div class="card"><small>Sem visita na semana</small><b style="color:var(--fraco)">' + (d.lojas.length - visit) + '</b></div>' +
-    '<div class="card"><small>Itens vencendo (&lt; 30 dias)</small><b style="color:var(--verm)">' + venc + ' <span style="font-size:15px;font-weight:500">· ' + (Math.round(cx * 10) / 10) + ' cx</span></b></div>' +
-    '<div class="card"><small>Rupturas</small><b>' + rup + '</b></div>';
+    '<span><b>' + visit + '</b>de ' + d.lojas.length + ' lojas visitadas</span>' +
+    '<span><b>' + (d.lojas.length - visit) + '</b>sem visita</span>' +
+    '<span><b style="color:var(--verm)">' + venc + '</b>vencendo (' + (Math.round(cx * 10) / 10) + ' cx)</span>' +
+    '<span><b>' + rup + '</b>rupturas</span>';
   var h = '<thead><tr><th class="c0">Loja</th>';
   d.lojas.forEach(function(l){ h += '<th class="lj' + (l.visita ? '' : ' semvis') + '">' + esc(l.nome) + '<span class="num">nº ' + esc(l.numero) + '</span></th>'; });
   h += '</tr><tr><th class="c0">Promotor</th>';
