@@ -24,6 +24,10 @@ Módulo SEPARADO do resto do BELLOTAS de propósito:
 - REDES (16/11/2026): um promotor pode ter lojas de redes diferentes; o
   formulário de cada loja mostra os produtos da rede dela. CNPJ é único
   entre redes, então visitas/<semana>/<cnpj>.json não muda.
+- SUPERMERCADO (19/11/2026): papel 'cliente', preso a UMA rede. Vê o
+  painel e o Excel só da rede dele (todas as lojas), sem localização nem
+  horário de recebimento, sem cadastro. Só admin/operador do BELLOTAS
+  cria, edita ou apaga esses logins (coordenador da Lider nem os vê).
 - Nome de produto EXIBIDO é simplificado (sem "RF." e sem "PATA NEGRA")
   — a marca não aparece pro promotor e o nome fica curto no celular.
 
@@ -68,7 +72,7 @@ REDES = {
 }
 ORDEM_REDES = ['guanabara', 'atacadao']
 DIAS_ALERTA = 30            # promotor reporta só o que vence em menos disso
-DIAS_TOKEN = {'promotor': 30, 'coordenador': 7}
+DIAS_TOKEN = {'promotor': 30, 'coordenador': 7, 'cliente': 7}
 FUSO = datetime.timezone(datetime.timedelta(hours=-3))   # Brasília (sem horário de verão)
 PAPEIS_BELLOTAS_ADMIN = ('admin', 'operador')
 
@@ -187,7 +191,8 @@ def _quem():
         u = next((x for x in _usuarios() if x['usuario'].lower() == d['u'].lower()), None)
         if u and u.get('ativo', True):
             return {'usuario': u['usuario'], 'nome': u.get('nome') or u['usuario'],
-                    'papel': u['papel'], 'lojas': u.get('lojas', []), 'origem': 'validade'}
+                    'papel': u['papel'], 'lojas': u.get('lojas', []), 'rede': u.get('rede'),
+                    'origem': 'validade'}
         return None
     s = validar_sessao(token)
     if s and s.get('papel') in PAPEIS_BELLOTAS_ADMIN:
@@ -198,6 +203,15 @@ def _quem():
 
 def _eh_gestor(q):
     return bool(q) and q['papel'] in ('coordenador', 'admin')
+
+
+def _eh_bellotas(q):
+    return bool(q) and q.get('origem') == 'bellotas'
+
+
+def _ve_painel(q):
+    """Gestor, ou supermercado (cliente) — este só da própria rede."""
+    return _eh_gestor(q) or (bool(q) and q['papel'] == 'cliente' and bool(q.get('rede')))
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -293,7 +307,10 @@ def v_me():
     q = _quem()
     if not q:
         return jsonify({'erro': 'sessão inválida'}), 401
-    return jsonify({k: q[k] for k in ('usuario', 'nome', 'papel', 'origem')})
+    out = {k: q[k] for k in ('usuario', 'nome', 'papel', 'origem')}
+    if q['papel'] == 'cliente':
+        out['rede'] = q.get('rede')
+    return jsonify(out)
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -306,6 +323,8 @@ def v_minhas():
     q = _quem()
     if not q:
         return jsonify({'erro': 'sessão inválida'}), 401
+    if q['papel'] == 'cliente':
+        return jsonify({'erro': 'Este login é do painel do supermercado, não do promotor.'}), 403
     cat = _catalogo()
     lojas = cat['lojas'] if _eh_gestor(q) else [l for l in cat['lojas'] if l['cnpj'] in q['lojas']]
     seg = _segunda(_agora_brt().date()).isoformat()
@@ -331,6 +350,8 @@ def v_visita():
     q = _quem()
     if not q:
         return jsonify({'erro': 'sessão inválida — entre de novo'}), 401
+    if q['papel'] == 'cliente':
+        return jsonify({'erro': 'Este login não envia visitas'}), 403
     body = request.get_json(silent=True) or {}
     cat = _catalogo()
     cnpj = _cnpj_loja(body.get('loja'), cat)
@@ -431,12 +452,28 @@ def _dados_painel(semana_txt, rede):
             'produtos': cat['produtos'].get(rede, []), 'lojas': lojas}
 
 
+def _sem_rastreio(d):
+    """Supermercado não vê localização nem horário de recebimento."""
+    for l in d['lojas']:
+        v = l.get('visita')
+        if v:
+            for k in ('lat', 'lng', 'precisao', 'recebidoEm', 'idLocal'):
+                v.pop(k, None)
+    d['redes'] = [r for r in d['redes'] if r['id'] == d['rede']]
+    return d
+
+
+def v_rede_pedida(q):
+    return q['rede'] if q['papel'] == 'cliente' else request.args.get('rede', 'guanabara')
+
+
 @bp.route('/validade/painel')
 def v_painel():
     q = _quem()
-    if not _eh_gestor(q):
+    if not _ve_painel(q):
         return jsonify({'erro': 'acesso restrito'}), 403
-    return jsonify(_dados_painel(request.args.get('semana', ''), request.args.get('rede', 'guanabara')))
+    d = _dados_painel(request.args.get('semana', ''), v_rede_pedida(q))
+    return jsonify(_sem_rastreio(d) if q['papel'] == 'cliente' else d)
 
 
 def _br(iso):
@@ -451,13 +488,16 @@ def v_painel_xlsx():
     """Mesma matriz da tela: coluna A = produtos; linhas 1-3 = loja,
     promotor, data do envio; da linha 4 em diante o que foi informado."""
     q = _quem()
-    if not _eh_gestor(q):
+    if not _ve_painel(q):
         return jsonify({'erro': 'acesso restrito'}), 403
     semana = request.args.get('semana', '')
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
     d = None
-    for rm in _catalogo()['redes']:
+    redes = _catalogo()['redes']
+    if q['papel'] == 'cliente':
+        redes = [r for r in redes if r['id'] == q['rede']]
+    for rm in redes:
         d = _dados_painel(semana, rm['id'])
         ws = wb.create_sheet(rm['nome'][:31])
         ws.sheet_properties.tabColor = rm['cor'].lstrip('#')
@@ -527,7 +567,7 @@ def _aba_excel(ws, d):
 # Rotas — cadastro de promotores / coordenadores
 # ─────────────────────────────────────────────────────────────────────
 def _publico(u):
-    return {k: u.get(k) for k in ('usuario', 'nome', 'papel', 'ativo', 'lojas')}
+    return {k: u.get(k) for k in ('usuario', 'nome', 'papel', 'ativo', 'lojas', 'rede')}
 
 
 @bp.route('/validade/usuarios', methods=['GET'])
@@ -536,7 +576,8 @@ def v_usuarios():
     if not _eh_gestor(q):
         return jsonify({'erro': 'acesso restrito'}), 403
     cat = _catalogo()
-    return jsonify({'usuarios': [_publico(u) for u in _usuarios(fresco=True)],
+    lista = [u for u in _usuarios(fresco=True) if _eh_bellotas(q) or u.get('papel') != 'cliente']
+    return jsonify({'usuarios': [_publico(u) for u in lista], 'podeSupermercado': _eh_bellotas(q),
                     'lojas': cat['lojas'], 'redes': cat['redes']})
 
 
@@ -551,7 +592,15 @@ def v_usuarios_salvar():
     usuario = re.sub(r'\s+', '', str(b.get('usuario') or '')).lower()
     if not re.fullmatch(r'[a-z0-9._-]{3,40}', usuario):
         return jsonify({'erro': 'Usuário: 3 a 40 letras/números, sem espaço (pode usar . _ -)'}), 400
-    papel = b.get('papel') if b.get('papel') in ('promotor', 'coordenador') else 'promotor'
+    papel = b.get('papel') if b.get('papel') in ('promotor', 'coordenador', 'cliente') else 'promotor'
+    existente = next((x for x in _usuarios(fresco=True) if x['usuario'] == usuario), None)
+    if (papel == 'cliente' or (existente and existente.get('papel') == 'cliente')) and not _eh_bellotas(q):
+        return jsonify({'erro': 'Logins de supermercado só podem ser criados ou alterados pelo BELLOTAS'}), 403
+    rede = None
+    if papel == 'cliente':
+        rede = b.get('rede')
+        if rede not in REDES:
+            return jsonify({'erro': 'Escolha a rede do supermercado'}), 400
     # 16/11/2026: cadastro só com login — o login é o nome exibido. Usuário
     # antigo que tinha nome mantém o nome se o formulário não mandar outro.
     nome = str(b.get('nome') or '').strip()
@@ -574,6 +623,10 @@ def v_usuarios_salvar():
         return jsonify({'erro': 'Nova senha: mínimo 6 caracteres'}), 400
     u.update({'nome': nome or u.get('nome') or usuario, 'papel': papel,
               'ativo': bool(b.get('ativo', True)), 'lojas': lojas})
+    if papel == 'cliente':
+        u['rede'] = rede
+    else:
+        u.pop('rede', None)
     if senha:
         u['senhaHash'] = hash_senha(senha)
     for outro in lista:
@@ -582,3 +635,26 @@ def v_usuarios_salvar():
     _salvar_usuarios(lista)
     print(f'[INFO] validade cadastro: {usuario} ({papel}) lojas={len(lojas)} por {q["usuario"]}')
     return jsonify({'ok': True, 'usuario': _publico(u)})
+
+
+@bp.route('/validade/usuarios/apagar', methods=['POST'])
+def v_usuarios_apagar():
+    """APAGA um usuário de vez (19/11/2026). As lojas dele ficam sem
+    promotor; as visitas já enviadas continuam no histórico (cada visita
+    guarda o login de quem enviou). Ninguém apaga a si mesmo."""
+    q = _quem()
+    if not _eh_gestor(q):
+        return jsonify({'erro': 'acesso restrito'}), 403
+    usuario = str((request.get_json(silent=True) or {}).get('usuario') or '').strip().lower()
+    if q['origem'] == 'validade' and usuario == q['usuario'].lower():
+        return jsonify({'erro': 'Você não pode apagar o seu próprio usuário'}), 400
+    lista = _usuarios(fresco=True)
+    alvo = next((u for u in lista if u['usuario'].lower() == usuario), None)
+    if alvo and alvo.get('papel') == 'cliente' and not _eh_bellotas(q):
+        return jsonify({'erro': 'Logins de supermercado só podem ser apagados pelo BELLOTAS'}), 403
+    nova = [u for u in lista if u['usuario'].lower() != usuario]
+    if len(nova) == len(lista):
+        return jsonify({'erro': 'Usuário não encontrado'}), 404
+    _salvar_usuarios(nova)
+    print(f'[INFO] validade cadastro: APAGADO {usuario} por {q["usuario"]}')
+    return jsonify({'ok': True})
