@@ -10,6 +10,8 @@
   NOVO 13/11/2026. Backend: server/validade.py.
   REDES (16/11/2026): aba por rede no painel (cor da rede), Excel com uma
   aba por rede, cadastro só com login e lojas agrupadas por rede.
+  19/11/2026: grade com linhas visíveis, colunas de loja estreitas (nome
+  quebra em 2 linhas, nº da filial embaixo), botão APAGAR usuário.
 -->
 <style>
 :root{--azul:#1F3B63;--laranja:#F29A1F;--fundo:#F4F6F9;--borda:#D5DCE6;--texto:#1A2230;--fraco:#4A5568;--verm:#A3201B}
@@ -49,15 +51,20 @@ select,input.campo{height:40px;border:1px solid #B9C3D1;border-radius:8px;paddin
 .grp-tit .pill{color:#fff;border-radius:999px;padding:3px 10px;font-size:12px}
 .grp-tit .bar{flex:1;height:3px;border-radius:2px}
 .tabwrap{overflow:auto;background:#fff;border:1px solid var(--borda);border-radius:12px;max-height:calc(100vh - 330px);min-height:300px}
-table.m{border-collapse:separate;border-spacing:0;font-size:12.5px}
-table.m th,table.m td{border-bottom:1px solid #E6EAF0;border-left:1px solid #E6EAF0;padding:6px 8px;text-align:center;white-space:nowrap}
-table.m thead th,table.m thead td{position:sticky;background:#fff;z-index:2}
-table.m thead tr:nth-child(1) > *{top:0}
-table.m thead tr:nth-child(2) > *{top:31px}
-table.m thead tr:nth-child(3) > *{top:60px;border-bottom:2px solid #B9C3D1}
-table.m .c0{position:sticky;left:0;z-index:3;background:#F7F8FA;text-align:left;font-weight:600;border-left:none;min-width:210px}
-table.m thead .c0{z-index:4;background:#EEF1F5;color:var(--fraco);font-size:12px}
-table.m td.cel{min-width:118px;line-height:1.3;cursor:default}
+table.m{border-collapse:separate;border-spacing:0;font-size:12px}
+table.m th,table.m td{border-bottom:1px solid #C9D1DC;border-left:1px solid #C9D1DC;padding:4px 5px;text-align:center;white-space:nowrap}
+table.m thead{position:sticky;top:0;z-index:3}
+table.m thead th,table.m thead td{background:#fff;vertical-align:top}
+table.m thead tr:nth-child(3) > *{border-bottom:2px solid #8E9AAB}
+table.m thead th.lj,table.m thead td.lj{width:88px;min-width:88px;max-width:96px;white-space:normal;line-height:1.2;overflow-wrap:anywhere}
+table.m thead th.lj{font-size:11.5px;font-weight:700;padding:6px 4px}
+table.m thead th.lj .num{display:block;font-weight:500;color:var(--fraco);font-size:11px;margin-top:2px}
+table.m .c0{position:sticky;left:0;z-index:2;background:#F7F8FA;text-align:left;font-weight:600;border-left:none;border-right:2px solid #8E9AAB;min-width:200px;padding:5px 10px}
+table.m thead .c0{z-index:4;background:#EEF1F5;color:var(--fraco);font-size:12px;vertical-align:middle}
+table.m td.cel{width:88px;min-width:88px;max-width:96px;white-space:normal;line-height:1.25;cursor:default;font-size:11.5px}
+table.m tbody tr:nth-child(even) td.cel:not(.vm):not(.am):not(.rp):not(.semvis){background:#F8FAFC}
+table.m tbody tr:hover th.c0{background:#DCE5F1}
+table.m tbody tr:hover td.cel:not(.vm):not(.am):not(.rp):not(.semvis){background:#EAF0F8}
 .semvis{background:#ECEEF2!important;color:var(--verm);font-weight:700}
 .vm{background:#F4C9C5;color:#7E1712;font-weight:700}
 .am{background:#FBE7C2;color:#6B4700;font-weight:700}
@@ -142,7 +149,7 @@ table.m td.cel{min-width:118px;line-height:1.3;cursor:default}
       <span>vazio = nada a reportar · dias contados até hoje</span>
     </div>
     <div class="tabwrap"><table class="m" id="matriz"></table></div>
-    <div class="nota">Passe o mouse sobre a data de envio para ver o horário de recebimento e a localização registrada.</div>
+    <div class="nota">Passe o mouse sobre a data de envio para ver o horário de recebimento e a localização; sobre uma célula para ver o detalhe do lote.</div>
   </section>
 
   <!-- CADASTRO -->
@@ -177,6 +184,7 @@ table.m td.cel{min-width:118px;line-height:1.3;cursor:default}
         <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
           <button class="btn" type="submit" id="fBtn">Cadastrar</button>
           <button class="btn sec" type="button" onclick="limparForm()">Limpar</button>
+          <button class="btn oculto" type="button" id="fApagar" onclick="apagarUsr()" style="background:var(--verm);margin-left:auto">APAGAR</button>
         </div>
       </form>
     </div>
@@ -273,17 +281,17 @@ function desenhaPainel(){
     '<div class="card"><small>Itens vencendo (&lt; 30 dias)</small><b style="color:var(--verm)">' + venc + ' <span style="font-size:15px;font-weight:500">· ' + (Math.round(cx * 10) / 10) + ' cx</span></b></div>' +
     '<div class="card"><small>Rupturas</small><b>' + rup + '</b></div>';
   var h = '<thead><tr><th class="c0">Loja</th>';
-  d.lojas.forEach(function(l){ h += '<th class="' + (l.visita ? '' : 'semvis') + '" style="font-size:13px">' + esc(l.rotulo) + '</th>'; });
+  d.lojas.forEach(function(l){ h += '<th class="lj' + (l.visita ? '' : ' semvis') + '">' + esc(l.nome) + '<span class="num">nº ' + esc(l.numero) + '</span></th>'; });
   h += '</tr><tr><th class="c0">Promotor</th>';
-  d.lojas.forEach(function(l){ h += '<td class="' + (l.visita ? '' : 'semvis') + '" style="font-weight:500;color:var(--texto)">' + esc(l.promotor || '—') + '</td>'; });
+  d.lojas.forEach(function(l){ h += '<td class="lj' + (l.visita ? '' : ' semvis') + '" style="font-weight:500;color:var(--texto)">' + esc(l.promotor || '—') + '</td>'; });
   h += '</tr><tr><th class="c0">Envio</th>';
   d.lojas.forEach(function(l){
     var v = l.visita;
-    if (!v) { h += '<td class="semvis">sem visita</td>'; return; }
+    if (!v) { h += '<td class="lj semvis">sem visita</td>'; return; }
     var dt = new Date(v.coletadoEm), rec = new Date(v.recebidoEm);
     var tip = 'Preenchida: ' + dt.toLocaleString('pt-BR') + '\nRecebida: ' + rec.toLocaleString('pt-BR') + '\nPor: ' + v.promotorNome +
       '\nLocalização: ' + (v.lat != null ? v.lat.toFixed(5) + ', ' + v.lng.toFixed(5) + (v.precisao ? ' (±' + v.precisao + ' m)' : '') : 'não registrada');
-    h += '<td title="' + esc(tip) + '">' + dt.toLocaleDateString('pt-BR', {weekday:'short', day:'2-digit', month:'2-digit'}) + ' ' + dt.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) +
+    h += '<td class="lj" title="' + esc(tip) + '">' + dt.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'}) + '<br>' + dt.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) +
          (v.lat != null ? '' : ' <span title="sem localização" style="color:var(--verm)">•</span>') + '</td>';
   });
   h += '</tr></thead><tbody>';
@@ -294,9 +302,10 @@ function desenhaPainel(){
       var it = l.visita.itens.filter(function(i){ return i.cod === p.cod; })[0];
       if (!it) { h += '<td class="cel"></td>'; return; }
       if (it.ruptura) { h += '<td class="cel rp">RUPTURA</td>'; return; }
-      var dias = it.dias, txt2 = dias < 0 ? 'VENCIDO há ' + (-dias) + 'd' : dias + ' dias';
-      h += '<td class="cel ' + (dias < 15 ? 'vm' : 'am') + '">' + it.caixas + ' cx · ' + dataBR(it.validade).slice(0,5) +
-           '<br><span style="font-size:11.5px;font-weight:500">' + txt2 + ' · ' + it.kg + ' kg</span></td>';
+      var dias = it.dias, txt2 = dias < 0 ? 'venc. ' + (-dias) + 'd' : dias + 'd';
+      h += '<td class="cel ' + (dias < 15 ? 'vm' : 'am') + '" title="' + esc(it.caixas + ' cx (' + it.kg + ' kg) · validade ' + dataBR(it.validade) + ' · ' + (dias < 0 ? 'vencido há ' + (-dias) + ' dias' : 'vence em ' + dias + ' dias')) + '">' +
+           it.caixas + ' cx · ' + dataBR(it.validade).slice(0,5) +
+           '<br><span style="font-size:11px;font-weight:500">' + txt2 + ' · ' + it.kg + ' kg</span></td>';
     });
     h += '</tr>';
   });
@@ -358,7 +367,7 @@ function papelMudou(){ $('blocoLojas').classList.toggle('oculto', $('fPapel').va
 function limparForm(){
   $('fmUsr').reset(); $('fUsr').readOnly = false; $('fAtivo').checked = true;
   $('fmTit').textContent = 'Novo usuário'; $('fBtn').textContent = 'Cadastrar'; $('fSenhaLb').textContent = 'Senha inicial';
-  $('fErro').textContent = ''; papelMudou(); desenhaLojasSel([]);
+  $('fErro').textContent = ''; $('fApagar').classList.add('oculto'); papelMudou(); desenhaLojasSel([]);
 }
 function editar(usr){
   var u = S.usuarios.filter(function(x){ return x.usuario === usr; })[0]; if (!u) return;
@@ -367,6 +376,7 @@ function editar(usr){
   $('fmTit').textContent = 'Editar ' + u.usuario; $('fBtn').textContent = 'Salvar alterações';
   $('fSenhaLb').textContent = 'Nova senha (deixe em branco para manter)';
   $('fErro').textContent = ''; $('fOk').textContent = '';
+  $('fApagar').classList.remove('oculto');
   papelMudou(); desenhaLojasSel(u.lojas || []);
   $('fmUsr').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -381,6 +391,18 @@ function salvarUsr(ev){
       if (!x[0].ok) { $('fErro').textContent = x[1].erro || 'Erro ao salvar'; return; }
       var msg = 'Salvo: ' + corpo.usuario + (corpo.senha ? ' — informe a senha ao usuário.' : '');
       limparForm(); $('fOk').textContent = msg; carregaUsr();
+    })
+    .catch(function(){ $('fErro').textContent = 'Sem conexão com o servidor.'; });
+}
+function apagarUsr(){
+  var usr = $('fUsr').value.trim(); if (!usr) return;
+  if (!confirm('APAGAR o usuário ' + usr + '?\n\nEle perde o acesso na hora e as lojas dele ficam sem promotor. As visitas que ele já enviou continuam no painel. Isto não pode ser desfeito.')) return;
+  $('fErro').textContent = ''; $('fOk').textContent = '';
+  api('/validade/usuarios/apagar', { method: 'POST', body: JSON.stringify({ usuario: usr }) })
+    .then(function(r){ return r.json().then(function(d){ return [r, d]; }); })
+    .then(function(x){
+      if (!x[0].ok) { $('fErro').textContent = x[1].erro || 'Erro ao apagar'; return; }
+      limparForm(); $('fOk').textContent = 'Apagado: ' + usr; carregaUsr();
     })
     .catch(function(){ $('fErro').textContent = 'Sem conexão com o servidor.'; });
 }
