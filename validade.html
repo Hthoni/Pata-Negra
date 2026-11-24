@@ -9,6 +9,8 @@
   Controle de validade — tela do PROMOTOR (celular). NOVO 13/11/2026.
   REDES (16/11/2026): lojas de Guanabara e Atacadão na mesma lista,
   cada rede com a sua cor; o formulário mostra os produtos da rede da loja.
+  RUPTURA EM 2 BOTÕES (24/11/2026): RUPTURA GELADEIRA / RUPTURA TOTAL lado
+  a lado; marcada qualquer uma, somem caixas/validade e aparece LIMPAR.
   Login próprio (não é o do BELLOTAS). Backend: server/validade.py.
   Visita preenchida sem sinal fica numa FILA no celular (localStorage
   'vl_fila') e é enviada sozinha quando a internet volta.
@@ -50,17 +52,25 @@ input.campo{width:100%;height:52px;border:1px solid #B9C3D1;border-radius:10px;p
 .fm-rede .pill{color:#fff;border-radius:999px;padding:4px 11px;font-size:12px;font-weight:700}
 .voltar{display:inline-flex;align-items:center;gap:4px;color:var(--azul);font-weight:600;background:none;border:none;padding:8px 0;min-height:44px;cursor:pointer}
 .prod{background:#fff;border:1px solid var(--borda);border-radius:12px;padding:10px 12px;margin-bottom:8px}
-.prod.rup{background:var(--verm-lt);border-color:#E3B3AF}
+.prod.rup-g{background:#F1F3F5;border-color:#9AA1AA}
+.prod.rup-t{background:#E4E7EB;border-color:#5F6670}
 .prod.bad{border-color:var(--verm);box-shadow:0 0 0 1px var(--verm)}
 .p-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .p-nome{font-weight:600;font-size:15px;line-height:1.25}
-.b-rup{min-height:38px;padding:0 12px;border-radius:999px;border:1.5px solid var(--azul);background:#fff;color:var(--azul);font-size:13px;font-weight:700;white-space:nowrap;cursor:pointer}
-.prod.rup .b-rup{background:var(--azul);color:#fff}
+.p-rups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:8px}
+.b-rup{min-height:46px;padding:0 8px;border-radius:10px;border:2px solid #B9C3D1;background:#fff;color:#111;font-size:13px;font-weight:700;line-height:1.15;cursor:pointer}
+.prod.rup-g .b-gel{background:#D5D9DF;border-color:#5F6670}
+.prod.rup-t .b-tot{background:#9AA1AA;border-color:#3F4650}
+.rup-linha{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:8px}
+.b-limpar{min-height:44px;padding:0 14px;border-radius:10px;border:2px solid var(--azul);background:#fff;color:var(--azul);font-size:13px;font-weight:700;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
 .p-campos{display:grid;grid-template-columns:84px minmax(0,1fr);gap:8px;margin-top:8px}
 .p-campos label{font-size:12px;color:var(--fraco);font-weight:600;display:block;margin-bottom:3px}
 .p-campos input{width:100%;height:46px;border:1px solid #B9C3D1;border-radius:8px;padding:0 8px;background:#fff;text-align:center}
 .p-msg{font-size:13px;font-weight:700;margin-top:6px}
-.rup-txt{font-size:14px;font-weight:600;color:var(--verm);margin-top:6px}
+.rup-txt{font-size:13px;font-weight:600;color:#333;line-height:1.3}
+.instr p{margin:0 0 8px}.instr p:last-child{margin:0}
+.chip-g{background:#D5D9DF;color:#111;padding:0 5px;border-radius:4px}
+.chip-t{background:#9AA1AA;color:#111;padding:0 5px;border-radius:4px}
 .rodape{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--borda);padding:12px 16px calc(12px + env(safe-area-inset-bottom));margin:12px -16px -16px}
 .resumo{font-size:14px;color:var(--fraco);margin-bottom:8px}
 .oculto{display:none!important}
@@ -106,7 +116,7 @@ input.campo{width:100%;height:52px;border:1px solid #B9C3D1;border-radius:10px;p
     </button>
     <div class="fm-rede" id="fmRede"></div>
     <h1 id="fmLoja"></h1>
-    <div class="aviso info" id="fmInstr"></div>
+    <div class="aviso info instr" id="fmInstr"></div>
     <div id="listaProd"></div>
     <div class="rodape">
       <div class="resumo" id="fmResumo"></div>
@@ -216,32 +226,53 @@ function abrirLoja(i){
   $('fmLoja').textContent = S.loja.rotulo;
   $('telaForm').querySelector('.rodape').style.borderTop = '4px solid ' + r.cor2;
   var lim = new Date(hojeISO() + 'T00:00:00'); lim.setDate(lim.getDate() + DIAS_ALERTA);
-  $('fmInstr').innerHTML = 'Lance só o que vence em <b>menos de ' + DIAS_ALERTA + ' dias</b> (antes de ' + lim.toLocaleDateString('pt-BR') + '). Se houver mais de um lote, informe o <b>pior</b> (validade mais próxima), em <b>caixas</b>.<br>Produto em falta na câmara? Toque em <b>Ruptura</b>.<br>Nada a reportar? É só tocar em <b>Enviar visita</b>.';
+  $('fmInstr').innerHTML =
+    '<p><b>Faltando mercadoria?</b> Toque no botão certo:</p>' +
+    '<p><b class="chip-g">RUPTURA GELADEIRA</b> — não tem mais desta mercadoria na geladeira.</p>' +
+    '<p><b class="chip-t">RUPTURA TOTAL</b> — não tem mais nada desta mercadoria na loja.</p>' +
+    '<p>Caso exista mercadoria com <b>menos de ' + DIAS_ALERTA + ' dias</b> para vencer (antes de ' + lim.toLocaleDateString('pt-BR') + '), informe o número de <b>caixas</b> e a <b>data a vencer</b> nos campos abaixo.</p>' +
+    '<p>E se tiver mais de um lote com menos de ' + DIAS_ALERTA + ' dias, informe o <b>pior lote</b>.</p>' +
+    '<p>Nada a reportar? É só tocar em <b>Enviar visita</b>.</p>';
   $('listaProd').innerHTML = S.produtos.map(function(p){
     var r = S.rasc[p.cod] || {};
     return '<div class="prod" id="pr_' + p.cod + '">' +
-      '<div class="p-top"><span class="p-nome">' + esc(p.nome) + '</span>' +
-      '<button type="button" class="b-rup" aria-pressed="false" onclick="toggleRup(\'' + p.cod + '\')">Ruptura</button></div>' +
-      '<div class="rup-txt oculto">Em falta na câmara frigorífica</div>' +
+      '<div class="p-top"><span class="p-nome">' + esc(p.nome) + '</span></div>' +
+      '<div class="p-rups">' +
+        '<button type="button" class="b-rup b-gel" aria-pressed="false" onclick="marcaRup(\'' + p.cod + '\', \'geladeira\')">RUPTURA<br>GELADEIRA</button>' +
+        '<button type="button" class="b-rup b-tot" aria-pressed="false" onclick="marcaRup(\'' + p.cod + '\', \'total\')">RUPTURA<br>TOTAL</button>' +
+      '</div>' +
+      '<div class="rup-linha oculto"><span class="rup-txt"></span>' +
+        '<button type="button" class="b-limpar" onclick="marcaRup(\'' + p.cod + '\', \'\')" aria-label="Limpar ruptura de ' + esc(p.nome) + '">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg>LIMPAR</button>' +
+      '</div>' +
       '<div class="p-campos">' +
         '<div><label for="cx_' + p.cod + '">Caixas</label><input id="cx_' + p.cod + '" type="number" inputmode="decimal" min="0" step="any" value="' + esc(r.caixas || '') + '" oninput="mudou(\'' + p.cod + '\')"></div>' +
         '<div><label for="vd_' + p.cod + '">Validade do pior lote</label><input id="vd_' + p.cod + '" type="date" value="' + esc(r.validade || '') + '" oninput="mudou(\'' + p.cod + '\')"></div>' +
       '</div><div class="p-msg"></div></div>';
   }).join('');
-  S.produtos.forEach(function(p){ if ((S.rasc[p.cod] || {}).ruptura) aplicaRup(p.cod, true); validaLinha(p.cod); });
+  S.produtos.forEach(function(p){
+    var r = S.rasc[p.cod];
+    if (r && r.ruptura === true) r.ruptura = 'total';   // rascunho antigo
+    aplicaRup(p.cod, (r || {}).ruptura || ''); validaLinha(p.cod);
+  });
   atualizaResumo();
   mostra('telaForm');
 }
-function aplicaRup(cod, on){
+// est: '' | 'geladeira' | 'total'
+function aplicaRup(cod, est){
   var el = $('pr_' + cod);
-  el.classList.toggle('rup', on);
-  el.querySelector('.b-rup').setAttribute('aria-pressed', on ? 'true' : 'false');
-  el.querySelector('.rup-txt').classList.toggle('oculto', !on);
-  el.querySelector('.p-campos').classList.toggle('oculto', on);
+  el.classList.toggle('rup-g', est === 'geladeira'); el.classList.toggle('rup-t', est === 'total');
+  el.querySelector('.b-gel').setAttribute('aria-pressed', est === 'geladeira' ? 'true' : 'false');
+  el.querySelector('.b-tot').setAttribute('aria-pressed', est === 'total' ? 'true' : 'false');
+  el.querySelector('.rup-linha').classList.toggle('oculto', !est);
+  el.querySelector('.rup-txt').textContent = est === 'geladeira' ? 'Não tem mais desta mercadoria na geladeira.'
+    : est === 'total' ? 'Não tem mais nada desta mercadoria na loja.' : '';
+  el.querySelector('.p-campos').classList.toggle('oculto', !!est);
 }
-function toggleRup(cod){
+// tocar no botão já marcado também desmarca; LIMPAR manda ''
+function marcaRup(cod, est){
   var r = S.rasc[cod] = S.rasc[cod] || {};
-  r.ruptura = !r.ruptura;
+  r.ruptura = (est && r.ruptura === est) ? '' : est;
   aplicaRup(cod, r.ruptura);
   salvaRasc(); validaLinha(cod); atualizaResumo();
 }
@@ -272,13 +303,15 @@ function validaLinha(cod){
   return prob;
 }
 function atualizaResumo(){
-  var n = 0, rup = 0, bad = 0;
+  var n = 0, rg = 0, rt = 0, bad = 0;
   S.produtos.forEach(function(p){
     var r = S.rasc[p.cod] || {};
-    if (r.ruptura) rup++; else if (String(r.caixas || '').trim() || r.validade) { if (validaLinha(p.cod)) bad++; else n++; }
+    if (r.ruptura === 'geladeira') rg++;
+    else if (r.ruptura) rt++;
+    else if (String(r.caixas || '').trim() || r.validade) { if (validaLinha(p.cod)) bad++; else n++; }
   });
   $('fmResumo').textContent = bad ? bad + ' linha(s) com problema — corrija antes de enviar'
-    : (n || rup) ? n + ' produto(s) vencendo · ' + rup + ' ruptura(s)' : 'Nada a reportar — envie para confirmar a visita.';
+    : (n || rg || rt) ? n + ' vencendo · ' + rg + ' ruptura geladeira · ' + rt + ' ruptura total' : 'Nada a reportar — envie para confirmar a visita.';
   $('fmBtn').disabled = bad > 0;
 }
 
@@ -287,7 +320,7 @@ function enviarVisita(){
   var itens = [];
   S.produtos.forEach(function(p){
     var r = S.rasc[p.cod] || {};
-    if (r.ruptura) itens.push({ cod: p.cod, ruptura: true });
+    if (r.ruptura) itens.push({ cod: p.cod, ruptura: r.ruptura === 'geladeira' ? 'geladeira' : 'total' });
     else if (String(r.caixas || '').trim() && r.validade) itens.push({ cod: p.cod, caixas: String(r.caixas).trim(), validade: r.validade });
   });
   var resumo = itens.length ? itens.length + ' linha(s) preenchida(s)' : 'nada a reportar';
