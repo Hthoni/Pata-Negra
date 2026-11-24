@@ -322,7 +322,7 @@ function desenhaPainel(){
     var tip = 'Visita: ' + dt.toLocaleString('pt-BR') + '\nPor: ' + v.promotorNome;
     if (!S.cliente) tip += '\nRecebida: ' + new Date(v.recebidoEm).toLocaleString('pt-BR') +
       '\nLocalização: ' + (v.lat != null ? v.lat.toFixed(5) + ', ' + v.lng.toFixed(5) + (v.precisao ? ' (±' + v.precisao + ' m)' : '') : 'não registrada');
-    h += '<td class="lj" title="' + esc(tip) + '">' + dt.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'}) + '<br>' + dt.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) +
+    h += '<td class="lj" style="white-space:nowrap;font-size:11px" title="' + esc(tip) + '">' + dt.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'}) + ' ' + dt.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) +
          (S.cliente || v.lat != null ? '' : ' <span title="sem localização" style="color:var(--verm)">•</span>') + '</td>';
   });
   h += '</tr></thead><tbody>';
