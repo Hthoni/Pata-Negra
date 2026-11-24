@@ -334,10 +334,11 @@ function desenhaPainel(){
       if (!it) { h += '<td class="cel"></td>'; return; }
       if (it.ruptura === 'geladeira') { h += '<td class="cel rg" title="Não tem mais desta mercadoria na geladeira">RUPTURA<br>GELADEIRA</td>'; return; }
       if (it.ruptura) { h += '<td class="cel rp" title="Não tem mais nada desta mercadoria na loja">RUPTURA<br>TOTAL</td>'; return; }
-      var dias = it.dias, txt2 = dias < 0 ? 'venc. ' + (-dias) + 'd' : dias + 'd';
+      // 24/11: 2ª linha sempre curta (cabe em 1 linha) -> todas as células com a mesma altura
+      var dias = it.dias, txt2 = dias < 0 ? 'vencido ' + (-dias) + 'd' : dias + 'd · ' + it.kg + ' kg';
       h += '<td class="cel ' + (dias < 15 ? 'vm' : 'am') + '" title="' + esc(it.caixas + ' cx (' + it.kg + ' kg) · validade ' + dataBR(it.validade) + ' · ' + (dias < 0 ? 'vencido há ' + (-dias) + ' dias' : 'vence em ' + dias + ' dias')) + '">' +
-           it.caixas + ' cx · ' + dataBR(it.validade).slice(0,5) +
-           '<br><span style="font-size:11px;font-weight:500">' + txt2 + ' · ' + it.kg + ' kg</span></td>';
+           '<span style="white-space:nowrap">' + it.caixas + ' cx · ' + dataBR(it.validade).slice(0,5) + '</span>' +
+           '<br><span style="font-size:11px;font-weight:500;white-space:nowrap">' + txt2 + '</span></td>';
     });
     h += '</tr>';
   });
