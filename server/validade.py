@@ -24,6 +24,10 @@ Módulo SEPARADO do resto do BELLOTAS de propósito:
 - REDES (16/11/2026): um promotor pode ter lojas de redes diferentes; o
   formulário de cada loja mostra os produtos da rede dela. CNPJ é único
   entre redes, então visitas/<semana>/<cnpj>.json não muda.
+- RUPTURA EM 2 BOTÕES (24/11/2026): item['ruptura'] = 'geladeira' (não
+  tem mais na geladeira) ou 'total' (não tem nada na loja). Ruptura NÃO
+  leva caixas/validade. Visitas antigas com ruptura=True contam como
+  'total' (o botão antigo era "em falta na câmara").
 - SUPERMERCADO (19/11/2026): papel 'cliente', preso a UMA rede. Vê o
   painel e o Excel só da rede dele (todas as lojas), sem localização nem
   horário de recebimento, sem cadastro. Só admin/operador do BELLOTAS
@@ -375,8 +379,10 @@ def v_visita():
         p = prods.get(str(it.get('cod')))
         if not p:
             continue
-        if it.get('ruptura'):
-            itens.append({'cod': p['cod'], 'nome': p['nome'], 'ruptura': True})
+        rup = it.get('ruptura')
+        if rup:
+            itens.append({'cod': p['cod'], 'nome': p['nome'],
+                          'ruptura': 'geladeira' if rup == 'geladeira' else 'total'})
             continue
         cx_txt, val_txt = str(it.get('caixas') or '').strip(), str(it.get('validade') or '').strip()
         if not cx_txt and not val_txt:
@@ -512,10 +518,11 @@ def v_painel_xlsx():
 
 
 def _aba_excel(ws, d):
-    cinza = PatternFill('solid', fgColor='E9E5DF')
+    cinza = PatternFill(patternType='lightUp', fgColor='C9CFD6', bgColor='F4F6F8')   # sem visita: listrado
     verm = PatternFill('solid', fgColor='F4C9C5')
     amar = PatternFill('solid', fgColor='FBE7C2')
-    preto = PatternFill('solid', fgColor='2B2622')
+    rup_gel = PatternFill('solid', fgColor='D5D9DF')
+    rup_tot = PatternFill('solid', fgColor='9AA1AA')
     cab = PatternFill('solid', fgColor='EFE9E1')
     fino = Side(style='thin', color='D0C8BD')
     borda = Border(left=fino, right=fino, top=fino, bottom=fino)
@@ -547,7 +554,10 @@ def _aba_excel(ws, d):
             if not it:
                 continue
             if it.get('ruptura'):
-                c.value = 'RUPTURA'; c.fill = preto; c.font = Font(bold=True, color='FFFFFF')
+                gel = it['ruptura'] == 'geladeira'
+                c.value = 'RUPTURA\nGELADEIRA' if gel else 'RUPTURA\nTOTAL'
+                c.fill = rup_gel if gel else rup_tot
+                c.font = Font(bold=True, color='111111')
             else:
                 cx = it['caixas']; cx = int(cx) if float(cx).is_integer() else cx
                 c.value = f"{cx} cx ({it['kg']:g} kg)\nval. {_br(it['validade'])}\n{it['dias']} dias"
@@ -560,7 +570,7 @@ def _aba_excel(ws, d):
     ws.freeze_panes = 'B4'
     n = len(d['produtos']) + 6
     ws.cell(n, 1, f"Semana {_br(d['semana'])} a {_br(d['semanaFim'])} · dias contados até {_br(d['hoje'])}").font = Font(italic=True)
-    ws.cell(n + 1, 1, 'Vermelho: vence em menos de 15 dias · Amarelo: 15 a 29 dias · Cinza: loja sem visita · Vazio: nada a reportar').font = Font(italic=True)
+    ws.cell(n + 1, 1, 'Rosa: vence em menos de 15 dias · Bege: 15 a 29 dias · Cinza claro: RUPTURA GELADEIRA · Cinza escuro: RUPTURA TOTAL · Listrado: loja sem visita · Vazio: nada a reportar').font = Font(italic=True)
 
 
 # ─────────────────────────────────────────────────────────────────────
