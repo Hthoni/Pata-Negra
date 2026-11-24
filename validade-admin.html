@@ -16,6 +16,8 @@
   a própria rede (painel + Excel), sem localização; só o BELLOTAS cria.
   19/11/2026 (tarde): topo compacto — rede, semana e Excel numa linha só,
   totais e legenda numa faixa fina; a grade ganha o espaço.
+  24/11/2026: RUPTURA GELADEIRA (cinza claro) e RUPTURA TOTAL (cinza
+  escuro), texto em 2 linhas iguais; loja sem visita em listrado.
 -->
 <style>
 :root{--azul:#1F3B63;--laranja:#F29A1F;--fundo:#F4F6F9;--borda:#D5DCE6;--texto:#1A2230;--fraco:#4A5568;--verm:#A3201B}
@@ -69,15 +71,16 @@ table.m thead th.lj{font-size:11.5px;font-weight:700;padding:6px 4px}
 table.m thead th.lj .num{display:block;font-weight:500;color:var(--fraco);font-size:11px;margin-top:2px}
 table.m .c0{position:sticky;left:0;z-index:2;background:#F7F8FA;text-align:left;font-weight:600;border-left:none;border-right:2px solid #8E9AAB;min-width:200px;padding:5px 10px}
 table.m thead .c0{z-index:4;background:#EEF1F5;color:var(--fraco);font-size:12px;vertical-align:middle}
-table.m td.cel{width:88px;min-width:88px;max-width:96px;white-space:normal;line-height:1.25;cursor:default;font-size:11.5px}
-table.m tbody th.c0,table.m tbody td.cel:not(.vm):not(.am):not(.rp):not(.semvis){background:#FFFFFF}
-table.m tbody tr:nth-child(even) th.c0,table.m tbody tr:nth-child(even) td.cel:not(.vm):not(.am):not(.rp):not(.semvis){background:#EDF0F4}
+table.m td.cel{width:88px;min-width:88px;max-width:96px;white-space:normal;line-height:1.25;cursor:default;font-size:11px}
+table.m tbody th.c0,table.m tbody td.cel:not(.vm):not(.am):not(.rp):not(.rg):not(.semvis){background:#FFFFFF}
+table.m tbody tr:nth-child(even) th.c0,table.m tbody tr:nth-child(even) td.cel:not(.vm):not(.am):not(.rp):not(.rg):not(.semvis){background:#EDF0F4}
 table.m tbody tr:hover th.c0{background:#DCE5F1}
-table.m tbody tr:hover td.cel:not(.vm):not(.am):not(.rp):not(.semvis){background:#EAF0F8}
-.semvis{background:#D9DEE6!important;color:var(--verm);font-weight:700}
+table.m tbody tr:hover td.cel:not(.vm):not(.am):not(.rp):not(.rg):not(.semvis){background:#EAF0F8}
+.semvis{background:repeating-linear-gradient(135deg,#F4F6F8 0 4px,#DDE2E8 4px 6px)!important;color:var(--verm);font-weight:700}
 .vm{background:#F4C9C5;color:#7E1712;font-weight:700}
 .am{background:#FBE7C2;color:#6B4700;font-weight:700}
-.rp{background:#2B2622;color:#fff;font-weight:700}
+.rg{background:#D5D9DF;color:#111;font-weight:700}
+.rp{background:#9AA1AA;color:#111;font-weight:700}
 .nota{font-size:12.5px;color:var(--fraco);margin-top:8px}
 .oculto{display:none!important}
 .aviso{border-radius:10px;padding:10px 14px;margin-bottom:12px}
@@ -154,8 +157,9 @@ table.m tbody tr:hover td.cel:not(.vm):not(.am):not(.rp):not(.semvis){background
     <div class="leg">
       <span><i class="sw" style="background:#F4C9C5;border:1px solid #A3201B"></i>vence em menos de 15 dias</span>
       <span><i class="sw" style="background:#FBE7C2;border:1px solid #A8720A"></i>vence em 15 a 29 dias</span>
-      <span><i class="sw" style="background:#2B2622"></i>ruptura</span>
-      <span><i class="sw" style="background:#D9DEE6;border:1px dashed #8A93A0"></i>loja sem visita na semana</span>
+      <span><i class="sw" style="background:#D5D9DF;border:1px solid #5F6670"></i>ruptura geladeira</span>
+      <span><i class="sw" style="background:#9AA1AA;border:1px solid #3F4650"></i>ruptura total</span>
+      <span><i class="sw" style="background:repeating-linear-gradient(135deg,#F4F6F8 0 3px,#C9CFD6 3px 5px);border:1px dashed #8A93A0"></i>loja sem visita</span>
       <span>vazio = nada a reportar</span>
     </div>
     </div>
@@ -291,16 +295,21 @@ function desenhaPainel(){
   }).join('');
   $('atualizado').textContent = 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
   $('atualizado').title = 'Atualiza sozinho a cada minuto · dias contados até hoje';
-  var visit = 0, venc = 0, cx = 0, rup = 0;
+  var visit = 0, venc = 0, cx = 0, rg = 0, rt = 0;
   d.lojas.forEach(function(l){
     if (!l.visita) return; visit++;
-    l.visita.itens.forEach(function(it){ if (it.ruptura) rup++; else { venc++; cx += it.caixas; } });
+    l.visita.itens.forEach(function(it){
+      if (it.ruptura === 'geladeira') rg++;
+      else if (it.ruptura) rt++;          // 'total' ou visita antiga (true)
+      else { venc++; cx += it.caixas; }
+    });
   });
   $('cards').innerHTML =
     '<span><b>' + visit + '</b>de ' + d.lojas.length + ' lojas visitadas</span>' +
     '<span><b>' + (d.lojas.length - visit) + '</b>sem visita</span>' +
     '<span><b style="color:var(--verm)">' + venc + '</b>vencendo (' + (Math.round(cx * 10) / 10) + ' cx)</span>' +
-    '<span><b>' + rup + '</b>rupturas</span>';
+    '<span><b style="background:#D5D9DF;padding:0 5px;border-radius:4px">' + rg + '</b>ruptura geladeira</span>' +
+    '<span><b style="background:#9AA1AA;padding:0 5px;border-radius:4px">' + rt + '</b>ruptura total</span>';
   var h = '<thead><tr><th class="c0">Loja</th>';
   d.lojas.forEach(function(l){ h += '<th class="lj' + (l.visita ? '' : ' semvis') + '">' + esc(l.nome) + '<span class="num">nº ' + esc(l.numero) + '</span></th>'; });
   h += '</tr><tr><th class="c0">Promotor</th>';
@@ -323,7 +332,8 @@ function desenhaPainel(){
       if (!l.visita) { h += '<td class="cel semvis"></td>'; return; }
       var it = l.visita.itens.filter(function(i){ return i.cod === p.cod; })[0];
       if (!it) { h += '<td class="cel"></td>'; return; }
-      if (it.ruptura) { h += '<td class="cel rp">RUPTURA</td>'; return; }
+      if (it.ruptura === 'geladeira') { h += '<td class="cel rg" title="Não tem mais desta mercadoria na geladeira">RUPTURA<br>GELADEIRA</td>'; return; }
+      if (it.ruptura) { h += '<td class="cel rp" title="Não tem mais nada desta mercadoria na loja">RUPTURA<br>TOTAL</td>'; return; }
       var dias = it.dias, txt2 = dias < 0 ? 'venc. ' + (-dias) + 'd' : dias + 'd';
       h += '<td class="cel ' + (dias < 15 ? 'vm' : 'am') + '" title="' + esc(it.caixas + ' cx (' + it.kg + ' kg) · validade ' + dataBR(it.validade) + ' · ' + (dias < 0 ? 'vencido há ' + (-dias) + ' dias' : 'vence em ' + dias + ' dias')) + '">' +
            it.caixas + ' cx · ' + dataBR(it.validade).slice(0,5) +
