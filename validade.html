@@ -11,6 +11,8 @@
   cada rede com a sua cor; o formulário mostra os produtos da rede da loja.
   RUPTURA EM 2 BOTÕES (24/11/2026): RUPTURA GELADEIRA / RUPTURA TOTAL lado
   a lado; marcada qualquer uma, somem caixas/validade e aparece LIMPAR.
+  LOCALIZAÇÃO (25/11/2026): lê a posição também ao ABRIR a loja (reserva,
+  porque dentro da câmara o GPS costuma falhar na hora do envio).
   Login próprio (não é o do BELLOTAS). Backend: server/validade.py.
   Visita preenchida sem sinal fica numa FILA no celular (localStorage
   'vl_fila') e é enviada sozinha quando a internet volta.
@@ -217,8 +219,17 @@ function mostrarLojas(){
 }
 
 // ── formulário ───────────────────────────────────────────────────────
+// Posição lida ao abrir a loja: guardada no celular e mandada junto com a
+// visita como reserva (latAb/lngAb). Falhou ou negou? Segue sem ela.
+function lerPosicaoAbertura(cnpj){
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(function(p){
+    ls('vl_loc_' + cnpj, { lat: p.coords.latitude, lng: p.coords.longitude, precisao: Math.round(p.coords.accuracy), t: Date.now() });
+  }, function(){}, { enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 });
+}
 function abrirLoja(i){
   S.loja = S.lojas[i];
+  lerPosicaoAbertura(S.loja.cnpj);
   S.produtos = S.prodRede[S.loja.rede] || [];
   S.rasc = ls('vl_rasc_' + S.loja.cnpj) || {};
   var r = rede(S.loja.rede);
@@ -328,12 +339,14 @@ function enviarVisita(){
   $('fmBtn').disabled = true; $('fmBtn').textContent = 'Registrando…';
   var visita = { idLocal: Date.now() + '-' + Math.random().toString(36).slice(2, 8), loja: S.loja.cnpj, lojaNome: S.loja.rotulo,
                  coletadoEm: new Date().toISOString(), itens: itens, lat: null, lng: null, precisao: null };
+  var ab = ls('vl_loc_' + S.loja.cnpj);          // posição lida ao abrir a loja (vale por 6h)
+  if (ab && Date.now() - ab.t < 6 * 3600000) { visita.latAb = ab.lat; visita.lngAb = ab.lng; visita.precAb = ab.precisao; }
   var feito = false;
   function grava(){
     if (feito) return; feito = true;
     var fila = (ls('vl_fila') || []).filter(function(v){ return v.loja !== visita.loja; });  // nova visita da loja substitui
     fila.push(visita); ls('vl_fila', fila);
-    ls('vl_rasc_' + visita.loja, null);
+    ls('vl_rasc_' + visita.loja, null); ls('vl_loc_' + visita.loja, null);
     $('fmBtn').textContent = 'Enviar visita';
     mostrarLojas(); enviarFila();
   }
