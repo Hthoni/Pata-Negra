@@ -435,10 +435,10 @@ _ROMANOS = {'I', 'II', 'III', 'IV', 'V', 'VI'}
 
 
 def _nome_loja_msg(loja):
-    """'BANGU I' nº 5 -> 'Bangu I f 5' (romanos continuam maiúsculos)."""
+    """'BANGU I' nº 5 -> 'Bangu I F5' (romanos continuam maiúsculos)."""
     palavras = [w if w.upper() in _ROMANOS else w.capitalize() for w in str(loja['nome']).split()]
     palavras = [w.upper() if w.upper() in _ROMANOS else w for w in palavras]
-    return f"{' '.join(palavras)} f {loja['numero']}"
+    return f"{' '.join(palavras)} F{loja['numero']}"
 
 
 def _kg_txt(kg):
@@ -463,19 +463,28 @@ def montar_alerta_visita(loja, visita, atualizacao=False):
             lotes.append((dias, _kg_txt(it.get('kg')), nome))
     if not (lotes or rup_tot or rup_gel):
         return ''
-    linhas = [f'*{_nome_loja_msg(loja)}*' + (' (atualizado)' if atualizacao else '')]
+    # 25/11/2026: uma linha em branco entre os blocos (vencimento / ruptura
+    # total / ruptura geladeira). O WhatsApp via Botconversa engole "\n\n"
+    # puro; o espaço de largura zero no meio segura a linha em branco
+    # (mesmo truque do _QUEBRA do whatsapp.py).
+    quebra = '\n\u200b\n'
+    blocos = []
+    venc = []
     for dias, kg, nome in sorted(lotes):
         if dias < 0:
-            linhas.append(f'{kg} de {nome} — VENCIDOS')
+            venc.append(f'{kg} de {nome} — VENCIDOS')
         elif dias == 0:
-            linhas.append(f'{kg} de {nome} — vence HOJE')
+            venc.append(f'{kg} de {nome} — vence HOJE')
         else:
-            linhas.append(f'{kg} de {nome} com {dias} dia{"s" if dias != 1 else ""} para vencer')
+            venc.append(f'{kg} de {nome} com {dias} dia{"s" if dias != 1 else ""} para vencer')
+    if venc:
+        blocos.append('\n'.join(venc))
     if rup_tot:
-        linhas.append('Ruptura total: ' + ', '.join(rup_tot))
+        blocos.append('Ruptura total: ' + ', '.join(rup_tot))
     if rup_gel:
-        linhas.append('Ruptura geladeira: ' + ', '.join(rup_gel))
-    return '\n'.join(linhas)
+        blocos.append('Ruptura geladeira: ' + ', '.join(rup_gel))
+    titulo = f'*{_nome_loja_msg(loja)}*' + (' (atualizado)' if atualizacao else '')
+    return titulo + '\n' + quebra.join(blocos)
 
 
 def _alerta_representante(loja, visita, cat, atualizacao=False):
