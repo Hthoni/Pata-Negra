@@ -491,14 +491,16 @@ def montar_alerta_visita(loja, visita, atualizacao=False):
             venc.append(f'{kg} de {nome} — vence HOJE')
         else:
             venc.append(f'{kg} de {nome} com {dias} dia{"s" if dias != 1 else ""} para vencer')
-    if venc:
-        blocos.append('\n'.join(venc))
+    # 25/11/2026 (2): cada lote vira um bloco próprio -> linha em branco
+    # entre um vencimento e outro.
+    blocos.extend(venc)
     if rup_tot:
         blocos.append('Ruptura total: ' + ', '.join(rup_tot))
     if rup_gel:
         blocos.append('Ruptura geladeira: ' + ', '.join(rup_gel))
     titulo = f'*{_nome_loja_msg(loja)}*' + (' (atualizado)' if atualizacao else '')
-    return titulo + '\n' + quebra.join(blocos)
+    # 25/11/2026 (2): linha em branco também logo depois do nome da loja.
+    return titulo + quebra + quebra.join(blocos)
 
 
 def _alerta_representante(loja, visita, cat, atualizacao=False, anterior_tinha_itens=False):
