@@ -18,6 +18,8 @@
   totais e legenda numa faixa fina; a grade ganha o espaço.
   24/11/2026: RUPTURA GELADEIRA (cinza claro) e RUPTURA TOTAL (cinza
   escuro), texto em 2 linhas iguais; loja sem visita em listrado.
+  25/11/2026: data do envio em VERDE (enviada a até 300 m da loja) ou
+  VERMELHO (mais longe); sem localização fica preta com o ponto vermelho.
 -->
 <style>
 :root{--azul:#1F3B63;--laranja:#F29A1F;--fundo:#F4F6F9;--borda:#D5DCE6;--texto:#1A2230;--fraco:#4A5568;--verm:#A3201B}
@@ -161,6 +163,7 @@ table.m tbody tr:hover td.cel:not(.vm):not(.am):not(.rp):not(.rg):not(.semvis){b
       <span><i class="sw" style="background:#9AA1AA;border:1px solid #3F4650"></i>ruptura total</span>
       <span><i class="sw" style="background:repeating-linear-gradient(135deg,#F4F6F8 0 3px,#C9CFD6 3px 5px);border:1px dashed #8A93A0"></i>loja sem visita</span>
       <span>vazio = nada a reportar</span>
+      <span id="legLoc">envio: <b style="color:#1F7A3D">verde</b> na loja · <b style="color:#B71C1C">vermelho</b> fora da loja · <span style="color:var(--verm)">•</span> sem localização</span>
     </div>
     </div>
     <div class="tabwrap"><table class="m" id="matriz"></table></div>
@@ -286,6 +289,7 @@ function desenhaPainel(){
     return '<button role="tab" aria-selected="' + (r.id === d.rede) + '" class="' + (r.id === d.rede ? 'ativo' : '') + '" style="--rc:' + r.cor + ';--rc2:' + r.cor2 + '" onclick="trocaRede(\'' + r.id + '\')"><span class="dot"></span>' + esc(r.nome) + '</button>';
   }).join('');
   var rm = redeMeta(d.rede, d.redes);
+  $('legLoc').classList.toggle('oculto', !!S.cliente);
   if (S.cliente) { document.querySelector('.marca .t b').textContent = 'Lojas ' + rm.nome;
     $('notaPainel').textContent = 'Passe o mouse sobre a data de envio para ver o horário da visita; sobre uma célula para ver o detalhe do lote.'; }
   document.querySelector('.tabwrap').style.borderTop = '4px solid ' + rm.cor2;
@@ -320,10 +324,21 @@ function desenhaPainel(){
     if (!v) { h += '<td class="lj semvis">sem visita</td>'; return; }
     var dt = new Date(v.coletadoEm);
     var tip = 'Visita: ' + dt.toLocaleString('pt-BR') + '\nPor: ' + v.promotorNome;
-    if (!S.cliente) tip += '\nRecebida: ' + new Date(v.recebidoEm).toLocaleString('pt-BR') +
-      '\nLocalização: ' + (v.lat != null ? v.lat.toFixed(5) + ', ' + v.lng.toFixed(5) + (v.precisao ? ' (±' + v.precisao + ' m)' : '') : 'não registrada');
-    h += '<td class="lj" style="white-space:nowrap;font-size:11px" title="' + esc(tip) + '">' + dt.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'}) + ' ' + dt.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) +
-         (S.cliente || v.lat != null ? '' : ' <span title="sem localização" style="color:var(--verm)">•</span>') + '</td>';
+    var corEnvio = '';
+    if (!S.cliente) {
+      var la = v.lat != null ? v.lat : v.latAb, lo = v.lat != null ? v.lng : v.lngAb, pr = v.lat != null ? v.precisao : v.precAb;
+      tip += '\nRecebida: ' + new Date(v.recebidoEm).toLocaleString('pt-BR') +
+        '\nLocalização: ' + (la != null ? la.toFixed(5) + ', ' + lo.toFixed(5) + (pr ? ' (±' + pr + ' m)' : '') +
+          (v.locOrigem === 'abertura' ? ' — lida ao abrir a loja (sem GPS no envio)' : ' — lida no envio') : 'não registrada');
+      if (v.distLojaM != null) {
+        var dtx = v.distLojaM < 1000 ? v.distLojaM + ' m' : (v.distLojaM / 1000).toFixed(1).replace('.', ',') + ' km';
+        tip += '\nDistância da loja: ' + dtx + (v.naLoja ? ' — NA LOJA' : ' — FORA DA LOJA (mais de ' + v.raioM + ' m)');
+      } else if (la != null) tip += '\nDistância da loja: não calculada (loja sem coordenada no perfil)';
+      if (v.naLoja === true) corEnvio = 'color:#1F7A3D;font-weight:700;';
+      else if (v.naLoja === false) corEnvio = 'color:#B71C1C;font-weight:700;';
+    }
+    h += '<td class="lj" style="white-space:nowrap;font-size:11px;' + corEnvio + '" title="' + esc(tip) + '">' + dt.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'}) + ' ' + dt.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) +
+         (S.cliente || v.locOrigem ? '' : ' <span title="sem localização" style="color:var(--verm)">•</span>') + '</td>';
   });
   h += '</tr></thead><tbody>';
   d.produtos.forEach(function(p){
