@@ -491,7 +491,9 @@ def montar_mensagem_lista_motorista(nome_motorista, pedidos):
             l = _linha_pessoa('Encarregado', e.get('nome'), e.get('telefone'))
             if l:
                 linhas_parada.append(l)
-        blocos.append('\n'.join(linhas_parada))
+        bloco = '\n'.join(linhas_parada)
+        if bloco not in blocos:   # 25/11/2026: pedido Indústria + Distribuidora = uma parada só
+            blocos.append(bloco)
     corpo = _QUEBRA.join(blocos)
     return f'Olá {nome_motorista}, temos as seguintes entregas hoje:{_QUEBRA}{corpo}{_QUEBRA}Bom trabalho!'
 
@@ -516,7 +518,14 @@ def notificar_despacho_entrega(entrega):
     criada/despachada nem aparecia ainda. Resultado real visto em
     produção: 1ª entrega despachada (processo "limpo") funcionou, as
     2 seguintes (mesmo processo, cache já povoado) não encontraram
-    pedido nenhum. Limpa o cache aqui também, sempre, no início."""
+    pedido nenhum. Limpa o cache aqui também, sempre, no início.
+
+    FIX (25/11/2026): pedido dividido em Indústria + Distribuidora vira
+    DOIS romaneios da mesma loja -> vendedor e encarregado recebiam duas
+    mensagens idênticas (o texto não cita nº de pedido nem empresa).
+    Agora, dentro do mesmo despacho, a MESMA mensagem pro MESMO telefone
+    só sai uma vez. Lojas diferentes continuam gerando mensagens
+    diferentes, então nada legítimo é suprimido."""
     _limpar_cache_contexto()
     idx = {r['id']: r for r in _pedidos_ativos_hoje()}
     pedidos = [idx[pid] for pid in entrega.get('pedidoIds', []) if pid in idx]
@@ -530,17 +539,25 @@ def notificar_despacho_entrega(entrega):
         print('[WARN] notificar_despacho_entrega: nenhum pedido ativo encontrado pra essa entrega -- nada será enviado')
         return
 
+    ja_enviadas = set()   # (telefone normalizado, texto) deste despacho
     for r in pedidos:
         mot_nome, mot_tel = _motorista_da_entrega(r, _entregas_idx())
         alvos = [(r.get('vendedor', ''), r.get('telefoneVendedor', ''), 'vendedor')] + \
                 [(e.get('nome', ''), e.get('telefone', ''), 'encarregado') for e in (r.get('encarregados') or [])]
         for nome, tel, papel in alvos:
             if tel:
-                _enviar_whatsapp(tel, montar_mensagem_pedido_em_rota(
+                texto = montar_mensagem_pedido_em_rota(
                     nome, r.get('clienteNome') or r.get('cliente') or '', r.get('filial', ''), papel,
                     vendedor_nome=r.get('vendedor', ''), vendedor_telefone=r.get('telefoneVendedor', ''),
                     encarregados=r.get('encarregados'),
-                    motorista_nome=mot_nome, motorista_telefone=mot_tel))
+                    motorista_nome=mot_nome, motorista_telefone=mot_tel)
+                chave = (_normaliza_telefone(tel), texto)
+                if chave in ja_enviadas:
+                    print(f'[INFO] notificar_despacho_entrega: mensagem repetida pra {tel} '
+                          f'(pedido {r.get("id")}, mesma loja de outro pedido da entrega) -- não reenviada')
+                    continue
+                ja_enviadas.add(chave)
+                _enviar_whatsapp(tel, texto)
 
     telefone_motorista = (entrega.get('telefoneMotorista') or '').strip()
     if telefone_motorista:
