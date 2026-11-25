@@ -28,6 +28,12 @@ Módulo SEPARADO do resto do BELLOTAS de propósito:
   tem mais na geladeira) ou 'total' (não tem nada na loja). Ruptura NÃO
   leva caixas/validade. Visitas antigas com ruptura=True contam como
   'total' (o botão antigo era "em falta na câmara").
+- ALERTA PRA REPRESENTANTE (24/11/2026): ao receber uma visita COM algo a
+  reportar, manda um WhatsApp pra representante da rede (telefone da
+  vendedora, célula J3 do perfil de lojas da rede), pelo mesmo envio do
+  BELLOTAS (whatsapp._enviar_whatsapp). Só representantes — encarregados
+  de loja NÃO recebem. O texto não cita promotor nem a empresa dele. O
+  envio nunca derruba a visita: falhou, loga e segue.
 - SUPERMERCADO (19/11/2026): papel 'cliente', preso a UMA rede. Vê o
   painel e o Excel só da rede dele (todas as lojas), sem localização nem
   horário de recebimento, sem cadastro. Só admin/operador do BELLOTAS
@@ -76,6 +82,7 @@ REDES = {
 }
 ORDEM_REDES = ['guanabara', 'atacadao']
 DIAS_ALERTA = 30            # promotor reporta só o que vence em menos disso
+ALERTA_REPRESENTANTE = True  # False desliga o WhatsApp pras representantes
 DIAS_TOKEN = {'promotor': 30, 'coordenador': 7, 'cliente': 7}
 FUSO = datetime.timezone(datetime.timedelta(hours=-3))   # Brasília (sem horário de verão)
 PAPEIS_BELLOTAS_ADMIN = ('admin', 'operador')
@@ -243,7 +250,7 @@ def _catalogo():
     'alias': {cnpj_alias: cnpj_principal}}. Cache de 2 min."""
     if _cache_cat['cat'] is not None and time.time() - _cache_cat['t'] < 120:
         return _cache_cat['cat']
-    produtos, lojas, alias, redes = {}, [], {}, []
+    produtos, lojas, alias, redes, reps = {}, [], {}, [], {}
     for r in ORDEM_REDES:
         cfg = REDES[r]
         prods, vistos, nao_loja, filiais = [], set(), '', {}
@@ -263,6 +270,7 @@ def _catalogo():
                 prods.append({'cod': cod, 'nome': _nome_curto(p['nomePerfil']), 'kgCx': p['kgCx']})
             if chave == cfg['perfilLojas']:
                 filiais = ler_filiais(pb)
+                reps[r] = {'nome': meta.get('vendedor', ''), 'telefone': meta.get('telefone', '')}
         if not prods and not filiais:
             continue
         redes.append(_rede_meta(r))
@@ -279,7 +287,7 @@ def _catalogo():
         for l in ls:
             l['rotulo'] = f"{int(l['numero']):02d} · {l['nome']}" if str(l['numero']).isdigit() else l['nome']
         lojas.extend(ls)
-    cat = {'redes': redes, 'produtos': produtos, 'lojas': lojas, 'alias': alias}
+    cat = {'redes': redes, 'produtos': produtos, 'lojas': lojas, 'alias': alias, 'reps': reps}
     _cache_cat['cat'], _cache_cat['t'] = cat, time.time()
     return cat
 
@@ -411,10 +419,89 @@ def v_visita():
         'idLocal': str(body.get('idLocal') or '')[:60],
         'semana': seg, 'itens': itens,
     }
-    _gravar_json(f'visitas/{seg}/{loja["cnpj"]}.json', visita)
+    caminho = f'visitas/{seg}/{loja["cnpj"]}.json'
+    ja_havia = _bucket().blob(caminho).exists()
+    _gravar_json(caminho, visita)
     print(f'[INFO] validade visita: {loja["rede"]} {loja["rotulo"]} por {q["usuario"]} semana {seg} '
           f'itens={len(itens)} gps={"sim" if visita["lat"] is not None else "não"}')
+    _alerta_representante(loja, visita, cat, atualizacao=ja_havia)
     return jsonify({'ok': True, 'semana': seg, 'itens': len(itens)})
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Alerta por WhatsApp pra representante da rede
+# ─────────────────────────────────────────────────────────────────────
+_ROMANOS = {'I', 'II', 'III', 'IV', 'V', 'VI'}
+
+
+def _nome_loja_msg(loja):
+    """'BANGU I' nº 5 -> 'Bangu I f 5' (romanos continuam maiúsculos)."""
+    palavras = [w if w.upper() in _ROMANOS else w.capitalize() for w in str(loja['nome']).split()]
+    palavras = [w.upper() if w.upper() in _ROMANOS else w for w in palavras]
+    return f"{' '.join(palavras)} f {loja['numero']}"
+
+
+def _kg_txt(kg):
+    kg = float(kg or 0)
+    return (f'{kg:.0f}' if kg.is_integer() else f'{kg:.1f}'.replace('.', ',')) + ' kg'
+
+
+def montar_alerta_visita(loja, visita, atualizacao=False):
+    """Texto do alerta, no modelo combinado em 24/11/2026: só o nome da
+    loja + nº da filial em negrito; uma linha por lote, em kg; rupturas
+    no fim. Devolve '' quando a visita não tem nada a reportar."""
+    hoje = _agora_brt().date()
+    lotes, rup_tot, rup_gel = [], [], []
+    for it in visita.get('itens', []):
+        nome = str(it.get('nome', '')).lower()
+        if it.get('ruptura') == 'geladeira':
+            rup_gel.append(nome)
+        elif it.get('ruptura'):
+            rup_tot.append(nome)
+        elif it.get('validade'):
+            dias = (datetime.date.fromisoformat(it['validade']) - hoje).days
+            lotes.append((dias, _kg_txt(it.get('kg')), nome))
+    if not (lotes or rup_tot or rup_gel):
+        return ''
+    linhas = [f'*{_nome_loja_msg(loja)}*' + (' (atualizado)' if atualizacao else '')]
+    for dias, kg, nome in sorted(lotes):
+        if dias < 0:
+            linhas.append(f'{kg} de {nome} — VENCIDOS')
+        elif dias == 0:
+            linhas.append(f'{kg} de {nome} — vence HOJE')
+        else:
+            linhas.append(f'{kg} de {nome} com {dias} dia{"s" if dias != 1 else ""} para vencer')
+    if rup_tot:
+        linhas.append('Ruptura total: ' + ', '.join(rup_tot))
+    if rup_gel:
+        linhas.append('Ruptura geladeira: ' + ', '.join(rup_gel))
+    return '\n'.join(linhas)
+
+
+def _alerta_representante(loja, visita, cat, atualizacao=False):
+    """Manda o alerta pra representante da rede da loja. Nunca levanta
+    erro (a visita já está gravada) e SEMPRE loga o que aconteceu."""
+    rede = loja['rede']
+    try:
+        if not ALERTA_REPRESENTANTE:
+            print(f'[INFO] validade alerta: desligado (ALERTA_REPRESENTANTE=False) — {rede} {loja["rotulo"]}')
+            return
+        texto = montar_alerta_visita(loja, visita, atualizacao)
+        if not texto:
+            print(f'[INFO] validade alerta: nada a reportar, sem mensagem — {rede} {loja["rotulo"]}')
+            return
+        rep_ = (cat.get('reps') or {}).get(rede) or {}
+        tel = str(rep_.get('telefone') or '').strip()
+        if not tel:
+            print(f'[WARN] validade alerta: representante da rede {rede} SEM telefone no perfil (J3) — '
+                  f'mensagem NÃO enviada ({loja["rotulo"]})')
+            return
+        print(f'[INFO] validade alerta: enviando pra {rep_.get("nome")} ({tel}) — {rede} {loja["rotulo"]} '
+              f'({len(visita.get("itens", []))} itens{", atualização" if atualizacao else ""})')
+        import whatsapp
+        whatsapp._enviar_whatsapp(tel, texto)
+    except Exception as e:
+        print(f'[WARN] validade alerta: falha ao enviar ({rede} {loja["rotulo"]}): {e}')
 
 
 # ─────────────────────────────────────────────────────────────────────
