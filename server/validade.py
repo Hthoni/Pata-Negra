@@ -34,6 +34,13 @@ Módulo SEPARADO do resto do BELLOTAS de propósito:
   BELLOTAS (whatsapp._enviar_whatsapp). Só representantes — encarregados
   de loja NÃO recebem. O texto não cita promotor nem a empresa dele. O
   envio nunca derruba a visita: falhou, loga e segue.
+- VISITA NA LOJA? (25/11/2026): compara a posição do celular com a
+  lat/lng da loja no perfil. Até RAIO_LOJA_M -> 'naLoja' True (data em
+  verde no painel); mais longe -> False (vermelho); sem posição ou loja
+  sem coordenada -> None (neutro). Usa a posição lida no ENVIO; se
+  faltar (GPS falha dentro da câmara), a lida na ABERTURA da loja. É
+  calculado ao montar o painel, então corrigir a coordenada da loja no
+  perfil corrige também as visitas já gravadas.
 - SUPERMERCADO (19/11/2026): papel 'cliente', preso a UMA rede. Vê o
   painel e o Excel só da rede dele (todas as lojas), sem localização nem
   horário de recebimento, sem cadastro. Só admin/operador do BELLOTAS
@@ -83,6 +90,7 @@ REDES = {
 ORDEM_REDES = ['guanabara', 'atacadao']
 DIAS_ALERTA = 30            # promotor reporta só o que vence em menos disso
 ALERTA_REPRESENTANTE = True  # False desliga o WhatsApp pras representantes
+RAIO_LOJA_M = 300            # até essa distância da loja a visita conta como "na loja"
 DIAS_TOKEN = {'promotor': 30, 'coordenador': 7, 'cliente': 7}
 FUSO = datetime.timezone(datetime.timedelta(hours=-3))   # Brasília (sem horário de verão)
 PAPEIS_BELLOTAS_ADMIN = ('admin', 'operador')
@@ -282,7 +290,8 @@ def _catalogo():
             if cnpj in unir or cnpj == nao_loja or str(f['numero']).strip() in ('0', ''):
                 continue   # alias da mesma loja, CD, ou linha sem número
             ls.append({'cnpj': cnpj, 'rede': r, 'nome': f['nome'], 'numero': f['numero'],
-                       'regiao': f['regiao'], 'cidade': f['cidade']})
+                       'regiao': f['regiao'], 'cidade': f['cidade'],
+                       'lat': f.get('lat'), 'lng': f.get('lng')})
         ls.sort(key=lambda l: (int(l['numero']) if str(l['numero']).isdigit() else 9999, l['nome']))
         for l in ls:
             l['rotulo'] = f"{int(l['numero']):02d} · {l['nome']}" if str(l['numero']).isdigit() else l['nome']
@@ -347,7 +356,8 @@ def v_minhas():
             feitas[v['loja']] = v.get('coletadoEm') or v.get('recebidoEm')
         except Exception:
             pass
-    out = [{**l, 'visitadaEm': feitas.get(l['cnpj'])} for l in lojas]
+    out = [{**{k: x for k, x in l.items() if k not in ('lat', 'lng')},
+            'visitadaEm': feitas.get(l['cnpj'])} for l in lojas]
     return jsonify({'semana': seg, 'lojas': out, 'redes': cat['redes'],
                     'produtosPorRede': cat['produtos'],
                     'diasAlerta': DIAS_ALERTA, 'nome': q['nome']})
@@ -415,16 +425,20 @@ def v_visita():
         'promotor': q['usuario'], 'promotorNome': q['nome'],
         'coletadoEm': coletado.isoformat(timespec='seconds'),
         'recebidoEm': agora.isoformat(timespec='seconds'),
-        'lat': body.get('lat'), 'lng': body.get('lng'), 'precisao': body.get('precisao'),
+        'lat': _num(body.get('lat')), 'lng': _num(body.get('lng')), 'precisao': _num(body.get('precisao')),
+        # posição lida quando o promotor ABRIU a loja no celular (reserva)
+        'latAb': _num(body.get('latAb')), 'lngAb': _num(body.get('lngAb')), 'precAb': _num(body.get('precAb')),
         'idLocal': str(body.get('idLocal') or '')[:60],
         'semana': seg, 'itens': itens,
     }
     caminho = f'visitas/{seg}/{loja["cnpj"]}.json'
-    ja_havia = _bucket().blob(caminho).exists()
+    anterior = _ler_json(caminho)            # visita da mesma loja já enviada nesta semana (ou None)
+    ja_havia = anterior is not None
     _gravar_json(caminho, visita)
     print(f'[INFO] validade visita: {loja["rede"]} {loja["rotulo"]} por {q["usuario"]} semana {seg} '
           f'itens={len(itens)} gps={"sim" if visita["lat"] is not None else "não"}')
-    _alerta_representante(loja, visita, cat, atualizacao=ja_havia)
+    _alerta_representante(loja, visita, cat, atualizacao=ja_havia,
+                          anterior_tinha_itens=bool((anterior or {}).get('itens')))
     return jsonify({'ok': True, 'semana': seg, 'itens': len(itens)})
 
 
@@ -487,7 +501,7 @@ def montar_alerta_visita(loja, visita, atualizacao=False):
     return titulo + '\n' + quebra.join(blocos)
 
 
-def _alerta_representante(loja, visita, cat, atualizacao=False):
+def _alerta_representante(loja, visita, cat, atualizacao=False, anterior_tinha_itens=False):
     """Manda o alerta pra representante da rede da loja. Nunca levanta
     erro (a visita já está gravada) e SEMPRE loga o que aconteceu."""
     rede = loja['rede']
@@ -496,6 +510,11 @@ def _alerta_representante(loja, visita, cat, atualizacao=False):
             print(f'[INFO] validade alerta: desligado (ALERTA_REPRESENTANTE=False) — {rede} {loja["rotulo"]}')
             return
         texto = montar_alerta_visita(loja, visita, atualizacao)
+        if not texto and atualizacao and anterior_tinha_itens:
+            # 25/11/2026: a representante já recebeu um alerta desta loja e o
+            # promotor reenviou a visita SEM pendências -> avisa que zerou,
+            # senão ela fica com um alerta que não vale mais.
+            texto = f'*{_nome_loja_msg(loja)}* (atualizado)\nSem rupturas nem produtos por vencer.'
         if not texto:
             print(f'[INFO] validade alerta: nada a reportar, sem mensagem — {rede} {loja["rotulo"]}')
             return
@@ -546,6 +565,7 @@ def _dados_painel(semana_txt, rede):
             for it in v['itens']:
                 if it.get('validade'):
                     it['dias'] = (datetime.date.fromisoformat(it['validade']) - hoje).days
+            v.update(_local_da_visita(v, l))
         lojas.append({**l, 'promotor': (v or {}).get('promotorNome') or dono.get(l['cnpj'], ''),
                       'visita': v})
     semanas = [(_segunda(hoje) - datetime.timedelta(weeks=i)).isoformat() for i in range(12)]
@@ -554,12 +574,49 @@ def _dados_painel(semana_txt, rede):
             'produtos': cat['produtos'].get(rede, []), 'lojas': lojas}
 
 
+def _num(v):
+    try:
+        return float(v) if v is not None and v != '' else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _distancia_m(lat1, lng1, lat2, lng2):
+    """Distância em metros entre dois pontos (haversine)."""
+    import math
+    r = 6371000.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp, dl = p2 - p1, math.radians(lng2 - lng1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(a))
+
+
+def _local_da_visita(v, loja):
+    """{'naLoja': True|False|None, 'distLojaM': m|None, 'locOrigem':
+    'envio'|'abertura'|None, 'raioM'} — ver bloco VISITA NA LOJA? no topo."""
+    out = {'naLoja': None, 'distLojaM': None, 'locOrigem': None, 'raioM': RAIO_LOJA_M}
+    lat, lng, origem = v.get('lat'), v.get('lng'), 'envio'
+    if lat is None or lng is None:
+        lat, lng, origem = v.get('latAb'), v.get('lngAb'), 'abertura'
+    if lat is None or lng is None:
+        return out
+    out['locOrigem'] = origem
+    if loja.get('lat') is None or loja.get('lng') is None:
+        return out
+    d = _distancia_m(float(lat), float(lng), float(loja['lat']), float(loja['lng']))
+    out['distLojaM'] = round(d)
+    out['naLoja'] = d <= RAIO_LOJA_M
+    return out
+
+
 def _sem_rastreio(d):
     """Supermercado não vê localização nem horário de recebimento."""
     for l in d['lojas']:
+        l.pop('lat', None); l.pop('lng', None)
         v = l.get('visita')
         if v:
-            for k in ('lat', 'lng', 'precisao', 'recebidoEm', 'idLocal'):
+            for k in ('lat', 'lng', 'precisao', 'latAb', 'lngAb', 'precAb', 'recebidoEm', 'idLocal',
+                      'naLoja', 'distLojaM', 'locOrigem', 'raioM'):
                 v.pop(k, None)
     d['redes'] = [r for r in d['redes'] if r['id'] == d['rede']]
     return d
@@ -634,7 +691,11 @@ def _aba_excel(ws, d):
         ws.cell(2, j, l['promotor'])
         if v:
             dt = datetime.datetime.fromisoformat(v['coletadoEm'])
-            ws.cell(3, j, dt.strftime('%d/%m/%Y %H:%M'))
+            c3 = ws.cell(3, j, dt.strftime('%d/%m/%Y %H:%M'))
+            if v.get('naLoja') is True:
+                c3.font = Font(bold=True, color='1F7A3D')     # enviada na loja
+            elif v.get('naLoja') is False:
+                c3.font = Font(bold=True, color='B71C1C')     # enviada longe da loja
         else:
             ws.cell(3, j, 'sem visita').font = Font(bold=True, color='7A1F1C')
         for r in (1, 2, 3):
