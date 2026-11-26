@@ -585,7 +585,7 @@ def registrar_login(usuario, ok):
 import hmac
 import base64
 
-SESSAO_HORAS = 2
+SESSAO_HORAS = 12
 _secret_cache = None
 
 
