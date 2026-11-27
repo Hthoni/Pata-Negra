@@ -90,6 +90,10 @@ REDES = {
 ORDEM_REDES = ['guanabara', 'atacadao']
 DIAS_ALERTA = 30            # promotor reporta só o que vence em menos disso
 ALERTA_REPRESENTANTE = True  # False desliga o WhatsApp pras representantes
+# 27/11/2026: o mesmo alerta vai também pros encarregados DA LOJA visitada
+# (colunas U-Z da linha da filial no perfil). False volta a mandar só
+# pra representante.
+ALERTA_ENCARREGADOS = True
 RAIO_LOJA_M = 300            # até essa distância da loja a visita conta como "na loja"
 DIAS_TOKEN = {'promotor': 30, 'coordenador': 7, 'cliente': 7}
 FUSO = datetime.timezone(datetime.timedelta(hours=-3))   # Brasília (sem horário de verão)
@@ -258,7 +262,7 @@ def _catalogo():
     'alias': {cnpj_alias: cnpj_principal}}. Cache de 2 min."""
     if _cache_cat['cat'] is not None and time.time() - _cache_cat['t'] < 120:
         return _cache_cat['cat']
-    produtos, lojas, alias, redes, reps = {}, [], {}, [], {}
+    produtos, lojas, alias, redes, reps, encs = {}, [], {}, [], {}, {}
     for r in ORDEM_REDES:
         cfg = REDES[r]
         prods, vistos, nao_loja, filiais = [], set(), '', {}
@@ -286,6 +290,15 @@ def _catalogo():
         unir = cfg.get('unir') or {}
         alias.update(unir)
         ls = []
+        # Encarregados por loja. Ficam num dicionário à parte (cat['encs']) e
+        # NÃO dentro de cada loja: a lista de lojas é devolvida ao navegador
+        # (painel, promotor) e telefone de encarregado não pode ir junto.
+        # Loja com dois CNPJs (PILARES) junta os encarregados das duas linhas.
+        for cnpj, f in filiais.items():
+            alvo = unir.get(cnpj, cnpj)
+            for e in (f.get('encarregados') or []):
+                if str(e.get('telefone') or '').strip():
+                    encs.setdefault(alvo, []).append({'nome': e.get('nome', ''), 'telefone': e['telefone']})
         for cnpj, f in filiais.items():
             if cnpj in unir or cnpj == nao_loja or str(f['numero']).strip() in ('0', ''):
                 continue   # alias da mesma loja, CD, ou linha sem número
@@ -296,7 +309,7 @@ def _catalogo():
         for l in ls:
             l['rotulo'] = f"{int(l['numero']):02d} · {l['nome']}" if str(l['numero']).isdigit() else l['nome']
         lojas.extend(ls)
-    cat = {'redes': redes, 'produtos': produtos, 'lojas': lojas, 'alias': alias, 'reps': reps}
+    cat = {'redes': redes, 'produtos': produtos, 'lojas': lojas, 'alias': alias, 'reps': reps, 'encs': encs}
     _cache_cat['cat'], _cache_cat['t'] = cat, time.time()
     return cat
 
@@ -493,12 +506,16 @@ def montar_alerta_visita(loja, visita, atualizacao=False):
             venc.append(f'{kg} de {nome} com {dias} dia{"s" if dias != 1 else ""} para vencer')
     # 25/11/2026 (2): cada lote vira um bloco próprio -> linha em branco
     # entre um vencimento e outro.
+    # 27/11/2026: frase de atenção antes dos lotes (só quando há lote).
+    if venc:
+        blocos.append('Atenção! Mercadorias com validade curta na câmara frigorífica:')
     blocos.extend(venc)
     if rup_tot:
         blocos.append('Ruptura total: ' + ', '.join(rup_tot))
     if rup_gel:
         blocos.append('Ruptura geladeira: ' + ', '.join(rup_gel))
-    titulo = f'*{_nome_loja_msg(loja)}*' + (' (atualizado)' if atualizacao else '')
+    # 27/11/2026 (2): título passa a ser "Relatório <loja>".
+    titulo = f'*Relatório {_nome_loja_msg(loja)}*' + (' (atualizado)' if atualizacao else '')
     # 25/11/2026 (2): linha em branco também logo depois do nome da loja.
     return titulo + quebra + quebra.join(blocos)
 
@@ -516,20 +533,46 @@ def _alerta_representante(loja, visita, cat, atualizacao=False, anterior_tinha_i
             # 25/11/2026: a representante já recebeu um alerta desta loja e o
             # promotor reenviou a visita SEM pendências -> avisa que zerou,
             # senão ela fica com um alerta que não vale mais.
-            texto = f'*{_nome_loja_msg(loja)}* (atualizado)\nSem rupturas nem produtos por vencer.'
+            texto = f'*Relatório {_nome_loja_msg(loja)}* (atualizado)\n\u200b\nSem rupturas nem produtos por vencer.'
         if not texto:
             print(f'[INFO] validade alerta: nada a reportar, sem mensagem — {rede} {loja["rotulo"]}')
             return
+        import whatsapp
+        # Destinatários: representante da rede + encarregados da loja.
+        # Mesmo telefone em dois papéis recebe uma vez só.
+        dest, vistos = [], set()
         rep_ = (cat.get('reps') or {}).get(rede) or {}
         tel = str(rep_.get('telefone') or '').strip()
-        if not tel:
-            print(f'[WARN] validade alerta: representante da rede {rede} SEM telefone no perfil (J3) — '
-                  f'mensagem NÃO enviada ({loja["rotulo"]})')
+        if tel:
+            dest.append(('representante', rep_.get('nome', ''), tel))
+        else:
+            print(f'[WARN] validade alerta: representante da rede {rede} SEM telefone no perfil (J3) ({loja["rotulo"]})')
+        if ALERTA_ENCARREGADOS:
+            lista = (cat.get('encs') or {}).get(loja['cnpj']) or []
+            if not lista:
+                print(f'[INFO] validade alerta: loja sem encarregado com telefone no perfil — {rede} {loja["rotulo"]}')
+            for e in lista:
+                dest.append(('encarregado', e.get('nome', ''), str(e['telefone']).strip()))
+        if not dest:
+            print(f'[WARN] validade alerta: ninguém pra avisar — mensagem NÃO enviada ({rede} {loja["rotulo"]})')
             return
-        print(f'[INFO] validade alerta: enviando pra {rep_.get("nome")} ({tel}) — {rede} {loja["rotulo"]} '
-              f'({len(visita.get("itens", []))} itens{", atualização" if atualizacao else ""})')
-        import whatsapp
-        whatsapp._enviar_whatsapp(tel, texto)
+        for papel, nome, tel in dest:
+            chave = whatsapp._normaliza_telefone(tel)
+            if chave in vistos:
+                continue
+            vistos.add(chave)
+            # um try por destinatário: falha num número não segura os outros
+            try:
+                print(f'[INFO] validade alerta: enviando pra {papel} {nome} ({tel}) — {rede} {loja["rotulo"]} '
+                      f'({len(visita.get("itens", []))} itens{", atualização" if atualizacao else ""})')
+                # 27/11/2026 (2): encarregado recebe a saudação com o nome dele
+                # (como está no perfil) antes do relatório; representante não.
+                msg = texto
+                if papel == 'encarregado' and str(nome or '').strip():
+                    msg = f'Caro {str(nome).strip()},\n\u200b\n' + texto
+                whatsapp._enviar_whatsapp(tel, msg)
+            except Exception as e:
+                print(f'[WARN] validade alerta: falha ao enviar pra {papel} {nome} ({tel}) — {rede} {loja["rotulo"]}: {e}')
     except Exception as e:
         print(f'[WARN] validade alerta: falha ao enviar ({rede} {loja["rotulo"]}): {e}')
 
