@@ -20,6 +20,8 @@
   escuro), texto em 2 linhas iguais; loja sem visita em listrado.
   25/11/2026: data do envio em VERDE (enviada a até 300 m da loja) ou
   VERMELHO (mais longe); sem localização fica preta com o ponto vermelho.
+  28/11/2026: linha "Alerta" com o botão REENVIAR (só pra quem entra
+  pelo BELLOTAS) — manda de novo o relatório da loja no WhatsApp.
   25/11/2026 (2): totais na barra das redes; legenda + Exportar Excel
   no rodapé, abaixo da grade.
 -->
@@ -116,6 +118,16 @@ table.m tbody tr:hover td.cel:not(.vm):not(.am):not(.rp):not(.rg):not(.semvis){b
 .lojasel label small{color:#7A8494}
 .ok-msg{color:#1F5F3A;font-weight:600;margin-top:10px;min-height:18px}
 .err-msg{color:var(--verm);font-weight:600;margin-top:10px;min-height:18px}
+.breenv{height:24px;padding:0 8px;border:1px solid var(--azul);border-radius:6px;background:#fff;color:var(--azul);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit}
+.breenv:hover{background:var(--azul);color:#fff}
+.fundo{position:fixed;inset:0;background:rgba(20,28,40,.45);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+.dlg{background:#fff;border-radius:12px;padding:18px 20px;width:100%;max-width:420px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.dlg h3{margin:0 0 4px;font-size:17px;color:var(--azul)}
+.dlg p{margin:0 0 12px;font-size:13px;color:var(--fraco)}
+.dlg label.op{display:flex;align-items:center;gap:8px;padding:7px 0;font-size:14px;cursor:pointer}
+.dlg .acoes{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+.dlg .res{margin-top:12px;border-top:1px solid var(--borda);padding-top:10px;font-size:13.5px;display:flex;flex-direction:column;gap:6px}
+.dlg .res .okk{color:#1F7A3D;font-weight:700}.dlg .res .nok{color:#B71C1C;font-weight:700}
 </style>
 </head>
 <body>
@@ -232,6 +244,42 @@ function api(caminho, opts){
   if (S.token) opts.headers['Authorization'] = 'Bearer ' + S.token;
   return fetch(SRV + caminho, opts);
 }
+// ── reenviar alerta (só BELLOTAS) ──
+var RES_TXT = { enviado: 'enviado', sem_contato: 'NÃO enviado — o número não é contato no Botconversa e não foi possível criar. Confira o telefone no perfil.',
+  sem_telefone: 'NÃO enviado — sem telefone no perfil', sem_chave: 'NÃO enviado — chave do Botconversa não configurada',
+  falha: 'NÃO enviado — falha na comunicação com o Botconversa (veja o log)' };
+function fechaReenvio(){ var f = $('dlgReenvio'); if (f) f.remove(); }
+function abreReenvio(cnpj){
+  var l = (S.painel.lojas || []).filter(function(x){ return x.cnpj === cnpj; })[0]; if (!l) return;
+  fechaReenvio();
+  var f = document.createElement('div'); f.className = 'fundo'; f.id = 'dlgReenvio';
+  f.onclick = function(e){ if (e.target === f) fechaReenvio(); };
+  f.innerHTML = '<div class="dlg" role="dialog" aria-modal="true" aria-labelledby="dlgT"><h3 id="dlgT">Reenviar alerta</h3>' +
+    '<p>' + esc(l.rotulo || l.nome) + ' — manda de novo, pelo WhatsApp, o relatório atual desta loja.</p>' +
+    '<label class="op"><input type="radio" name="dst" value="encarregados" checked> Só os encarregados da loja</label>' +
+    '<label class="op"><input type="radio" name="dst" value="representante"> Só a representante</label>' +
+    '<label class="op"><input type="radio" name="dst" value="todos"> Todos (representante e encarregados)</label>' +
+    '<div class="res oculto" id="dlgRes"></div>' +
+    '<div class="acoes"><button class="btn sec" style="height:36px" onclick="fechaReenvio()">Fechar</button>' +
+    '<button class="btn" style="height:36px" id="dlgEnv" onclick="fazReenvio(\'' + esc(cnpj) + '\')">Enviar</button></div></div>';
+  document.body.appendChild(f);
+}
+function fazReenvio(cnpj){
+  var dst = document.querySelector('#dlgReenvio input[name=dst]:checked').value;
+  var b = $('dlgEnv'), r = $('dlgRes'); b.disabled = true; b.textContent = 'Enviando…';
+  api('/validade/alerta/reenviar', { method: 'POST', body: JSON.stringify({ loja: cnpj, semana: S.painel.semana, destino: dst }) })
+    .then(function(x){ return x.json().then(function(j){ return { ok: x.ok, j: j }; }); })
+    .then(function(x){
+      r.classList.remove('oculto');
+      if (!x.ok) { r.innerHTML = '<div class="nok">' + esc(x.j.erro || 'Não foi possível reenviar') + '</div>'; return; }
+      var lista = x.j.resultados || [];
+      if (!lista.length) { r.innerHTML = '<div class="nok">Ninguém a avisar: ' + (dst === 'representante' ? 'representante sem telefone no perfil.' : 'esta loja não tem encarregado com nome e telefone no perfil.') + '</div>'; return; }
+      r.innerHTML = lista.map(function(i){ var ok = i.resultado === 'enviado';
+        return '<div><b>' + esc(i.nome || '(sem nome)') + '</b> · ' + esc(i.papel) + ': <span class="' + (ok ? 'okk' : 'nok') + '">' + esc(RES_TXT[i.resultado] || i.resultado) + '</span></div>'; }).join('');
+    })
+    .catch(function(){ r.classList.remove('oculto'); r.innerHTML = '<div class="nok">Sem conexão com o servidor.</div>'; })
+    .then(function(){ b.disabled = false; b.textContent = 'Enviar de novo'; });
+}
 function dataBR(iso){ return iso ? iso.slice(8,10) + '/' + iso.slice(5,7) + '/' + iso.slice(0,4) : ''; }
 function erroGeral(t){ $('erroGeral').textContent = t || ''; $('erroGeral').classList.toggle('oculto', !t); }
 
@@ -345,6 +393,16 @@ function desenhaPainel(){
     h += '<td class="lj" style="white-space:nowrap;font-size:11px;' + corEnvio + '" title="' + esc(tip) + '">' + dt.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'}) + ' ' + dt.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) +
          (S.cliente || v.locOrigem ? '' : ' <span title="sem localização" style="color:var(--verm)">•</span>') + '</td>';
   });
+  if (S.origem === 'bellotas') {
+    h += '</tr><tr><th class="c0">Alerta WhatsApp</th>';
+    d.lojas.forEach(function(l){
+      var v = l.visita;
+      if (!v) { h += '<td class="lj semvis"></td>'; return; }
+      h += '<td class="lj">' + (v.itens && v.itens.length
+        ? '<button class="breenv" onclick="abreReenvio(\'' + esc(l.cnpj) + '\')" title="Mandar de novo o relatório desta loja no WhatsApp">Reenviar</button>'
+        : '<span style="color:var(--fraco);font-size:11px" title="Visita sem ruptura nem validade curta: não gera alerta">—</span>') + '</td>';
+    });
+  }
   h += '</tr></thead><tbody>';
   d.produtos.forEach(function(p){
     h += '<tr><th class="c0">' + esc(p.nome) + '</th>';
