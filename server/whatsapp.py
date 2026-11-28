@@ -571,7 +571,7 @@ def notificar_despacho_entrega(entrega):
 CRIAR_CONTATO_AUTOMATICO = True
 
 
-def _enviar_whatsapp(telefone, texto, nome=None):
+def _enviar_whatsapp(telefone, texto, nome=None, boas_vindas=None):
     """Envia mensagem PROATIVA via API do Botconversa (endpoint confirmado
     em 22/08/2026, via Swagger — backend.botconversa.com.br/swagger/).
 
@@ -598,7 +598,11 @@ def _enviar_whatsapp(telefone, texto, nome=None):
     em receber mensagens; decisão do Henrique em 28/11/2026, valendo pra
     representantes e encarregados que estão no perfil. Sem `nome`
     (despacho/entrega) nada muda: quem não é contato não recebe.
-    CRIAR_CONTATO_AUTOMATICO = False desliga."""
+    CRIAR_CONTATO_AUTOMATICO = False desliga.
+
+    28/11/2026 (3): `boas_vindas` = texto de apresentação mandado UMA vez,
+    antes da mensagem, só quando o contato acabou de ser criado aqui
+    (primeiro contato). Quem já era contato não recebe."""
     import os
     import requests
 
@@ -619,6 +623,7 @@ def _enviar_whatsapp(telefone, texto, nome=None):
     headers = {'API-KEY': api_key}
     tel_limpo = _normaliza_telefone(telefone)  # só dígitos, com DDI 55 (aceito com ou sem '+')
 
+    contato_novo = False
     try:
         resp_id = requests.get(f'{base}/subscriber/get_by_phone/{tel_limpo}/',
                                headers=headers, timeout=4)
@@ -655,6 +660,7 @@ def _enviar_whatsapp(telefone, texto, nome=None):
             if resp_id.status_code != 200:
                 print(f'[WARN] contato criado pra {telefone} mas não apareceu na busca — mensagem NÃO enviada')
                 return 'sem_contato'
+            contato_novo = resp_cria.status_code in (200, 201)
         resp_id.raise_for_status()
         subscriber_id = resp_id.json().get('id')
         if not subscriber_id:
@@ -662,6 +668,19 @@ def _enviar_whatsapp(telefone, texto, nome=None):
                   f'(resposta: {resp_id.text[:200]})')
             return 'sem_contato'
         print(f'[INFO] _enviar_whatsapp: subscriber_id={subscriber_id} pra {telefone}')
+
+        if contato_novo and boas_vindas:
+            # primeiro contato: apresentação antes do alerta. Se falhar, o
+            # alerta segue do mesmo jeito.
+            try:
+                resp_bv = requests.post(f'{base}/subscriber/{subscriber_id}/send_message/', headers=headers,
+                                        json={'type': 'text', 'value': boas_vindas}, timeout=4)
+                print(f'[INFO] _enviar_whatsapp: boas-vindas pra {telefone} -> status={resp_bv.status_code}')
+                import time
+                time.sleep(1.5)   # dá tempo da apresentação chegar ANTES do alerta
+            except Exception as e:
+                print(f'[WARN] boas-vindas pra {telefone} falhou (o alerta segue): {e}')
+
 
         resp_send = requests.post(f'{base}/subscriber/{subscriber_id}/send_message/',
                                   headers=headers,
