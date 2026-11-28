@@ -520,6 +520,22 @@ def montar_alerta_visita(loja, visita, atualizacao=False):
     return titulo + quebra + quebra.join(blocos)
 
 
+def _boas_vindas_encarregado(nome):
+    """Apresentação mandada UMA vez ao encarregado, no primeiro contato
+    (texto do Henrique, 28/11/2026). '\n\u200b\n' = linha em branco."""
+    q = '\n\u200b\n'
+    n = str(nome or '').strip()
+    return q.join([
+        f'Caro {n},' if n else 'Olá,',
+        'Este é o número de WhatsApp da Pata Negra, para alertá-lo de eventos de mercadorias '
+        'com pouco prazo de validade e/ou rupturas.',
+        'Acreditamos que a informação sempre fresca, e na mão, pode melhorar muito nossos processos.',
+        'Não se preocupe, será usado somente quando ocorrerem os problemas acima, mesmo assim, '
+        'no máximo uma vez por semana. Não vamos encher vc de mensagens... rsrsrs',
+        'Muito obrigado!!',
+    ])
+
+
 def _enviar_alerta(loja, texto, cat, destino='todos', n_itens=0, atualizacao=False):
     """Manda o texto pros destinatários da loja e devolve o que aconteceu
     com cada um: [{'papel','nome','resultado'}]. destino: 'todos' |
@@ -561,7 +577,10 @@ def _enviar_alerta(loja, texto, cat, destino='todos', n_itens=0, atualizacao=Fal
                 msg = f'Caro {str(nome).strip()},\n\u200b\n' + texto
             # 28/11/2026 (2): passa o nome -> se o telefone ainda não é contato
             # no Botconversa, o whatsapp.py cria o contato e envia.
-            res = whatsapp._enviar_whatsapp(tel, msg, nome=nome) or 'enviado'
+            # 28/11/2026 (3): encarregado em PRIMEIRO contato recebe antes a
+            # apresentação (só quando o contato é criado agora).
+            bv = _boas_vindas_encarregado(nome) if papel == 'encarregado' else None
+            res = whatsapp._enviar_whatsapp(tel, msg, nome=nome, boas_vindas=bv) or 'enviado'
         except Exception as e:
             print(f'[WARN] validade alerta: falha ao enviar pra {papel} {nome} ({tel}) — {rede} {loja["rotulo"]}: {e}')
             res = 'falha'
