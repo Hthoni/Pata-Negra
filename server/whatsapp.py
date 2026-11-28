@@ -565,7 +565,13 @@ def notificar_despacho_entrega(entrega):
                          montar_mensagem_lista_motorista(entrega.get('motorista', ''), pedidos))
 
 
-def _enviar_whatsapp(telefone, texto):
+# 28/11/2026: cria o contato no Botconversa quando o telefone ainda não
+# existe lá (só nos envios que informam o nome — hoje, os alertas de
+# validade). Ver a docstring de _enviar_whatsapp.
+CRIAR_CONTATO_AUTOMATICO = True
+
+
+def _enviar_whatsapp(telefone, texto, nome=None):
     """Envia mensagem PROATIVA via API do Botconversa (endpoint confirmado
     em 22/08/2026, via Swagger — backend.botconversa.com.br/swagger/).
 
@@ -577,7 +583,22 @@ def _enviar_whatsapp(telefone, texto):
 
     Autenticação: header 'API-KEY' (a chave de Configurações →
     Integrações → seção "API" — NÃO a do Zapier nem a do RD Station,
-    que são chaves separadas dentro da mesma tela)."""
+    que são chaves separadas dentro da mesma tela).
+
+    28/11/2026: devolve o que aconteceu, pra quem chama poder mostrar
+    na tela (botão "Reenviar alerta" do painel de validade):
+    'enviado' | 'sem_contato' (telefone não existe como contato no
+    Botconversa) | 'sem_chave' | 'falha'. Quem ignora o retorno
+    (despacho, entrega) continua funcionando igual.
+
+    28/11/2026 (2): CRIAÇÃO AUTOMÁTICA DE CONTATO. Quando quem chama
+    passa `nome` e o telefone ainda não é contato no Botconversa, o
+    contato é criado (POST /subscriber/) e a mensagem segue. A API exige
+    has_opt_in_whatsapp=true — é a declaração de que a pessoa concordou
+    em receber mensagens; decisão do Henrique em 28/11/2026, valendo pra
+    representantes e encarregados que estão no perfil. Sem `nome`
+    (despacho/entrega) nada muda: quem não é contato não recebe.
+    CRIAR_CONTATO_AUTOMATICO = False desliga."""
     import os
     import requests
 
@@ -592,7 +613,7 @@ def _enviar_whatsapp(telefone, texto):
     api_key = os.environ.get('BOTCONVERSA_API_KEY', '')
     if not api_key:
         print(f'[WARN] BOTCONVERSA_API_KEY não configurada — mensagem NÃO enviada pra {telefone}')
-        return
+        return 'sem_chave'
 
     base = 'https://backend.botconversa.com.br/api/v1/webhook'
     headers = {'API-KEY': api_key}
@@ -606,15 +627,40 @@ def _enviar_whatsapp(telefone, texto):
             # comum: telefone nunca mandou mensagem pro número do Botconversa
             # antes, então não existe como 'subscriber' ainda -- não é erro
             # de configuração, é esperado até a pessoa interagir 1x.
-            print(f'[INFO] {telefone} ainda não é subscriber no Botconversa '
-                  f'(precisa mandar mensagem pro número pelo menos 1 vez antes)')
-            return
+            nome_txt = str(nome or '').strip()
+            if not (CRIAR_CONTATO_AUTOMATICO and nome_txt):
+                print(f'[INFO] {telefone} ainda não é subscriber no Botconversa '
+                      f'(precisa ser cadastrado lá ou mandar mensagem pro número 1 vez)')
+                return 'sem_contato'
+            partes = nome_txt.split(None, 1)
+            resp_cria = requests.post(f'{base}/subscriber/', headers=headers, timeout=6,
+                                      json={'phone': tel_limpo, 'first_name': partes[0],
+                                            'last_name': partes[1] if len(partes) > 1 else '',
+                                            'has_opt_in_whatsapp': True})
+            print(f'[INFO] _enviar_whatsapp: contato NOVO no Botconversa pra {telefone} ({nome_txt}) '
+                  f'-> status={resp_cria.status_code} resposta={resp_cria.text[:200]}')
+            # 401 = "já existe com este telefone": segue pra busca do mesmo jeito
+            if resp_cria.status_code not in (200, 201, 401):
+                return 'sem_contato'
+            # a criação não devolve o id -> busca de novo (2 tentativas, o
+            # cadastro pode levar um instante pra aparecer)
+            import time
+            for espera in (0.5, 1.5):
+                time.sleep(espera)
+                resp_id = requests.get(f'{base}/subscriber/get_by_phone/{tel_limpo}/',
+                                       headers=headers, timeout=4)
+                print(f'[INFO] _enviar_whatsapp: get_by_phone({tel_limpo}) após criar -> status={resp_id.status_code}')
+                if resp_id.status_code == 200:
+                    break
+            if resp_id.status_code != 200:
+                print(f'[WARN] contato criado pra {telefone} mas não apareceu na busca — mensagem NÃO enviada')
+                return 'sem_contato'
         resp_id.raise_for_status()
         subscriber_id = resp_id.json().get('id')
         if not subscriber_id:
             print(f'[WARN] Botconversa não achou subscriber pro telefone {telefone} '
                   f'(resposta: {resp_id.text[:200]})')
-            return
+            return 'sem_contato'
         print(f'[INFO] _enviar_whatsapp: subscriber_id={subscriber_id} pra {telefone}')
 
         resp_send = requests.post(f'{base}/subscriber/{subscriber_id}/send_message/',
@@ -625,8 +671,10 @@ def _enviar_whatsapp(telefone, texto):
               f'resposta={resp_send.text[:200]}')
         resp_send.raise_for_status()
         print(f'[INFO] _enviar_whatsapp: SUCESSO enviando pra {telefone}')
+        return 'enviado'
     except Exception as e:
         print(f'[WARN] falha ao enviar WhatsApp pra {telefone}: {e}')
+        return 'falha'
 
 
 def processar_mensagem_entrada(telefone, texto=''):
