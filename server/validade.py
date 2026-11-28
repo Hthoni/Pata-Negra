@@ -520,6 +520,55 @@ def montar_alerta_visita(loja, visita, atualizacao=False):
     return titulo + quebra + quebra.join(blocos)
 
 
+def _enviar_alerta(loja, texto, cat, destino='todos', n_itens=0, atualizacao=False):
+    """Manda o texto pros destinatários da loja e devolve o que aconteceu
+    com cada um: [{'papel','nome','resultado'}]. destino: 'todos' |
+    'representante' | 'encarregados'. Mesmo telefone em dois papéis recebe
+    uma vez só. Usado pelo envio da visita e pelo botão "Reenviar alerta"."""
+    import whatsapp
+    rede = loja['rede']
+    dest, vistos, saida = [], set(), []
+    if destino in ('todos', 'representante'):
+        rep_ = (cat.get('reps') or {}).get(rede) or {}
+        tel = str(rep_.get('telefone') or '').strip()
+        if tel:
+            dest.append(('representante', rep_.get('nome', ''), tel))
+        else:
+            print(f'[WARN] validade alerta: representante da rede {rede} SEM telefone no perfil (J3) ({loja["rotulo"]})')
+            saida.append({'papel': 'representante', 'nome': rep_.get('nome', ''), 'resultado': 'sem_telefone'})
+    if destino in ('todos', 'encarregados') and ALERTA_ENCARREGADOS:
+        lista = (cat.get('encs') or {}).get(loja['cnpj']) or []
+        if not lista:
+            print(f'[INFO] validade alerta: loja sem encarregado com telefone no perfil — {rede} {loja["rotulo"]}')
+        for e in lista:
+            dest.append(('encarregado', e.get('nome', ''), str(e['telefone']).strip()))
+    if not dest:
+        print(f'[WARN] validade alerta: ninguém pra avisar — mensagem NÃO enviada ({rede} {loja["rotulo"]})')
+        return saida
+    for papel, nome, tel in dest:
+        chave = whatsapp._normaliza_telefone(tel)
+        if chave in vistos:
+            continue
+        vistos.add(chave)
+        # um try por destinatário: falha num número não segura os outros
+        try:
+            print(f'[INFO] validade alerta: enviando pra {papel} {nome} ({tel}) — {rede} {loja["rotulo"]} '
+                  f'({n_itens} itens{", atualização" if atualizacao else ""})')
+            # 27/11/2026 (2): encarregado recebe a saudação com o nome dele
+            # (como está no perfil) antes do relatório; representante não.
+            msg = texto
+            if papel == 'encarregado' and str(nome or '').strip():
+                msg = f'Caro {str(nome).strip()},\n\u200b\n' + texto
+            # 28/11/2026 (2): passa o nome -> se o telefone ainda não é contato
+            # no Botconversa, o whatsapp.py cria o contato e envia.
+            res = whatsapp._enviar_whatsapp(tel, msg, nome=nome) or 'enviado'
+        except Exception as e:
+            print(f'[WARN] validade alerta: falha ao enviar pra {papel} {nome} ({tel}) — {rede} {loja["rotulo"]}: {e}')
+            res = 'falha'
+        saida.append({'papel': papel, 'nome': nome, 'resultado': res})
+    return saida
+
+
 def _alerta_representante(loja, visita, cat, atualizacao=False, anterior_tinha_itens=False):
     """Manda o alerta pra representante da rede da loja. Nunca levanta
     erro (a visita já está gravada) e SEMPRE loga o que aconteceu."""
@@ -537,44 +586,42 @@ def _alerta_representante(loja, visita, cat, atualizacao=False, anterior_tinha_i
         if not texto:
             print(f'[INFO] validade alerta: nada a reportar, sem mensagem — {rede} {loja["rotulo"]}')
             return
-        import whatsapp
-        # Destinatários: representante da rede + encarregados da loja.
-        # Mesmo telefone em dois papéis recebe uma vez só.
-        dest, vistos = [], set()
-        rep_ = (cat.get('reps') or {}).get(rede) or {}
-        tel = str(rep_.get('telefone') or '').strip()
-        if tel:
-            dest.append(('representante', rep_.get('nome', ''), tel))
-        else:
-            print(f'[WARN] validade alerta: representante da rede {rede} SEM telefone no perfil (J3) ({loja["rotulo"]})')
-        if ALERTA_ENCARREGADOS:
-            lista = (cat.get('encs') or {}).get(loja['cnpj']) or []
-            if not lista:
-                print(f'[INFO] validade alerta: loja sem encarregado com telefone no perfil — {rede} {loja["rotulo"]}')
-            for e in lista:
-                dest.append(('encarregado', e.get('nome', ''), str(e['telefone']).strip()))
-        if not dest:
-            print(f'[WARN] validade alerta: ninguém pra avisar — mensagem NÃO enviada ({rede} {loja["rotulo"]})')
-            return
-        for papel, nome, tel in dest:
-            chave = whatsapp._normaliza_telefone(tel)
-            if chave in vistos:
-                continue
-            vistos.add(chave)
-            # um try por destinatário: falha num número não segura os outros
-            try:
-                print(f'[INFO] validade alerta: enviando pra {papel} {nome} ({tel}) — {rede} {loja["rotulo"]} '
-                      f'({len(visita.get("itens", []))} itens{", atualização" if atualizacao else ""})')
-                # 27/11/2026 (2): encarregado recebe a saudação com o nome dele
-                # (como está no perfil) antes do relatório; representante não.
-                msg = texto
-                if papel == 'encarregado' and str(nome or '').strip():
-                    msg = f'Caro {str(nome).strip()},\n\u200b\n' + texto
-                whatsapp._enviar_whatsapp(tel, msg)
-            except Exception as e:
-                print(f'[WARN] validade alerta: falha ao enviar pra {papel} {nome} ({tel}) — {rede} {loja["rotulo"]}: {e}')
+        _enviar_alerta(loja, texto, cat, n_itens=len(visita.get('itens', [])), atualizacao=atualizacao)
     except Exception as e:
         print(f'[WARN] validade alerta: falha ao enviar ({rede} {loja["rotulo"]}): {e}')
+
+
+@bp.route('/validade/alerta/reenviar', methods=['POST'])
+def v_alerta_reenviar():
+    """28/11/2026: manda de novo o relatório ATUAL de uma loja (visita da
+    semana pedida). Só pra quem entra pelo BELLOTAS. Serve pra quando o
+    contato foi cadastrado no Botconversa depois do envio, ou alguém diz
+    que não recebeu. Devolve o resultado por destinatário."""
+    q = _quem()
+    if not q:
+        return jsonify({'erro': 'sessão inválida — entre de novo'}), 401
+    if not _eh_bellotas(q):
+        return jsonify({'erro': 'Só o login do BELLOTAS reenvia alertas'}), 403
+    body = request.get_json(silent=True) or {}
+    destino = body.get('destino') if body.get('destino') in ('todos', 'representante', 'encarregados') else 'todos'
+    cat = _catalogo()
+    cnpj = _cnpj_loja(body.get('loja'), cat)
+    loja = next((l for l in cat['lojas'] if l['cnpj'] == cnpj), None)
+    if not loja:
+        return jsonify({'erro': 'Loja desconhecida'}), 400
+    try:
+        seg = _segunda(datetime.date.fromisoformat(str(body.get('semana')))).isoformat()
+    except Exception:
+        seg = _segunda(_agora_brt().date()).isoformat()
+    visita = _ler_json(f'visitas/{seg}/{loja["cnpj"]}.json')
+    if not visita:
+        return jsonify({'erro': 'Esta loja não tem visita nessa semana'}), 400
+    texto = montar_alerta_visita(loja, visita)
+    if not texto:
+        return jsonify({'erro': 'A visita desta loja não tem ruptura nem validade curta — não há alerta a enviar'}), 400
+    print(f'[INFO] validade alerta: REENVIO pedido por {q["usuario"]} — {loja["rede"]} {loja["rotulo"]} semana {seg} destino={destino}')
+    res = _enviar_alerta(loja, texto, cat, destino=destino, n_itens=len(visita.get('itens', [])))
+    return jsonify({'ok': True, 'loja': loja['rotulo'], 'resultados': res})
 
 
 # ─────────────────────────────────────────────────────────────────────
